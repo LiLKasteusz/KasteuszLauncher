@@ -1,7 +1,7 @@
 const DiscordRPC = require('discord-rpc');
 const config = require('./config');
 
-const DEFAULT_CLIENT_ID = '1557751696900489296';
+const DEFAULT_CLIENT_ID = '1564399095999897740';
 let rpc = null;
 let isConnected = false;
 const launcherStartTime = new Date();
@@ -19,9 +19,9 @@ let reconnectTimer = null;
 function getClientId() {
   try {
     const userConfig = config.getConfig();
-    return userConfig?.discordClientId || '';
+    return userConfig?.discordClientId || DEFAULT_CLIENT_ID;
   } catch (_) {
-    return '';
+    return DEFAULT_CLIENT_ID;
   }
 }
 

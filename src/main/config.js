@@ -49,7 +49,7 @@ const DEFAULT_CONFIG = {
   ambientGlow: true,
   animationSpeed: 0.6,
   discordRpcEnabled: true,
-  discordClientId: '',
+  discordClientId: '1564399095999897740',
   favoriteServers: [
     { name: 'Szkolne SMP', ip: 'szkolnesmp.com.pl', description: 'Oficjalny serwer Kasteusza (1.21.11)', isOfficial: true },
     { name: 'Hypixel', ip: 'mc.hypixel.net', description: 'Serwer minigier' }
