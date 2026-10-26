@@ -1,9 +1,7 @@
 // KasteuszLauncher Renderer Controller
-console.log('[RENDERER] renderer.js starting, readyState:', document.readyState);
-window.addEventListener('error', (err) => console.error('[UNCAUGHT ERROR]', err.error || err.message));
-window.addEventListener('unhandledrejection', (err) => console.error('[UNHANDLED REJECTION]', err.reason));
-
 let skinViewer = null;
+let pendingSkinUrl = null;
+let pendingCapeIdOrUrl = null;
 let currentAccount = null;
 let currentConfig = null;
 let availableVersions = [];
@@ -113,55 +111,42 @@ const elements = {
 
 // 1. Initialise App
 async function initApp() {
-  console.log('[RENDERER] initApp called!');
+  console.log('[RENDERER] Inicjalizacja KasteuszLauncher...');
+
+  // 1. Rejestracja wszystkich listenerów interfejsu synchronicznie (przyciski, garderoba, obracanie, motywy)
   try {
-    console.log('[INIT] 1. setupWindowControls');
     setupWindowControls();
-    console.log('[INIT] 2. setupNavigation');
     setupNavigation();
-    console.log('[INIT] 3. init3DSkinViewer');
-    init3DSkinViewer();
-    console.log('[INIT] 4. setupSettingsListeners');
-    setupSettingsListeners();
-    console.log('[INIT] 5. setupModsListeners');
-    setupModsListeners();
-    console.log('[INIT] 6. setupModBrowser');
-    setupModBrowser();
-    console.log('[INIT] 7. setupLauncherEventListeners');
-    setupLauncherEventListeners();
-
-    console.log('[INIT] 8. loadConfig');
-    await loadConfig();
-    console.log('[INIT] 9. loadAccount');
-    await loadAccount();
-    console.log('[INIT] 10. loadVersions');
-    await loadVersions();
-    console.log('[INIT] 11. loadMods');
-    await loadMods();
-    console.log('[INIT] 12. loadFriends');
-    await loadFriends();
-    console.log('[INIT] 13. setupFriendsListeners');
-    setupFriendsListeners();
-    console.log('[INIT] 14. initOfficialServerWidget');
-    initOfficialServerWidget();
-    console.log('[INIT] 15. setupServerHostingListeners');
-    setupServerHostingListeners();
-    console.log('[INIT] 16. loadServerHosting');
-    await loadServerHosting();
-
-    console.log('[INIT] 17. setupWardrobeListeners');
     setupWardrobeListeners();
-    console.log('[INIT] 18. setupThemesListeners');
     setupThemesListeners();
-    console.log('[INIT] 19. loadStats');
-    await loadStats();
-    console.log('[INIT] All init completed successfully!');
-  } catch (err) {
-    console.error('[INIT ERROR]', err);
+    setupSettingsListeners();
+    setupModsListeners();
+    setupModBrowser();
+    setupLauncherEventListeners();
+    setupFriendsListeners();
+    setupServerHostingListeners();
+  } catch (listenerErr) {
+    console.error('Błąd rejestracji listenerów UI:', listenerErr);
   }
 
-  // "przed tym trzeba sie zalogowac na konto premium"
-  // Automatycznie otwieramy okno logowania, jeśli użytkownik nie jest jeszcze zalogowany
+  // 2. Inicjalizacja podglądu postaci 3D
+  try {
+    init3DSkinViewer();
+  } catch (viewerErr) {
+    console.error('Błąd startu podglądu 3D:', viewerErr);
+  }
+
+  // 3. Asynchroniczne ładowanie konfiguracji i danych z izolacją błędów
+  try { await loadConfig(); } catch (e) { console.error('Błąd loadConfig:', e); }
+  try { await loadAccount(); } catch (e) { console.error('Błąd loadAccount:', e); }
+  try { await loadVersions(); } catch (e) { console.error('Błąd loadVersions:', e); }
+  try { await loadMods(); } catch (e) { console.error('Błąd loadMods:', e); }
+  try { await loadFriends(); } catch (e) { console.error('Błąd loadFriends:', e); }
+  try { initOfficialServerWidget(); } catch (e) { console.error('Błąd initOfficialServerWidget:', e); }
+  try { await loadServerHosting(); } catch (e) { console.error('Błąd loadServerHosting:', e); }
+  try { await loadStats(); } catch (e) { console.error('Błąd loadStats:', e); }
+
+  // 4. Automatyczne otwieranie okna logowania jeśli użytkownik nie jest jeszcze zalogowany
   if (!currentAccount) {
     setTimeout(() => {
       openLoginModal();
@@ -291,76 +276,111 @@ function createStanceAnimationClass() {
 }
 
 function init3DSkinViewer() {
+  if (skinViewer) return;
   if (!window.skinview3d) {
     console.warn('Biblioteka skinview3d nie załadowana.');
     return;
   }
 
-  const container = elements.skinContainer;
-  const width = container.clientWidth || 400;
-  const height = container.clientHeight || 450;
+  const container = elements.skinContainer || document.getElementById('skin-container');
+  const canvas = elements.skinCanvas || document.getElementById('skin-canvas');
+  if (!canvas) return;
 
-  skinViewer = new window.skinview3d.SkinViewer({
-    canvas: elements.skinCanvas,
-    width: width,
-    height: height,
-    skin: 'assets/default-skin.png'
-  });
+  const width = (container && container.clientWidth > 50) ? container.clientWidth : 400;
+  const height = (container && container.clientHeight > 50) ? container.clientHeight : 450;
 
-  // Setup animations and camera
-  const StanceAnim = createStanceAnimationClass();
-  if (StanceAnim) {
-    skinViewer.animation = new StanceAnim();
-    skinViewer.animation.speed = 0.6;
-  } else {
-    skinViewer.animation = new window.skinview3d.IdleAnimation();
+  try {
+    skinViewer = new window.skinview3d.SkinViewer({
+      canvas: canvas,
+      width: width,
+      height: height
+    });
+
+    // Setup animations and camera
+    const StanceAnim = createStanceAnimationClass();
+    if (StanceAnim) {
+      skinViewer.animation = new StanceAnim();
+      skinViewer.animation.speed = 0.6;
+    } else {
+      skinViewer.animation = new window.skinview3d.IdleAnimation();
+    }
+
+    skinViewer.controls.enableRotate = true;
+    skinViewer.controls.enableZoom = false;
+    skinViewer.controls.enablePan = false;
+
+    // Set slight 3/4 angle on wrapper so it persists across animation cycles
+    const targetObj = skinViewer.playerWrapper || skinViewer.playerObject;
+    if (targetObj) {
+      targetObj.rotation.y = isPlayerFlipped ? 2.72 : -0.42;
+      targetObj.position.y = -2;
+    }
+
+    // Lighting with vibrant Minecraft colors matching screenshot
+    if (skinViewer.globalLight) {
+      skinViewer.globalLight.intensity = 1.05;
+    }
+    if (skinViewer.cameraLight) {
+      skinViewer.cameraLight.intensity = 1.75;
+    }
+
+    window.addEventListener('resize', handleViewerResize);
+    setTimeout(handleViewerResize, 100);
+    setTimeout(handleViewerResize, 350);
+
+    // Apply any pending cape
+    if (pendingCapeIdOrUrl) {
+      applyCape(pendingCapeIdOrUrl, false);
+      pendingCapeIdOrUrl = null;
+    }
+
+    // Apply any pending or current skin
+    const skinToLoad = pendingSkinUrl || 'assets/default-skin.png';
+    pendingSkinUrl = null;
+    updateSkinDisplay(skinToLoad);
+  } catch (err) {
+    console.error('Błąd inicjalizacji podglądu 3D:', err);
   }
-
-  skinViewer.controls.enableRotate = true;
-  skinViewer.controls.enableZoom = false;
-  skinViewer.controls.enablePan = false;
-
-  // Set slight 3/4 angle on wrapper so it persists across animation cycles
-  if (skinViewer.playerWrapper) {
-    skinViewer.playerWrapper.rotation.y = -0.42;
-    skinViewer.playerWrapper.position.y = -2;
-  } else {
-    skinViewer.playerObject.rotation.y = -0.42;
-    skinViewer.playerObject.position.y = -2;
-  }
-
-  // Lighting with vibrant Minecraft colors matching screenshot
-  if (skinViewer.globalLight) {
-    skinViewer.globalLight.intensity = 1.05;
-  }
-  if (skinViewer.cameraLight) {
-    skinViewer.cameraLight.intensity = 1.75;
-  }
-
-  window.addEventListener('resize', handleViewerResize);
 }
 
 function handleViewerResize() {
-  if (!skinViewer || !elements.skinContainer) return;
-  const width = elements.skinContainer.clientWidth;
-  const height = elements.skinContainer.clientHeight;
-  if (width > 0 && height > 0) {
+  const container = elements.skinContainer || document.getElementById('skin-container');
+  if (!skinViewer || !container) return;
+  const width = container.clientWidth;
+  const height = container.clientHeight;
+  if (width > 50 && height > 50) {
     skinViewer.width = width;
     skinViewer.height = height;
   }
 }
 
 function updateSkinDisplay(skinUrl) {
-  if (!skinViewer) return;
   let target = skinUrl || 'assets/default-skin.png';
   if (typeof target === 'string' && target.startsWith('http://')) {
     target = target.replace('http://', 'https://');
   }
+
+  if (!skinViewer) {
+    pendingSkinUrl = target;
+    init3DSkinViewer();
+    return;
+  }
+
   try {
-    skinViewer.loadSkin(target).catch(err => {
+    skinViewer.loadSkin(target).then(() => {
+      if (skinViewer.playerObject?.skin) {
+        skinViewer.playerObject.skin.visible = true;
+      }
+    }).catch(err => {
       console.warn('Błąd ładowania skórki, używam fallbacku:', err);
       if (target !== 'assets/default-skin.png') {
-        skinViewer.loadSkin('assets/default-skin.png');
+        skinViewer.loadSkin('assets/default-skin.png').then(() => {
+          if (skinViewer.playerObject?.skin) {
+            skinViewer.playerObject.skin.visible = true;
+          }
+        }).catch(fallbackErr => {
+          console.warn('Fallback skórki nie powiódł się:', fallbackErr);
+        });
       }
     });
   } catch (e) {
@@ -626,6 +646,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     closeLoginModal();
     closeProfileModal();
+    closeWardrobeModal();
   }
 });
 
@@ -1715,20 +1736,27 @@ let currentCapeId = "kasteusz";
 let isPlayerFlipped = false;
 
 function openWardrobeModal() {
-  if (elements.wardrobeModal) elements.wardrobeModal.classList.add("open");
+  const modal = elements.wardrobeModal || document.getElementById('wardrobe-modal');
+  if (modal) modal.classList.add("open");
 }
 
 function closeWardrobeModal() {
-  if (elements.wardrobeModal) elements.wardrobeModal.classList.remove("open");
+  const modal = elements.wardrobeModal || document.getElementById('wardrobe-modal');
+  if (modal) modal.classList.remove("open");
 }
 
 function applyCape(capeIdOrUrl, save = true) {
-  if (!skinViewer) return;
   currentCapeId = capeIdOrUrl;
 
   document.querySelectorAll(".cape-item-card").forEach(card => {
     card.classList.toggle("active", card.dataset.capeId === capeIdOrUrl);
   });
+
+  if (!skinViewer) {
+    pendingCapeIdOrUrl = capeIdOrUrl;
+    if (save) window.api.saveConfig({ selectedCape: capeIdOrUrl || "none" });
+    return;
+  }
 
   if (capeIdOrUrl === "none" || !capeIdOrUrl) {
     skinViewer.loadCape(null);
@@ -1828,21 +1856,30 @@ function setupWardrobeListeners() {
     }
   });
 
-  elements.btnOpenWardrobe?.addEventListener("click", openWardrobeModal);
-  elements.btnCloseWardrobeModal?.addEventListener("click", closeWardrobeModal);
-  elements.wardrobeModal?.addEventListener("click", (e) => {
-    if (e.target === elements.wardrobeModal) closeWardrobeModal();
+  const btnWardrobe = elements.btnOpenWardrobe || document.getElementById('btn-open-wardrobe');
+  btnWardrobe?.addEventListener("click", openWardrobeModal);
+
+  const btnCloseModal = elements.btnCloseWardrobeModal || document.getElementById('btn-close-wardrobe-modal');
+  btnCloseModal?.addEventListener("click", closeWardrobeModal);
+
+  const wardrobeModal = elements.wardrobeModal || document.getElementById('wardrobe-modal');
+  wardrobeModal?.addEventListener("click", (e) => {
+    if (e.target === wardrobeModal) closeWardrobeModal();
   });
 
-  // Rotate player 180 deg to inspect cape
-  elements.btnRotatePlayer?.addEventListener("click", () => {
-    if (!skinViewer) return;
+  // Rotate player 180 deg to inspect cape/skin
+  const btnRotate = elements.btnRotatePlayer || document.getElementById('btn-rotate-player');
+  btnRotate?.addEventListener("click", () => {
+    if (!skinViewer) {
+      init3DSkinViewer();
+      if (!skinViewer) return;
+    }
     isPlayerFlipped = !isPlayerFlipped;
     const targetObj = skinViewer.playerWrapper || skinViewer.playerObject;
     if (targetObj) {
       targetObj.rotation.y = isPlayerFlipped ? 2.72 : -0.42;
     }
-    elements.btnRotatePlayer.classList.toggle("active", isPlayerFlipped);
+    btnRotate.classList.toggle("active", isPlayerFlipped);
   });
 
   // Wardrobe tabs (Capes vs Skins)
@@ -2071,4 +2108,8 @@ function setupThemesListeners() {
 
 
 // Run init
-window.addEventListener('DOMContentLoaded', initApp);
+if (document.readyState === 'loading') {
+  window.addEventListener('DOMContentLoaded', initApp);
+} else {
+  initApp();
+}

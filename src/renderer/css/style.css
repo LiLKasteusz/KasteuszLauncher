@@ -1890,6 +1890,8 @@ input[type="checkbox"] {
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
+  pointer-events: auto;
+  user-select: none;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -1903,6 +1905,13 @@ input[type="checkbox"] {
   color: #ffffff;
   transform: translateY(-1px);
   box-shadow: 0 4px 16px var(--accent-glow);
+}
+
+.hero-tool-btn.active {
+  background: rgba(30, 32, 45, 0.95);
+  border-color: var(--accent-primary);
+  color: #ffffff;
+  box-shadow: 0 0 16px var(--accent-glow);
 }
 
 .hero-tool-btn .tool-emoji {
