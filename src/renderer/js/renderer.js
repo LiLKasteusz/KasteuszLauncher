@@ -380,8 +380,8 @@ async function loadConfig() {
       if (skinViewer?.animation) skinViewer.animation.speed = speed;
     }
 
-    // Selected Cape
-    const savedCape = currentConfig.selectedCape || 'kasteusz';
+    // Selected Cape (default to none so no unwanted cape is forced)
+    const savedCape = currentConfig.selectedCape || 'none';
     setTimeout(() => {
       applyCape(savedCape, false);
     }, 250);
@@ -457,16 +457,8 @@ async function applyAccountToUI(account) {
     elements.userNicknameText.textContent = account.username;
     if (elements.userStatusDot) elements.userStatusDot.style.background = '#22c55e';
 
-    // Pobierz URL skórki na podstawie nicku jeśli jeszcze nie jest ustawiona
-    let skinToUse = account.skinUrl;
-    if (!skinToUse && account.username) {
-      try {
-        skinToUse = await window.api.getSkinUrl(account.username);
-        account.skinUrl = skinToUse;
-      } catch (err) {
-        console.warn('Nie udało się pobrać skórki dla nicku:', err);
-      }
-    }
+    // Prioritize custom skin (e.g. Zygzak McQueen #95) over generic Mojang skin
+    let skinToUse = account.customSkinUrl || account.skinUrl || 'assets/default-skin.png';
 
     if (skinToUse) {
       updateSkinDisplay(skinToUse);
@@ -1715,7 +1707,10 @@ function applyCape(capeIdOrUrl, save = true) {
   }
 
   const capeEntry = BUILTIN_CAPES[capeIdOrUrl];
-  const urlToLoad = capeEntry ? capeEntry.url : capeIdOrUrl;
+  let urlToLoad = capeEntry ? capeEntry.url : capeIdOrUrl;
+  if (urlToLoad && typeof urlToLoad === 'string' && urlToLoad.startsWith('http://')) {
+    urlToLoad = urlToLoad.replace('http://', 'https://');
+  }
 
   try {
     skinViewer.loadCape(urlToLoad).then(() => {
@@ -1762,30 +1757,31 @@ function renderAccountCapes(account) {
   }
 
   account.capes.forEach((c) => {
+    const capeUrl = (c.url || '').replace('http://', 'https://');
     const card = document.createElement("div");
     card.className = "cape-item-card";
-    card.dataset.capeId = c.url;
+    card.dataset.capeId = capeUrl;
 
     const preview = document.createElement("div");
     preview.className = "cape-preview-wrapper";
-    renderCapeCanvasPreview(preview, c.url);
+    renderCapeCanvasPreview(preview, capeUrl);
 
     const info = document.createElement("div");
     info.className = "cape-item-info";
     info.innerHTML = `
       <span class="cape-item-title">${c.alias || "Pelerynka"}</span>
-      <span class="cape-item-badge blue">Mojang</span>
+      <span class="cape-item-badge blue">Oficjalna</span>
     `;
 
     card.appendChild(preview);
     card.appendChild(info);
 
     card.addEventListener("click", () => {
-      applyCape(c.url, true);
-      showToast(`Założono oficjalną pelerynkę: ${c.alias || "Mojang"}!`);
+      applyCape(capeUrl, true);
+      showToast(`Założono Twoją oficjalną pelerynkę: ${c.alias || "Mojang"}!`);
     });
 
-    if (currentCapeId === c.url) card.classList.add("active");
+    if (currentCapeId === capeUrl) card.classList.add("active");
     container.appendChild(card);
   });
 }
@@ -1863,18 +1859,29 @@ function setupWardrobeListeners() {
   });
 
   // Preset Skins
-  elements.btnPresetMcqueen?.addEventListener("click", () => {
+  elements.btnPresetMcqueen?.addEventListener("click", async () => {
     updateSkinDisplay("assets/default-skin.png");
+    try {
+      await window.api.setCustomSkin("assets/default-skin.png");
+    } catch (e) {}
     showToast("Założono skin: Zygzak McQueen #95!");
   });
 
-  elements.btnPresetSteve?.addEventListener("click", () => {
-    updateSkinDisplay("https://textures.minecraft.net/texture/1a406e897914457613d760ab577a34d35388b73d263f9d4ca4570b5f816b3fb9");
+  elements.btnPresetSteve?.addEventListener("click", async () => {
+    const url = "https://textures.minecraft.net/texture/1a406e897914457613d760ab577a34d35388b73d263f9d4ca4570b5f816b3fb9";
+    updateSkinDisplay(url);
+    try {
+      await window.api.setCustomSkin(url);
+    } catch (e) {}
     showToast("Założono skin: Steve!");
   });
 
-  elements.btnPresetAlex?.addEventListener("click", () => {
-    updateSkinDisplay("https://textures.minecraft.net/texture/e5585b88c7dd884ec71b83d693eeab61a5867ff4691bc9dbb2eb5420a32194b6");
+  elements.btnPresetAlex?.addEventListener("click", async () => {
+    const url = "https://textures.minecraft.net/texture/e5585b88c7dd884ec71b83d693eeab61a5867ff4691bc9dbb2eb5420a32194b6";
+    updateSkinDisplay(url);
+    try {
+      await window.api.setCustomSkin(url);
+    } catch (e) {}
     showToast("Założono skin: Alex!");
   });
 
@@ -1886,6 +1893,7 @@ function setupWardrobeListeners() {
       const url = await window.api.getSkinUrl(nick);
       if (url) {
         updateSkinDisplay(url);
+        await window.api.setCustomSkin(url);
         showToast(`Pobrano skórkę dla gracza ${nick}!`);
       }
     } catch (err) {
@@ -1899,6 +1907,7 @@ function setupWardrobeListeners() {
       const newSkinUrl = await window.api.selectSkinFile();
       if (newSkinUrl) {
         updateSkinDisplay(newSkinUrl);
+        await window.api.setCustomSkin(newSkinUrl);
         showToast("Załadowano własną skórkę z pliku!");
       }
     } catch (err) {
@@ -1985,6 +1994,13 @@ function applyTheme(themeName, save = true) {
       ruby: "drop-shadow(0 0 12px rgba(244, 63, 94, 0.75)) hue-rotate(65deg) saturate(2)"
     };
     logoEl.style.filter = filters[theme] || filters.purple;
+  }
+
+  // Active pill highlight
+  const activeNav = document.querySelector(".nav-pill.active");
+  if (activeNav) {
+    activeNav.style.borderColor = "var(--accent-primary)";
+    activeNav.style.boxShadow = "0 0 14px var(--accent-glow)";
   }
 
   if (save) {

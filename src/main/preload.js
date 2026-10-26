@@ -44,17 +44,6 @@ contextBridge.exposeInMainWorld('api', {
   // External Links
   openExternal: (url) => ipcRenderer.send('system:open-external', url),
 
-  // Wardrobe & Capes
-  selectCapeFile: () => ipcRenderer.invoke('wardrobe:select-cape'),
-
-  // Player Stats & Playtime
-  getStats: () => ipcRenderer.invoke('stats:get'),
-  onStatsUpdated: (callback) => {
-    const sub = (_event, val) => callback(val);
-    ipcRenderer.on('stats:updated', sub);
-    return () => ipcRenderer.removeListener('stats:updated', sub);
-  },
-
   // Friends System
   getFriends: () => ipcRenderer.invoke('friends:get'),
   addFriend: (username) => ipcRenderer.invoke('friends:add', username),

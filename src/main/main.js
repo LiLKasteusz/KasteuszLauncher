@@ -1,6 +1,5 @@
 const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
-const fs = require('fs');
 const config = require('./config');
 const auth = require('./auth');
 const launcher = require('./launcher');
@@ -9,7 +8,6 @@ const mods = require('./mods');
 const friends = require('./friends');
 const serverHost = require('./server');
 const discord = require('./discord');
-const stats = require('./stats');
 
 let mainWindow = null;
 
@@ -182,40 +180,6 @@ ipcMain.handle('config:select-java', async () => {
     return result.filePaths[0];
   }
   return null;
-});
-
-// IPC: Statystyki i Czas Gry
-ipcMain.handle('stats:get', async () => {
-  const s = stats.getStats();
-  return {
-    ...s,
-    rankTitle: stats.getRankTitle(s.totalPlaytimeMinutes)
-  };
-});
-
-// IPC: Wybór pliku pelerynki z dysku
-ipcMain.handle('wardrobe:select-cape', async () => {
-  if (!mainWindow) return null;
-  const result = await dialog.showOpenDialog(mainWindow, {
-    title: 'Wybierz plik pelerynki Minecraft (PNG 64x32 lub 128x64)',
-    properties: ['openFile'],
-    filters: [
-      { name: 'Tekstura pelerynki (.png)', extensions: ['png'] }
-    ]
-  });
-  if (!result.canceled && result.filePaths.length > 0) {
-    const filePath = result.filePaths[0];
-    const base64 = fs.readFileSync(filePath).toString('base64');
-    return `data:image/png;base64,${base64}`;
-  }
-  return null;
-});
-
-// IPC: Zewnętrzne linki
-ipcMain.on('system:open-external', (_e, url) => {
-  if (url && (url.startsWith('https://') || url.startsWith('http://'))) {
-    shell.openExternal(url);
-  }
 });
 
 // IPC: Minecraft i wersje

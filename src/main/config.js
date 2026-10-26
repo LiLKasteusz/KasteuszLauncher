@@ -45,7 +45,7 @@ const DEFAULT_CONFIG = {
   fpsPreset: 'ultra',
   optimizeGameOptions: true,
   themeAccent: 'purple',
-  selectedCape: 'kasteusz',
+  selectedCape: 'none',
   ambientGlow: true,
   animationSpeed: 0.6,
   favoriteServers: [
