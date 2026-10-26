@@ -1987,13 +1987,6 @@ function applyTheme(themeName, save = true) {
     logoEl.style.filter = filters[theme] || filters.purple;
   }
 
-  // Active pill highlight
-  const activeNav = document.querySelector(".nav-pill.active");
-  if (activeNav) {
-    activeNav.style.borderColor = "var(--accent-primary)";
-    activeNav.style.boxShadow = "0 0 14px var(--accent-glow)";
-  }
-
   if (save) {
     window.api.saveConfig({ themeAccent: theme });
     showToast(`Aktywowano motyw: ${THEME_NAMES[theme] || theme}!`);
