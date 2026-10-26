@@ -6,6 +6,12 @@ let currentAccount = null;
 let currentConfig = null;
 let availableVersions = [];
 let isGameLaunching = false;
+let currentCosmetics = {
+  backEquipment: 'cape',
+  ears: false,
+  halo: false
+};
+let haloMeshGroup = null;
 
 // DOM Elements
 const elements = {
@@ -109,12 +115,36 @@ const elements = {
   settingAnimSpeed: document.getElementById('setting-anim-speed'),
   settingAnimVal: document.getElementById('setting-anim-val'),
 
+  // Live Wallpapers & UI Sounds
+  settingWallpaperOpacity: document.getElementById('setting-wallpaper-opacity'),
+  settingWallpaperVal: document.getElementById('setting-wallpaper-val'),
+  settingUiSounds: document.getElementById('setting-ui-sounds'),
+  settingSoundsVolume: document.getElementById('setting-sounds-volume'),
+  settingSoundsVal: document.getElementById('setting-sounds-val'),
+
+  // 3D Cosmetics
+  tabBtnCosmetics: document.getElementById('tab-btn-cosmetics'),
+  wardrobeContentCosmetics: document.getElementById('wardrobe-content-cosmetics'),
+  cosmeticBackCape: document.getElementById('cosmetic-back-cape'),
+  cosmeticBackElytra: document.getElementById('cosmetic-back-elytra'),
+  cosmeticEarsCard: document.getElementById('cosmetic-ears-card'),
+  pillEarsStatus: document.getElementById('pill-ears-status'),
+  cosmeticHaloCard: document.getElementById('cosmetic-halo-card'),
+  pillHaloStatus: document.getElementById('pill-halo-status'),
+
   toastContainer: document.getElementById('toast-container')
 };
 
 // 1. Initialise App
 async function initApp() {
   console.log('[RENDERER] Inicjalizacja KasteuszLauncher...');
+
+  // Rejestracja globalnych dźwięków interfejsu (Web Audio API)
+  try {
+    window.uiSounds?.attachInteractiveListeners();
+  } catch (soundErr) {
+    console.error('Błąd attachInteractiveListeners:', soundErr);
+  }
 
   // 1. Rejestracja wszystkich listenerów interfejsu synchronicznie (przyciski, garderoba, obracanie, motywy)
   try {
@@ -274,6 +304,22 @@ function createStanceAnimationClass() {
         player.cape.rotation.x = 0.20 + 0.08 * Math.sin(t * 1.3);
         player.cape.rotation.z = 0.03 * Math.cos(t * 0.9);
       }
+
+      // Elytra wings subtle flight flutter when equipped
+      if (player.elytra && (player.backEquipment === 'elytra' || player.elytra.visible)) {
+        player.elytra.leftWing.rotation.x = 0.32 + 0.05 * Math.cos(t * 1.2);
+        player.elytra.leftWing.rotation.z = 0.30 + 0.10 * Math.sin(t * 1.4);
+        if (typeof player.elytra.updateRightWing === 'function') {
+          player.elytra.updateRightWing();
+        }
+      }
+
+      // Floating gold halo hovering above head
+      const halo = player.skin?.head?.getObjectByName('playerHalo');
+      if (halo) {
+        halo.position.y = 7.2 + 0.35 * Math.sin(t * 1.5);
+        halo.rotation.y = 0.12 * Math.sin(t * 0.8);
+      }
     }
   };
 }
@@ -341,6 +387,17 @@ function init3DSkinViewer() {
     const skinToLoad = pendingSkinUrl || 'assets/default-skin.png';
     pendingSkinUrl = null;
     updateSkinDisplay(skinToLoad);
+
+    // Apply cosmetics
+    if (currentCosmetics.backEquipment && skinViewer.playerObject) {
+      skinViewer.playerObject.backEquipment = currentCosmetics.backEquipment;
+    }
+    if (currentCosmetics.ears) {
+      applyEars(true, false);
+    }
+    if (currentCosmetics.halo) {
+      applyHalo(true, false);
+    }
   } catch (err) {
     console.error('Błąd inicjalizacji podglądu 3D:', err);
   }
@@ -442,6 +499,49 @@ async function loadConfig() {
       if (skinViewer?.animation) skinViewer.animation.speed = speed;
     }
 
+    // Live Wallpapers
+    const savedWallpaper = currentConfig.liveWallpaper || 'matrix';
+    const savedOpacity = (currentConfig.wallpaperOpacity !== undefined) ? currentConfig.wallpaperOpacity : 0.6;
+    window.liveWallpapers?.init(savedWallpaper, savedOpacity);
+    document.querySelectorAll('.wallpaper-opt-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.style === savedWallpaper);
+    });
+    if (elements.settingWallpaperOpacity) {
+      elements.settingWallpaperOpacity.value = Math.round(savedOpacity * 100);
+    }
+    if (elements.settingWallpaperVal) {
+      elements.settingWallpaperVal.textContent = `${Math.round(savedOpacity * 100)}%`;
+    }
+
+    // UI Sounds
+    const soundsEnabled = currentConfig.uiSoundsEnabled !== false;
+    const soundsVolume = (currentConfig.uiSoundsVolume !== undefined) ? currentConfig.uiSoundsVolume : 0.4;
+    window.uiSounds?.init(soundsEnabled, soundsVolume);
+    if (elements.settingUiSounds) {
+      elements.settingUiSounds.checked = soundsEnabled;
+    }
+    if (elements.settingSoundsVolume) {
+      elements.settingSoundsVolume.value = Math.round(soundsVolume * 100);
+    }
+    if (elements.settingSoundsVal) {
+      elements.settingSoundsVal.textContent = `${Math.round(soundsVolume * 100)}%`;
+    }
+
+    // Music Player
+    const musicStation = currentConfig.musicPlayerStation || 'lofi';
+    const musicVolume = (currentConfig.musicPlayerVolume !== undefined) ? currentConfig.musicPlayerVolume : 0.35;
+    window.musicPlayer?.init(musicStation, musicVolume);
+
+    // 3D Cosmetics
+    if (currentConfig.cosmetics) {
+      currentCosmetics = {
+        backEquipment: currentConfig.cosmetics.backEquipment || 'cape',
+        ears: !!currentConfig.cosmetics.ears,
+        halo: !!currentConfig.cosmetics.halo
+      };
+    }
+    updateCosmeticsUI();
+
     // Selected Cape (default to none so no unwanted cape is forced)
     const savedCape = currentConfig.selectedCape || 'none';
     setTimeout(() => {
@@ -453,6 +553,39 @@ async function loadConfig() {
 }
 
 function setupSettingsListeners() {
+  // Live Wallpapers Settings
+  document.querySelectorAll('.wallpaper-opt-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.wallpaper-opt-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const style = btn.dataset.style;
+      window.liveWallpapers?.setStyle(style);
+      window.api.saveConfig({ liveWallpaper: style });
+      showToast(`Zmieniono tło: ${btn.textContent.trim()}`);
+    });
+  });
+
+  elements.settingWallpaperOpacity?.addEventListener('input', (e) => {
+    const val = parseInt(e.target.value, 10);
+    if (elements.settingWallpaperVal) elements.settingWallpaperVal.textContent = `${val}%`;
+    window.liveWallpapers?.setOpacity(val / 100);
+    window.api.saveConfig({ wallpaperOpacity: val / 100 });
+  });
+
+  // UI Sounds Settings
+  elements.settingUiSounds?.addEventListener('change', (e) => {
+    window.uiSounds?.setEnabled(e.target.checked);
+    window.api.saveConfig({ uiSoundsEnabled: e.target.checked });
+    showToast(e.target.checked ? '🔊 Włączono dźwięki interfejsu' : 'Wyciszono dźwięki interfejsu');
+  });
+
+  elements.settingSoundsVolume?.addEventListener('input', (e) => {
+    const val = parseInt(e.target.value, 10);
+    if (elements.settingSoundsVal) elements.settingSoundsVal.textContent = `${val}%`;
+    window.uiSounds?.setVolume(val / 100);
+    window.api.saveConfig({ uiSoundsVolume: val / 100 });
+  });
+
   // FPS Boost Toggle
   elements.settingFpsBoost?.addEventListener('change', (e) => {
     window.api.saveConfig({ fpsBoostMode: e.target.checked });
@@ -1260,6 +1393,10 @@ function renderFullVersionsGrid() {
 async function handlePlayClick() {
   if (isGameLaunching) return;
 
+  try {
+    window.uiSounds?.playLaunch();
+  } catch (_) {}
+
   if (!currentAccount) {
     showToast('Przed uruchomieniem gry musisz się zalogować!');
     openLoginModal();
@@ -1315,6 +1452,10 @@ function setupLauncherEventListeners() {
     showToast(`Minecraft ${data.version} został uruchomiony!`);
     elements.playBtnText.textContent = 'Gra jest uruchomiona';
     appendLog(`[KasteuszLauncher] Minecraft ${data.version} wystartował.`);
+    try {
+      window.liveWallpapers?.pause(true);
+      window.musicPlayer?.onGameLaunch();
+    } catch (_) {}
     // FPS Boost: wyłączamy animację 3D dla 0% obciążenia GPU podczas grania
     if (skinViewer) {
       skinViewer.animation = null;
@@ -1325,10 +1466,17 @@ function setupLauncherEventListeners() {
     setLaunchingState(false);
     showToast(`Gra została zamknięta (kod: ${data.code}).`);
     appendLog(`[KasteuszLauncher] Proces gry zakończony z kodem ${data.code}.`);
+    try {
+      window.liveWallpapers?.pause(false);
+      window.musicPlayer?.onGameClose();
+    } catch (_) {}
     // Wznawiamy animację 3D po wyjściu z gry
     if (skinViewer && window.skinview3d) {
-      skinViewer.animation = new window.skinview3d.IdleAnimation();
-      skinViewer.animation.speed = 0.7;
+      const StanceAnim = createStanceAnimationClass();
+      if (StanceAnim) {
+        skinViewer.animation = new StanceAnim();
+        skinViewer.animation.speed = currentConfig?.animationSpeed || 0.6;
+      }
     }
   });
 
@@ -1348,6 +1496,9 @@ function appendLog(line) {
 
 // Toast notification helper
 function showToast(message) {
+  try {
+    window.uiSounds?.playToast();
+  } catch (_) {}
   const toast = document.createElement('div');
   toast.className = 'toast';
   toast.innerHTML = `
@@ -1788,6 +1939,7 @@ function applyCape(capeIdOrUrl, save = true) {
   if (capeIdOrUrl === "none" || !capeIdOrUrl) {
     skinViewer.loadCape(null);
     if (skinViewer.playerObject?.cape) skinViewer.playerObject.cape.visible = false;
+    if (skinViewer.playerObject?.elytra) skinViewer.playerObject.elytra.visible = false;
     if (save) window.api.saveConfig({ selectedCape: "none" });
     return;
   }
@@ -1800,13 +1952,149 @@ function applyCape(capeIdOrUrl, save = true) {
 
   try {
     skinViewer.loadCape(urlToLoad).then(() => {
-      if (skinViewer.playerObject?.cape) skinViewer.playerObject.cape.visible = true;
+      if (skinViewer.playerObject) {
+        skinViewer.playerObject.backEquipment = currentCosmetics.backEquipment || 'cape';
+      }
     }).catch(err => {
       console.warn("Błąd ładowania pelerynki:", err);
     });
     if (save) window.api.saveConfig({ selectedCape: capeIdOrUrl });
   } catch (err) {
     console.warn("Wyjątek ładowania pelerynki:", err);
+  }
+}
+
+// 3D Cosmetics Logic: Back Equipment (Cape/Elytra), Ears, and Floating Halo
+function applyBackEquipment(type, save = true) {
+  currentCosmetics.backEquipment = type;
+  if (skinViewer?.playerObject) {
+    skinViewer.playerObject.backEquipment = type;
+  }
+  updateCosmeticsUI();
+  if (save) {
+    window.api.saveConfig({ cosmetics: currentCosmetics });
+  }
+}
+
+function applyEars(enabled, save = true) {
+  currentCosmetics.ears = !!enabled;
+  if (skinViewer) {
+    if (currentCosmetics.ears) {
+      const skinUrl = currentAccount?.customSkinUrl || currentAccount?.skinUrl || 'assets/default-skin.png';
+      try {
+        skinViewer.loadEars(skinUrl, { textureType: 'skin' });
+      } catch (e) {
+        console.warn('Błąd ładowania uszu:', e);
+      }
+    } else {
+      try {
+        skinViewer.resetEars();
+      } catch (e) {
+        console.warn('Błąd resetu uszu:', e);
+      }
+    }
+  }
+  updateCosmeticsUI();
+  if (save) {
+    window.api.saveConfig({ cosmetics: currentCosmetics });
+  }
+}
+
+function applyHalo(enabled, save = true) {
+  currentCosmetics.halo = !!enabled;
+  if (skinViewer?.playerObject?.skin?.head) {
+    const head = skinViewer.playerObject.skin.head;
+    const existing = head.getObjectByName('playerHalo');
+    if (existing) {
+      head.remove(existing);
+      existing.traverse?.(child => {
+        child.geometry?.dispose?.();
+        child.material?.dispose?.();
+      });
+    }
+
+    if (currentCosmetics.halo) {
+      const anyMesh = head.children.find(c => c.isMesh);
+      if (anyMesh) {
+        const MeshConstructor = anyMesh.constructor;
+        const BoxGeoConstructor = anyMesh.geometry.constructor;
+        const MatConstructor = anyMesh.material.constructor;
+        const GroupConstructor = head.constructor;
+
+        const haloGroup = new GroupConstructor();
+        haloGroup.name = 'playerHalo';
+
+        const haloMat = new MatConstructor({
+          color: 0xffd700,
+          emissive: 0xffaa00,
+          emissiveIntensity: 0.9,
+          roughness: 0.2,
+          metalness: 0.85
+        });
+
+        const barThickness = 1.0;
+        const ringSize = 9.5;
+
+        const barGeoFB = new BoxGeoConstructor(ringSize, barThickness, barThickness);
+        const barGeoLR = new BoxGeoConstructor(barThickness, barThickness, ringSize - barThickness * 2);
+
+        const frontBar = new MeshConstructor(barGeoFB, haloMat);
+        frontBar.position.set(0, 0, ringSize / 2 - barThickness / 2);
+
+        const backBar = new MeshConstructor(barGeoFB, haloMat);
+        backBar.position.set(0, 0, -ringSize / 2 + barThickness / 2);
+
+        const leftBar = new MeshConstructor(barGeoLR, haloMat);
+        leftBar.position.set(-ringSize / 2 + barThickness / 2, 0, 0);
+
+        const rightBar = new MeshConstructor(barGeoLR, haloMat);
+        rightBar.position.set(ringSize / 2 - barThickness / 2, 0, 0);
+
+        haloGroup.add(frontBar);
+        haloGroup.add(backBar);
+        haloGroup.add(leftBar);
+        haloGroup.add(rightBar);
+
+        haloGroup.position.set(0, 7.2, 0);
+        haloGroup.rotation.x = -0.15;
+        haloGroup.rotation.z = 0.05;
+
+        head.add(haloGroup);
+      }
+    }
+  }
+  updateCosmeticsUI();
+  if (save) {
+    window.api.saveConfig({ cosmetics: currentCosmetics });
+  }
+}
+
+function updateCosmeticsUI() {
+  const cardCape = document.getElementById('cosmetic-back-cape');
+  const cardElytra = document.getElementById('cosmetic-back-elytra');
+  const cardEars = document.getElementById('cosmetic-ears-card');
+  const cardHalo = document.getElementById('cosmetic-halo-card');
+  const pillEars = document.getElementById('pill-ears-status');
+  const pillHalo = document.getElementById('pill-halo-status');
+
+  if (cardCape && cardElytra) {
+    const isElytra = currentCosmetics.backEquipment === 'elytra';
+    cardCape.classList.toggle('active', !isElytra);
+    cardElytra.classList.toggle('active', isElytra);
+    const pillCape = cardCape.querySelector('.cosmetic-status-pill');
+    const pillEly = cardElytra.querySelector('.cosmetic-status-pill');
+    if (pillCape) pillCape.textContent = !isElytra ? 'Aktywna' : 'Wybierz';
+    if (pillEly) pillEly.textContent = isElytra ? 'Aktywne' : 'Wybierz';
+  }
+
+  if (cardEars && pillEars) {
+    cardEars.classList.toggle('active', !!currentCosmetics.ears);
+    pillEars.textContent = currentCosmetics.ears ? 'Aktywne' : 'Wyłączone';
+  }
+
+  if (cardHalo && pillHalo) {
+    cardHalo.classList.toggle('active', !!currentCosmetics.halo);
+    pillHalo.textContent = currentCosmetics.halo ? 'Aktywna' : 'Wyłączone';
   }
 }
 
@@ -1909,19 +2197,55 @@ function setupWardrobeListeners() {
     btnRotate.classList.toggle("active", isPlayerFlipped);
   });
 
-  // Wardrobe tabs (Capes vs Skins)
-  elements.tabBtnCapes?.addEventListener("click", () => {
-    elements.tabBtnCapes.classList.add("active");
-    elements.tabBtnSkins.classList.remove("active");
-    elements.wardrobeContentCapes.classList.add("active");
-    elements.wardrobeContentSkins.classList.remove("active");
+  // Wardrobe tabs (Capes vs Skins vs Cosmetics)
+  const tabBtnCapes = elements.tabBtnCapes || document.getElementById('tab-btn-capes');
+  const tabBtnSkins = elements.tabBtnSkins || document.getElementById('tab-btn-skins');
+  const tabBtnCosmetics = elements.tabBtnCosmetics || document.getElementById('tab-btn-cosmetics');
+  const contentCapes = elements.wardrobeContentCapes || document.getElementById('wardrobe-content-capes');
+  const contentSkins = elements.wardrobeContentSkins || document.getElementById('wardrobe-content-skins');
+  const contentCosmetics = elements.wardrobeContentCosmetics || document.getElementById('wardrobe-content-cosmetics');
+
+  function switchWardrobeTab(tab) {
+    [tabBtnCapes, tabBtnSkins, tabBtnCosmetics].forEach(b => b?.classList.remove('active'));
+    [contentCapes, contentSkins, contentCosmetics].forEach(c => c?.classList.remove('active'));
+
+    if (tab === 'capes') {
+      tabBtnCapes?.classList.add('active');
+      contentCapes?.classList.add('active');
+    } else if (tab === 'skins') {
+      tabBtnSkins?.classList.add('active');
+      contentSkins?.classList.add('active');
+    } else if (tab === 'cosmetics') {
+      tabBtnCosmetics?.classList.add('active');
+      contentCosmetics?.classList.add('active');
+    }
+  }
+
+  tabBtnCapes?.addEventListener('click', () => switchWardrobeTab('capes'));
+  tabBtnSkins?.addEventListener('click', () => switchWardrobeTab('skins'));
+  tabBtnCosmetics?.addEventListener('click', () => switchWardrobeTab('cosmetics'));
+
+  // 3D Cosmetics Selection Handlers
+  document.getElementById('cosmetic-back-cape')?.addEventListener('click', () => {
+    applyBackEquipment('cape', true);
+    showToast('Wyposażono klasyczną pelerynkę!');
   });
 
-  elements.tabBtnSkins?.addEventListener("click", () => {
-    elements.tabBtnSkins.classList.add("active");
-    elements.tabBtnCapes.classList.remove("active");
-    elements.wardrobeContentSkins.classList.add("active");
-    elements.wardrobeContentCapes.classList.remove("active");
+  document.getElementById('cosmetic-back-elytra')?.addEventListener('click', () => {
+    applyBackEquipment('elytra', true);
+    showToast('Wyposażono skrzydła Elytra z Twoją pelerynką!');
+  });
+
+  document.getElementById('cosmetic-ears-card')?.addEventListener('click', () => {
+    const newState = !currentCosmetics.ears;
+    applyEars(newState, true);
+    showToast(newState ? 'Włączono uszy Deadmau5!' : 'Zdjęto uszy Deadmau5.');
+  });
+
+  document.getElementById('cosmetic-halo-card')?.addEventListener('click', () => {
+    const newState = !currentCosmetics.halo;
+    applyHalo(newState, true);
+    showToast(newState ? 'Aktywowano złotą Aureolę Światła!' : 'Zdjęto Aureolę.');
   });
 
   // Built-in cape selection
@@ -2097,6 +2421,10 @@ function applyTheme(themeName, save = true) {
     activeNav.style.borderColor = "var(--accent-primary)";
     activeNav.style.boxShadow = "0 0 14px var(--accent-glow)";
   }
+
+  try {
+    window.liveWallpapers?.updateThemeColors();
+  } catch (_) {}
 
   if (save) {
     window.api.saveConfig({ themeAccent: theme });

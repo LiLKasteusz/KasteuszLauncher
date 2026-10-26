@@ -7,6 +7,8 @@
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+  <!-- LIVE WALLPAPERS CANVAS (Background) -->
+  <canvas id="live-wallpaper-canvas"></canvas>
 
   <!-- Top App Titlebar / Drag Region -->
   <header class="topbar">
@@ -603,6 +605,70 @@
             </div>
           </div>
 
+          <!-- LIVE WALLPAPERS SETTINGS -->
+          <div class="settings-card-group">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+              <div>
+                <h3 style="font-size: 15px; font-weight: 700; color: #ffffff; display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                  <span>🌌</span>
+                  <span>Animowane Tła (Live Wallpapers)</span>
+                </h3>
+                <span style="font-size: 12px; color: var(--text-dim);">Dynamiczne tło w stylu sci-fi dopasowujące się do Twojego motywu.</span>
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px;">
+              <button class="btn-secondary wallpaper-opt-btn active" data-style="matrix" style="padding: 10px 8px; font-size: 12px; font-weight: 600; text-align: center;">
+                ✨ Cyber Cząsteczki
+              </button>
+              <button class="btn-secondary wallpaper-opt-btn" data-style="warp" style="padding: 10px 8px; font-size: 12px; font-weight: 600; text-align: center;">
+                🚀 Tunel Gwiezdny
+              </button>
+              <button class="btn-secondary wallpaper-opt-btn" data-style="aurora" style="padding: 10px 8px; font-size: 12px; font-weight: 600; text-align: center;">
+                🌊 Kosmiczna Zorza
+              </button>
+              <button class="btn-secondary wallpaper-opt-btn" data-style="none" style="padding: 10px 8px; font-size: 12px; font-weight: 600; text-align: center;">
+                ⬛ Wyłączone
+              </button>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px;">
+              <div style="display: flex; flex-direction: column; gap: 2px;">
+                <span style="font-size: 13px; font-weight: 600; color: #ffffff;">Intensywność / Przezroczystość tła</span>
+                <span style="font-size: 11px; color: var(--text-dim);">Reguluje jasność animowanych efektów za kartami launchera</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <input type="range" id="setting-wallpaper-opacity" min="10" max="100" step="5" value="60" style="width: 120px; cursor: pointer; accent-color: var(--accent-primary);">
+                <span id="setting-wallpaper-val" style="font-size: 12px; font-weight: 700; color: var(--accent-primary); min-width: 35px;">60%</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- UI SOUNDS SETTINGS -->
+          <div class="settings-card-group">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+              <div>
+                <h3 style="font-size: 15px; font-weight: 700; color: #ffffff; display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                  <span>🔊</span>
+                  <span>Dźwięki Interfejsu (UI Sounds)</span>
+                </h3>
+                <span style="font-size: 12px; color: var(--text-dim);">Syntetyzowane dźwięki klikania, najechania myszką i odpalania gry (zero opóźnień na Linuxie).</span>
+              </div>
+              <input type="checkbox" id="setting-ui-sounds" checked style="width: 20px; height: 20px; accent-color: var(--accent-primary); cursor: pointer;">
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px;">
+              <div style="display: flex; flex-direction: column; gap: 2px;">
+                <span style="font-size: 13px; font-weight: 600; color: #ffffff;">Głośność efektów dźwiękowych</span>
+                <span style="font-size: 11px; color: var(--text-dim);">Dopasuj poziom głośności kliknięć i startu gry</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <input type="range" id="setting-sounds-volume" min="0" max="100" step="5" value="40" style="width: 120px; cursor: pointer; accent-color: var(--accent-primary);">
+                <span id="setting-sounds-val" style="font-size: 12px; font-weight: 700; color: var(--accent-primary); min-width: 35px;">40%</span>
+              </div>
+            </div>
+          </div>
+
           <!-- RAM Min/Max -->
           <div class="setting-row">
             <div class="setting-info">
@@ -669,6 +735,29 @@
   <!-- Bottom Footer Bar -->
   <footer class="footer-bar">
     <div class="footer-copyright">© 2026 KASTEUSZ STUDIO</div>
+
+    <!-- Central Docked Mini Music Player -->
+    <div class="footer-music-player" id="footer-music-player">
+      <div class="music-visualizer" id="music-visualizer">
+        <span class="bar"></span>
+        <span class="bar"></span>
+        <span class="bar"></span>
+      </div>
+      <div class="music-info-text">
+        <span class="music-station-title" id="music-title">Lofi Chill Beats</span>
+        <span class="music-station-genre" id="music-genre">Lofi Hip-Hop</span>
+      </div>
+      <div class="music-controls">
+        <button class="music-ctrl-btn" id="btn-music-prev" title="Poprzednia stacja">⏮</button>
+        <button class="music-ctrl-btn play-btn" id="btn-music-toggle" title="Odtwarzaj / Pauza">▶</button>
+        <button class="music-ctrl-btn" id="btn-music-next" title="Następna stacja">⏭</button>
+      </div>
+      <div class="music-vol-wrapper">
+        <span class="vol-icon">🔊</span>
+        <input type="range" class="music-vol-slider" id="music-volume-slider" min="0" max="100" value="35">
+      </div>
+    </div>
+
     <div class="footer-version">4.0.1</div>
   </footer>
 
@@ -829,6 +918,7 @@
       <div class="wardrobe-tabs">
         <button class="wardrobe-tab active" id="tab-btn-capes">Pelerynki (Capes)</button>
         <button class="wardrobe-tab" id="tab-btn-skins">Skórki (Skins)</button>
+        <button class="wardrobe-tab" id="tab-btn-cosmetics">Kosmetyki 3D</button>
       </div>
 
       <!-- Capes section -->
@@ -911,6 +1001,51 @@
           </button>
         </div>
       </div>
+
+      <!-- 3D Cosmetics section -->
+      <div class="wardrobe-content" id="wardrobe-content-cosmetics">
+        <div class="wardrobe-section-label">WYPOSAŻENIE PLECÓW (PELERYNKA CZY SKRZYDŁA ELYTRA)</div>
+        <div class="cosmetics-grid">
+          <div class="cosmetic-card active" id="cosmetic-back-cape" data-back="cape">
+            <div class="cosmetic-icon">🦸‍♂️</div>
+            <div class="cosmetic-info">
+              <span class="cosmetic-name">Klasyczna Pelerynka</span>
+              <span class="cosmetic-desc">Powiewająca peleryna na plecach</span>
+            </div>
+            <span class="cosmetic-status-pill">Aktywna</span>
+          </div>
+
+          <div class="cosmetic-card" id="cosmetic-back-elytra" data-back="elytra">
+            <div class="cosmetic-icon">🪽</div>
+            <div class="cosmetic-info">
+              <span class="cosmetic-name">Skrzydła Elytra (Wings)</span>
+              <span class="cosmetic-desc">Rozłożone 3D skrzydła z teksturą Twojej pelerynki</span>
+            </div>
+            <span class="cosmetic-status-pill">Wybierz</span>
+          </div>
+        </div>
+
+        <div class="wardrobe-section-label" style="margin-top: 16px;">DODATKI NA GŁOWĘ</div>
+        <div class="cosmetics-grid">
+          <div class="cosmetic-card" id="cosmetic-ears-card">
+            <div class="cosmetic-icon">🐭</div>
+            <div class="cosmetic-info">
+              <span class="cosmetic-name">Uszy Deadmau5</span>
+              <span class="cosmetic-desc">Kultowe duże uszy na głowie gracza</span>
+            </div>
+            <span class="cosmetic-status-pill" id="pill-ears-status">Wyłączone</span>
+          </div>
+
+          <div class="cosmetic-card" id="cosmetic-halo-card">
+            <div class="cosmetic-icon">😇</div>
+            <div class="cosmetic-info">
+              <span class="cosmetic-name">Aureola Światła (Halo)</span>
+              <span class="cosmetic-desc">Lewitujący złoty pierścień nad głową postaci</span>
+            </div>
+            <span class="cosmetic-status-pill" id="pill-halo-status">Wyłączone</span>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -919,6 +1054,9 @@
 
   <!-- Scripts -->
   <script src="js/skinview3d.bundle.js"></script>
+  <script src="js/sounds.js"></script>
+  <script src="js/wallpapers.js"></script>
+  <script src="js/music-player.js"></script>
   <script src="js/renderer.js"></script>
 </body>
 </html>

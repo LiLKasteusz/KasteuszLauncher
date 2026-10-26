@@ -50,6 +50,18 @@ const DEFAULT_CONFIG = {
   animationSpeed: 0.6,
   discordRpcEnabled: true,
   discordClientId: '1564399095999897740',
+  liveWallpaper: 'matrix',
+  wallpaperOpacity: 0.6,
+  uiSoundsEnabled: true,
+  uiSoundsVolume: 0.4,
+  musicPlayerEnabled: false,
+  musicPlayerVolume: 0.4,
+  musicPlayerStation: 'lofi',
+  cosmetics: {
+    backEquipment: 'cape',
+    ears: false,
+    halo: false
+  },
   favoriteServers: [
     { name: 'Szkolne SMP', ip: 'szkolnesmp.com.pl', description: 'Oficjalny serwer Kasteusza (1.21.11)', isOfficial: true },
     { name: 'Hypixel', ip: 'mc.hypixel.net', description: 'Serwer minigier' }
