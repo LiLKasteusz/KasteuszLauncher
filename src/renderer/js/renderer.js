@@ -1,4 +1,7 @@
 // KasteuszLauncher Renderer Controller
+console.log('[RENDERER] renderer.js starting, readyState:', document.readyState);
+window.addEventListener('error', (err) => console.error('[UNCAUGHT ERROR]', err.error || err.message));
+window.addEventListener('unhandledrejection', (err) => console.error('[UNHANDLED REJECTION]', err.reason));
 
 let skinViewer = null;
 let currentAccount = null;
@@ -110,27 +113,52 @@ const elements = {
 
 // 1. Initialise App
 async function initApp() {
-  setupWindowControls();
-  setupNavigation();
-  init3DSkinViewer();
-  setupSettingsListeners();
-  setupModsListeners();
-  setupModBrowser();
-  setupLauncherEventListeners();
+  console.log('[RENDERER] initApp called!');
+  try {
+    console.log('[INIT] 1. setupWindowControls');
+    setupWindowControls();
+    console.log('[INIT] 2. setupNavigation');
+    setupNavigation();
+    console.log('[INIT] 3. init3DSkinViewer');
+    init3DSkinViewer();
+    console.log('[INIT] 4. setupSettingsListeners');
+    setupSettingsListeners();
+    console.log('[INIT] 5. setupModsListeners');
+    setupModsListeners();
+    console.log('[INIT] 6. setupModBrowser');
+    setupModBrowser();
+    console.log('[INIT] 7. setupLauncherEventListeners');
+    setupLauncherEventListeners();
 
-  await loadConfig();
-  await loadAccount();
-  await loadVersions();
-  await loadMods();
-  await loadFriends();
-  setupFriendsListeners();
-  initOfficialServerWidget();
-  setupServerHostingListeners();
-  await loadServerHosting();
+    console.log('[INIT] 8. loadConfig');
+    await loadConfig();
+    console.log('[INIT] 9. loadAccount');
+    await loadAccount();
+    console.log('[INIT] 10. loadVersions');
+    await loadVersions();
+    console.log('[INIT] 11. loadMods');
+    await loadMods();
+    console.log('[INIT] 12. loadFriends');
+    await loadFriends();
+    console.log('[INIT] 13. setupFriendsListeners');
+    setupFriendsListeners();
+    console.log('[INIT] 14. initOfficialServerWidget');
+    initOfficialServerWidget();
+    console.log('[INIT] 15. setupServerHostingListeners');
+    setupServerHostingListeners();
+    console.log('[INIT] 16. loadServerHosting');
+    await loadServerHosting();
 
-  setupWardrobeListeners();
-  setupThemesListeners();
-  await loadStats();
+    console.log('[INIT] 17. setupWardrobeListeners');
+    setupWardrobeListeners();
+    console.log('[INIT] 18. setupThemesListeners');
+    setupThemesListeners();
+    console.log('[INIT] 19. loadStats');
+    await loadStats();
+    console.log('[INIT] All init completed successfully!');
+  } catch (err) {
+    console.error('[INIT ERROR]', err);
+  }
 
   // "przed tym trzeba sie zalogowac na konto premium"
   // Automatycznie otwieramy okno logowania, jeśli użytkownik nie jest jeszcze zalogowany
