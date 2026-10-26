@@ -265,6 +265,41 @@ async function launchMinecraft(window, versionOverride) {
     activeLauncherClient.on('data', (e) => {
       const line = e.toString().trim();
       safeSend('launcher:log', { level: 'info', text: line });
+
+      // Dynamiczne wykrywanie stanu gry i serwera dla Discord RPC
+      if (line.includes('Connecting to ')) {
+        const match = line.match(/Connecting to\s+([a-zA-Z0-9.\-_]+)/i);
+        if (match && match[1]) {
+          const rawHost = match[1];
+          const serverName = (rawHost === 'localhost' || rawHost === '127.0.0.1') ? 'Lokalny serwer' : rawHost;
+          discord.setLauncherActivity({
+            isPlaying: true,
+            serverIp: serverName,
+            statusDetails: `Gra na serwerze: ${serverName}`,
+            gameVersion: versionToLaunch
+          });
+        }
+      } else if (line.includes('Starting integrated minecraft server') || line.includes('Starting integrated server')) {
+        discord.setLauncherActivity({
+          isPlaying: true,
+          serverIp: null,
+          statusDetails: 'Tryb jednoosobowy (Singleplayer)',
+          gameVersion: versionToLaunch
+        });
+      } else if (
+        line.includes('Stopping singleplayer server') ||
+        line.includes('Client disconnected with reason') ||
+        line.includes('lost connection: Disconnected') ||
+        line.includes('Disconnecting from previous connection') ||
+        line.includes('Disconnected from server')
+      ) {
+        discord.setLauncherActivity({
+          isPlaying: true,
+          serverIp: null,
+          statusDetails: 'W menu gry',
+          gameVersion: versionToLaunch
+        });
+      }
     });
 
     activeLauncherClient.on('download-status', (e) => {
@@ -286,7 +321,7 @@ async function launchMinecraft(window, versionOverride) {
     activeLauncherClient.on('close', (code) => {
       isLaunching = false;
       const updatedStats = stats.recordClose();
-      discord.setLauncherActivity({ isPlaying: false, serverIp: 'szkolnesmp.com.pl' });
+      discord.setLauncherActivity({ isPlaying: false, serverIp: null, statusDetails: 'W menu launchera' });
       safeSend('launcher:closed', { code });
       safeSend('stats:updated', updatedStats);
     });
@@ -295,7 +330,12 @@ async function launchMinecraft(window, versionOverride) {
       .then(() => {
         isLaunching = false;
         const currentStats = stats.recordLaunch(versionToLaunch);
-        discord.setLauncherActivity({ isPlaying: true, serverIp: 'szkolnesmp.com.pl', gameVersion: versionToLaunch });
+        discord.setLauncherActivity({
+          isPlaying: true,
+          serverIp: null,
+          statusDetails: 'W menu gry',
+          gameVersion: versionToLaunch
+        });
         safeSend('launcher:started', { version: versionToLaunch });
         safeSend('stats:updated', currentStats);
         resolve({ success: true, version: versionToLaunch });

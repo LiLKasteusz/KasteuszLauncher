@@ -34,8 +34,16 @@ function createWindow() {
 
   mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
 
-  mainWindow.webContents.on('console-message', (_e, level, message, line, sourceId) => {
-    console.log(`[RENDERER L${line}]`, message);
+  mainWindow.webContents.on('console-message', (event) => {
+    console.log('[RENDERER CONSOLE]', event.message, 'at line', event.lineNumber);
+  });
+
+  mainWindow.webContents.on('did-finish-load', () => {
+    console.log('[MAIN] did-finish-load');
+  });
+
+  mainWindow.webContents.on('did-fail-load', (e, code, desc) => {
+    console.log('[MAIN] did-fail-load', code, desc);
   });
 
   mainWindow.once('ready-to-show', () => {
@@ -91,13 +99,13 @@ ipcMain.handle('auth:get-active', async () => {
 
 ipcMain.handle('auth:login-microsoft', async () => {
   const acc = await auth.loginWithMicrosoft();
-  if (acc && acc.name) discord.setLauncherActivity({ username: acc.name });
+  if (acc && acc.name) discord.setLauncherActivity({ username: acc.name, isPlaying: false, serverIp: null, statusDetails: 'W menu launchera' });
   return acc;
 });
 
 ipcMain.handle('auth:login-offline', async (_e, username) => {
   const acc = await auth.createOfflineAccount(username);
-  if (acc && acc.name) discord.setLauncherActivity({ username: acc.name });
+  if (acc && acc.name) discord.setLauncherActivity({ username: acc.name, isPlaying: false, serverIp: null, statusDetails: 'W menu launchera' });
   return acc;
 });
 
