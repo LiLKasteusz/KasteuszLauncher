@@ -331,6 +331,14 @@ async function authenticateWithXboxAndMinecraft(msAccessToken, msRefreshToken) {
   if (!activeSkin) {
     activeSkin = await getSkinUrlForUsername(username);
   }
+  if (activeSkin && activeSkin.startsWith('http://')) {
+    activeSkin = activeSkin.replace('http://', 'https://');
+  }
+
+  const safeCapes = (profile?.capes || []).map(c => ({
+    ...c,
+    url: c.url ? c.url.replace('http://', 'https://') : c.url
+  }));
 
   const xuid = xblData.DisplayClaims?.xui?.[0]?.xid || '';
 
@@ -340,7 +348,7 @@ async function authenticateWithXboxAndMinecraft(msAccessToken, msRefreshToken) {
     name: username,
     skinUrl: activeSkin,
     skinVariant: profile?.skins?.[0]?.variant || 'CLASSIC',
-    capes: profile?.capes || [],
+    capes: safeCapes,
     mcAccessToken,
     msRefreshToken,
     expiresAt: Date.now() + expiresIn * 1000,

@@ -5,6 +5,7 @@ const config = require('./config');
 const auth = require('./auth');
 const mods = require('./mods');
 const discord = require('./discord');
+const stats = require('./stats');
 
 const FPS_BOOST_JVM_FLAGS = [
   '-XX:+UseG1GC',
@@ -284,15 +285,19 @@ async function launchMinecraft(window, versionOverride) {
 
     activeLauncherClient.on('close', (code) => {
       isLaunching = false;
+      const updatedStats = stats.recordClose();
       discord.setLauncherActivity({ isPlaying: false, serverIp: 'szkolnesmp.com.pl' });
       safeSend('launcher:closed', { code });
+      safeSend('stats:updated', updatedStats);
     });
 
     activeLauncherClient.launch(launchOptions)
       .then(() => {
         isLaunching = false;
+        const currentStats = stats.recordLaunch(versionToLaunch);
         discord.setLauncherActivity({ isPlaying: true, serverIp: 'szkolnesmp.com.pl', gameVersion: versionToLaunch });
         safeSend('launcher:started', { version: versionToLaunch });
+        safeSend('stats:updated', currentStats);
         resolve({ success: true, version: versionToLaunch });
         if (appConfig.closeOnLaunch) {
           setTimeout(() => {

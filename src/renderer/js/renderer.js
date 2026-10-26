@@ -324,7 +324,10 @@ function handleViewerResize() {
 
 function updateSkinDisplay(skinUrl) {
   if (!skinViewer) return;
-  const target = skinUrl || 'assets/default-skin.png';
+  let target = skinUrl || 'assets/default-skin.png';
+  if (typeof target === 'string' && target.startsWith('http://')) {
+    target = target.replace('http://', 'https://');
+  }
   try {
     skinViewer.loadSkin(target).catch(err => {
       console.warn('Błąd ładowania skórki, używam fallbacku:', err);
