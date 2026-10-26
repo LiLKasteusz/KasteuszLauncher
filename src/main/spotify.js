@@ -1,10 +1,13 @@
-// KasteuszLauncher Spotify Integration Module
+// KasteuszLauncher Spotify Integration Module (OAuth 2.0 PKCE Flow)
 const { BrowserWindow } = require('electron');
 const { exec } = require('child_process');
+const http = require('http');
+const crypto = require('crypto');
 const config = require('./config');
 
-const DEFAULT_SPOTIFY_CLIENT_ID = 'b27f4d436a5a40b99144421a71e84323'; // Standard Client ID for desktop integrations
-const REDIRECT_URI = 'http://localhost:8888/callback';
+const DEFAULT_SPOTIFY_CLIENT_ID = '65b708073fc0480ea92a077233ca87bd'; // Registered Spotify PKCE Client ID (Spotube/Desktop standard)
+const REDIRECT_PORT = 4304;
+const REDIRECT_URI = `http://localhost:${REDIRECT_PORT}/auth/spotify/callback`;
 const SCOPES = [
   'user-read-playback-state',
   'user-modify-playback-state',
@@ -14,19 +17,117 @@ const SCOPES = [
   'user-library-read'
 ].join(' ');
 
+function generateCodeVerifier() {
+  return crypto.randomBytes(32).toString('base64url');
+}
+
+function generateCodeChallenge(verifier) {
+  return crypto.createHash('sha256').update(verifier).digest('base64url');
+}
+
 /**
- * Rozpoczyna logowanie do konta Spotify w oknie Electron
+ * Wymienia kod autoryzacji PKCE na token dostępu (access_token i refresh_token)
+ */
+async function exchangeCodeForToken(code, codeVerifier, clientId) {
+  const res = await fetch('https://accounts.spotify.com/api/token', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded'
+    },
+    body: new URLSearchParams({
+      client_id: clientId,
+      grant_type: 'authorization_code',
+      code: code,
+      redirect_uri: REDIRECT_URI,
+      code_verifier: codeVerifier
+    })
+  });
+
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.error_description || data.error || `Błąd tokenu Spotify (${res.status})`);
+  }
+
+  return {
+    accessToken: data.access_token,
+    refreshToken: data.refresh_token,
+    expiresIn: data.expires_in || 3600
+  };
+}
+
+/**
+ * Odświeża access_token za pomocą refresh_token
+ */
+async function refreshAccessToken() {
+  const cfg = config.getConfig();
+  const refreshToken = cfg?.spotifyAuth?.refreshToken;
+  const clientId = cfg?.spotifyClientId || DEFAULT_SPOTIFY_CLIENT_ID;
+  if (!refreshToken) return null;
+
+  try {
+    const res = await fetch('https://accounts.spotify.com/api/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: new URLSearchParams({
+        client_id: clientId,
+        grant_type: 'refresh_token',
+        refresh_token: refreshToken
+      })
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      const updated = {
+        ...cfg.spotifyAuth,
+        accessToken: data.access_token,
+        refreshToken: data.refresh_token || refreshToken,
+        expiresAt: Date.now() + (data.expires_in || 3600) * 1000
+      };
+      config.saveConfig({ spotifyAuth: updated });
+      return data.access_token;
+    }
+  } catch (err) {
+    console.warn('[Spotify] Błąd odświeżania tokenu:', err);
+  }
+  return null;
+}
+
+/**
+ * Zwraca aktywny token, odświeżając go automatycznie jeśli wygasł
+ */
+async function getValidToken() {
+  const cfg = config.getConfig();
+  const auth = cfg?.spotifyAuth;
+  if (!auth || !auth.accessToken) return null;
+
+  if (auth.expiresAt && Date.now() > auth.expiresAt - 60000 && auth.refreshToken) {
+    const refreshed = await refreshAccessToken();
+    if (refreshed) return refreshed;
+  }
+  return auth.accessToken;
+}
+
+/**
+ * Rozpoczyna logowanie do konta Spotify (obsługuje Google login, Apple, login e-mail przez PKCE)
  */
 async function loginWithSpotify(customClientId) {
   const cfg = config.getConfig();
   const clientId = customClientId || cfg?.spotifyClientId || DEFAULT_SPOTIFY_CLIENT_ID;
 
-  const authUrl = `https://accounts.spotify.com/authorize?client_id=${clientId}&response_type=token&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${encodeURIComponent(SCOPES)}&show_dialog=true`;
+  const codeVerifier = generateCodeVerifier();
+  const codeChallenge = generateCodeChallenge(codeVerifier);
+
+  const authUrl = `https://accounts.spotify.com/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${encodeURIComponent(SCOPES)}&code_challenge_method=S256&code_challenge=${codeChallenge}&show_dialog=true`;
 
   return new Promise((resolve, reject) => {
+    let handled = false;
+    let localServer = null;
+
     const authWin = new BrowserWindow({
-      width: 520,
-      height: 700,
+      width: 540,
+      height: 720,
       center: true,
       title: 'Logowanie do konta Spotify - KasteuszLauncher',
       autoHideMenuBar: true,
@@ -37,59 +138,109 @@ async function loginWithSpotify(customClientId) {
       }
     });
 
-    let handled = false;
+    const cleanup = () => {
+      if (localServer) {
+        try { localServer.close(); } catch (_) {}
+        localServer = null;
+      }
+      if (authWin && !authWin.isDestroyed()) {
+        try { authWin.destroy(); } catch (_) {}
+      }
+    };
 
-    function handleCallbackUrl(rawUrl) {
-      if (!rawUrl || handled) return;
-      if (rawUrl.startsWith(REDIRECT_URI) || rawUrl.includes('localhost:8888/callback')) {
-        handled = true;
-        try {
-          const hashIdx = rawUrl.indexOf('#');
-          const hash = hashIdx >= 0 ? rawUrl.substring(hashIdx + 1) : '';
-          const params = new URLSearchParams(hash);
-          const accessToken = params.get('access_token');
-          const expiresIn = parseInt(params.get('expires_in') || '3600', 10);
-          const error = params.get('error');
-
-          if (error) {
-            authWin.destroy();
-            reject(new Error(`Odrzucono logowanie Spotify: ${error}`));
-            return;
-          }
-
-          if (accessToken) {
-            const expiresAt = Date.now() + expiresIn * 1000;
-            // Pobieramy dane profilu gracza ze Spotify
-            fetchUserProfile(accessToken).then((profile) => {
-              const spotifyData = {
-                accessToken,
-                expiresAt,
-                user: profile
-              };
-              config.saveConfig({ spotifyAuth: spotifyData });
-              authWin.destroy();
-              resolve(spotifyData);
-            }).catch(err => {
-              console.warn('[Spotify] Błąd profilu po logowaniu:', err);
-              const spotifyData = { accessToken, expiresAt, user: { displayName: 'Użytkownik Spotify' } };
-              config.saveConfig({ spotifyAuth: spotifyData });
-              authWin.destroy();
-              resolve(spotifyData);
-            });
-            return;
-          }
-        } catch (e) {
-          authWin.destroy();
-          reject(e);
-        }
+    async function handleCode(code) {
+      if (handled) return;
+      handled = true;
+      try {
+        const tokenData = await exchangeCodeForToken(code, codeVerifier, clientId);
+        const profile = await fetchUserProfile(tokenData.accessToken).catch(() => ({ displayName: 'Użytkownik Spotify' }));
+        const spotifyData = {
+          accessToken: tokenData.accessToken,
+          refreshToken: tokenData.refreshToken,
+          expiresAt: Date.now() + (tokenData.expiresIn || 3600) * 1000,
+          user: profile
+        };
+        config.saveConfig({ spotifyAuth: spotifyData });
+        cleanup();
+        resolve(spotifyData);
+      } catch (err) {
+        cleanup();
+        reject(err);
       }
     }
 
-    authWin.webContents.on('will-navigate', (_e, url) => handleCallbackUrl(url));
-    authWin.webContents.on('will-redirect', (_e, url) => handleCallbackUrl(url));
+    function checkRedirectUrl(rawUrl) {
+      if (!rawUrl || handled) return false;
+      if (rawUrl.includes('/auth/spotify/callback') || rawUrl.startsWith('spotube://callback')) {
+        try {
+          const parsed = new URL(rawUrl.startsWith('spotube://') ? rawUrl.replace('spotube://', 'http://localhost/') : rawUrl);
+          const error = parsed.searchParams.get('error');
+          const code = parsed.searchParams.get('code');
+
+          if (error) {
+            handled = true;
+            cleanup();
+            reject(new Error(`Odrzucono logowanie Spotify: ${error}`));
+            return true;
+          }
+
+          if (code) {
+            handleCode(code);
+            return true;
+          }
+        } catch (_) {}
+      }
+      return false;
+    }
+
+    // Uruchomienie lokalnego mikroserwera HTTP do przechwycenia przekierowania
+    try {
+      localServer = http.createServer((req, res) => {
+        const fullUrl = `http://localhost:${REDIRECT_PORT}${req.url}`;
+        const didHandle = checkRedirectUrl(fullUrl);
+
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(`
+          <!DOCTYPE html>
+          <html>
+          <head><meta charset="utf-8"><title>KasteuszLauncher - Spotify</title></head>
+          <body style="background:#090a0f;color:#ffffff;font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0;">
+            <div style="text-align:center;padding:20px;">
+              <h2 style="color:#1db954;margin-bottom:8px;">✓ Połączono pomyślnie z kontem Spotify!</h2>
+              <p style="color:#94a3b8;font-size:14px;">Możesz teraz wrócić do KasteuszLauncher. To okno zamknie się automatycznie.</p>
+            </div>
+          </body>
+          </html>
+        `);
+      });
+
+      localServer.listen(REDIRECT_PORT, '127.0.0.1', () => {
+        console.log(`[Spotify] Serwer nasłuchuje na porcie ${REDIRECT_PORT} dla callbacku OAuth...`);
+      });
+
+      localServer.on('error', (err) => {
+        console.warn('[Spotify] Błąd nasłuchu na porcie 4304 (użyto fallbacku webContents):', err.message);
+      });
+    } catch (e) {
+      console.warn('[Spotify] Nie udało się uruchomić serwera callback:', e);
+    }
+
+    // Przechwytywanie przekierowań w oknie Electron (will-navigate, will-redirect, did-fail-load)
+    authWin.webContents.on('will-navigate', (_e, url) => {
+      if (checkRedirectUrl(url)) _e.preventDefault();
+    });
+
+    authWin.webContents.on('will-redirect', (_e, url) => {
+      if (checkRedirectUrl(url)) _e.preventDefault();
+    });
+
+    authWin.webContents.on('did-fail-load', (_e, _code, _desc, validatedURL) => {
+      checkRedirectUrl(validatedURL);
+    });
 
     authWin.on('closed', () => {
       if (!handled) {
+        cleanup();
         reject(new Error('Zamknięto okno logowania Spotify.'));
       }
     });
@@ -122,9 +273,8 @@ async function fetchUserProfile(token) {
  * Pobiera listę playlist użytkownika
  */
 async function getUserPlaylists(tokenOverride) {
-  const cfg = config.getConfig();
-  const token = tokenOverride || cfg?.spotifyAuth?.accessToken;
-  if (!token) throw new Error('Brak połączonego konta Spotify.');
+  const token = tokenOverride || await getValidToken();
+  if (!token) throw new Error('Brak połączonego konta Spotify. Kliknij „Połącz ze Spotify”.');
 
   const res = await fetch('https://api.spotify.com/v1/me/playlists?limit=50', {
     headers: { 'Authorization': `Bearer ${token}` }
@@ -132,7 +282,7 @@ async function getUserPlaylists(tokenOverride) {
 
   if (!res.ok) {
     if (res.status === 401) {
-      throw new Error('Token sesji Spotify wygasł. Zaloguj się ponownie.');
+      throw new Error('Token sesji Spotify wygasł. Kliknij „Połącz ze Spotify”, aby odświeżyć.');
     }
     throw new Error(`Błąd pobierania playlist (${res.status})`);
   }
@@ -154,8 +304,7 @@ async function getUserPlaylists(tokenOverride) {
  * Pobiera utwory z wybranej playlisty
  */
 async function getPlaylistTracks(playlistId, tokenOverride) {
-  const cfg = config.getConfig();
-  const token = tokenOverride || cfg?.spotifyAuth?.accessToken;
+  const token = tokenOverride || await getValidToken();
   if (!token) throw new Error('Brak połączonego konta Spotify.');
 
   const res = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=50`, {
@@ -210,8 +359,7 @@ function sendLinuxMprisCommand(cmd, arg = '') {
  * Sterowanie odtwarzaczem Spotify Web API
  */
 async function controlSpotifyWeb(action, uri = null) {
-  const cfg = config.getConfig();
-  const token = cfg?.spotifyAuth?.accessToken;
+  const token = await getValidToken();
 
   // Najpierw próbujemy sterować natywnym Spotify na Linuxie jeśli jest uruchomione
   if (action === 'play' && uri) {
@@ -277,5 +425,6 @@ module.exports = {
   getUserPlaylists,
   getPlaylistTracks,
   controlSpotifyWeb,
-  fetchUserProfile
+  fetchUserProfile,
+  refreshAccessToken
 };
