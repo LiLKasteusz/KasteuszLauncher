@@ -139,6 +139,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 16px;
   -webkit-app-region: drag;
   z-index: 50;
   background: var(--bg-main);
@@ -151,29 +152,34 @@ body {
 
 .topbar-left {
   gap: 10px;
-  min-width: 170px;
+  flex-shrink: 0;
+  min-width: max-content;
+  white-space: nowrap;
 }
 
 .logo-icon {
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   filter: var(--logo-filter);
   transition: filter 0.4s ease;
+  flex-shrink: 0;
 }
 
 .brand-title {
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 800;
-  letter-spacing: 0.8px;
+  letter-spacing: 0.6px;
   text-transform: uppercase;
   color: #ffffff;
   display: flex;
   align-items: center;
+  white-space: nowrap;
+  user-select: none;
 }
 
 .brand-title span {
   color: var(--accent-primary);
-  margin-left: 6px;
+  margin-left: 5px;
   text-shadow: 0 0 14px var(--accent-glow);
   transition: all 0.3s ease;
 }
@@ -186,6 +192,7 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.07);
   display: flex;
   gap: 2px;
+  flex-shrink: 0;
   -webkit-app-region: no-drag;
 }
 
@@ -238,7 +245,8 @@ body {
 
 /* Topbar Right (Profile + Window Controls) */
 .topbar-right {
-  gap: 18px;
+  gap: 14px;
+  flex-shrink: 0;
   -webkit-app-region: no-drag;
 }
 

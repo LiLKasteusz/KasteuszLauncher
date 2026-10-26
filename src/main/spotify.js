@@ -9,9 +9,9 @@ const config = require('./config');
 const isFlatpak = fs.existsSync('/.flatpak-info');
 const hostPrefix = isFlatpak ? 'flatpak-spawn --host ' : '';
 
-const DEFAULT_SPOTIFY_CLIENT_ID = '65b708073fc0480ea92a077233ca87bd'; // Registered Spotify PKCE Client ID (Spotube/Desktop standard)
-const REDIRECT_PORT = 4304;
-const REDIRECT_URI = `http://localhost:${REDIRECT_PORT}/auth/spotify/callback`;
+const DEFAULT_SPOTIFY_CLIENT_ID = '65b708073fc0480ea92a077233ca87bd'; // Registered Spotify PKCE Client ID (Spotify Desktop standard)
+const REDIRECT_PORT = 8989;
+const REDIRECT_URI = `http://127.0.0.1:${REDIRECT_PORT}/login`;
 const SCOPES = [
   'user-read-playback-state',
   'user-modify-playback-state',
@@ -175,7 +175,7 @@ async function loginWithSpotify(customClientId) {
 
     function checkRedirectUrl(rawUrl) {
       if (!rawUrl || handled) return false;
-      if (rawUrl.includes('/auth/spotify/callback') || rawUrl.startsWith('spotube://callback')) {
+      if (rawUrl.includes(':8989') || rawUrl.includes('/login') || (rawUrl.includes('code=') && rawUrl.includes('127.0.0.1')) || rawUrl.includes('/auth/spotify/callback')) {
         try {
           const parsed = new URL(rawUrl.startsWith('spotube://') ? rawUrl.replace('spotube://', 'http://localhost/') : rawUrl);
           const error = parsed.searchParams.get('error');
@@ -200,7 +200,7 @@ async function loginWithSpotify(customClientId) {
     // Uruchomienie lokalnego mikroserwera HTTP do przechwycenia przekierowania
     try {
       localServer = http.createServer((req, res) => {
-        const fullUrl = `http://localhost:${REDIRECT_PORT}${req.url}`;
+        const fullUrl = `http://127.0.0.1:${REDIRECT_PORT}${req.url}`;
         const didHandle = checkRedirectUrl(fullUrl);
 
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
@@ -223,7 +223,7 @@ async function loginWithSpotify(customClientId) {
       });
 
       localServer.on('error', (err) => {
-        console.warn('[Spotify] Błąd nasłuchu na porcie 4304 (użyto fallbacku webContents):', err.message);
+        console.warn(`[Spotify] Błąd nasłuchu na porcie ${REDIRECT_PORT} (użyto fallbacku webContents):`, err.message);
       });
     } catch (e) {
       console.warn('[Spotify] Nie udało się uruchomić serwera callback:', e);
