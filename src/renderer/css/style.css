@@ -41,12 +41,12 @@
   --accent-primary-dark: #7e22ce;
   --accent-rgb: 168, 85, 247;
   --accent-purple: var(--accent-primary);
-  --accent-purple-glow: rgba(168, 85, 247, 0.4);
-  --accent-glow: rgba(168, 85, 247, 0.4);
-  --accent-subtle: rgba(168, 85, 247, 0.16);
-  --border-active: rgba(168, 85, 247, 0.55);
+  --accent-purple-glow: rgba(168, 85, 247, 0.55);
+  --accent-glow: rgba(168, 85, 247, 0.55);
+  --accent-subtle: rgba(168, 85, 247, 0.22);
+  --border-active: rgba(168, 85, 247, 0.65);
   --accent-gradient: linear-gradient(135deg, #a855f7 0%, #7e22ce 100%);
-  --logo-filter: drop-shadow(0 0 10px rgba(168, 85, 247, 0.65));
+  --logo-filter: drop-shadow(0 0 10px rgba(168, 85, 247, 0.7));
 }
 
 [data-theme="red"] {
@@ -55,12 +55,12 @@
   --accent-primary-dark: #b91c1c;
   --accent-rgb: 239, 68, 68;
   --accent-purple: var(--accent-primary);
-  --accent-purple-glow: rgba(239, 68, 68, 0.4);
-  --accent-glow: rgba(239, 68, 68, 0.45);
-  --accent-subtle: rgba(239, 68, 68, 0.18);
-  --border-active: rgba(239, 68, 68, 0.6);
+  --accent-purple-glow: rgba(239, 68, 68, 0.55);
+  --accent-glow: rgba(239, 68, 68, 0.6);
+  --accent-subtle: rgba(239, 68, 68, 0.24);
+  --border-active: rgba(239, 68, 68, 0.7);
   --accent-gradient: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);
-  --logo-filter: drop-shadow(0 0 12px rgba(239, 68, 68, 0.75)) hue-rotate(85deg) saturate(2);
+  --logo-filter: drop-shadow(0 0 10px rgba(239, 68, 68, 0.7));
 }
 
 [data-theme="emerald"] {
@@ -69,12 +69,12 @@
   --accent-primary-dark: #047857;
   --accent-rgb: 16, 185, 129;
   --accent-purple: var(--accent-primary);
-  --accent-purple-glow: rgba(16, 185, 129, 0.4);
-  --accent-glow: rgba(16, 185, 129, 0.45);
-  --accent-subtle: rgba(16, 185, 129, 0.18);
-  --border-active: rgba(16, 185, 129, 0.6);
+  --accent-purple-glow: rgba(16, 185, 129, 0.55);
+  --accent-glow: rgba(16, 185, 129, 0.6);
+  --accent-subtle: rgba(16, 185, 129, 0.24);
+  --border-active: rgba(16, 185, 129, 0.7);
   --accent-gradient: linear-gradient(135deg, #10b981 0%, #047857 100%);
-  --logo-filter: drop-shadow(0 0 12px rgba(16, 185, 129, 0.75)) hue-rotate(220deg) saturate(1.8);
+  --logo-filter: drop-shadow(0 0 10px rgba(16, 185, 129, 0.7));
 }
 
 [data-theme="cyan"] {
@@ -83,12 +83,12 @@
   --accent-primary-dark: #0891b2;
   --accent-rgb: 6, 182, 212;
   --accent-purple: var(--accent-primary);
-  --accent-purple-glow: rgba(6, 182, 212, 0.4);
-  --accent-glow: rgba(6, 182, 212, 0.45);
-  --accent-subtle: rgba(6, 182, 212, 0.18);
-  --border-active: rgba(6, 182, 212, 0.6);
+  --accent-purple-glow: rgba(6, 182, 212, 0.55);
+  --accent-glow: rgba(6, 182, 212, 0.6);
+  --accent-subtle: rgba(6, 182, 212, 0.24);
+  --border-active: rgba(6, 182, 212, 0.7);
   --accent-gradient: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
-  --logo-filter: drop-shadow(0 0 12px rgba(6, 182, 212, 0.75)) hue-rotate(280deg) saturate(2);
+  --logo-filter: drop-shadow(0 0 10px rgba(6, 182, 212, 0.7));
 }
 
 [data-theme="gold"] {
@@ -97,12 +97,12 @@
   --accent-primary-dark: #d97706;
   --accent-rgb: 245, 158, 11;
   --accent-purple: var(--accent-primary);
-  --accent-purple-glow: rgba(245, 158, 11, 0.4);
-  --accent-glow: rgba(245, 158, 11, 0.45);
-  --accent-subtle: rgba(245, 158, 11, 0.2);
-  --border-active: rgba(245, 158, 11, 0.65);
+  --accent-purple-glow: rgba(245, 158, 11, 0.55);
+  --accent-glow: rgba(245, 158, 11, 0.6);
+  --accent-subtle: rgba(245, 158, 11, 0.24);
+  --border-active: rgba(245, 158, 11, 0.7);
   --accent-gradient: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-  --logo-filter: drop-shadow(0 0 12px rgba(245, 158, 11, 0.75)) hue-rotate(130deg) saturate(2.2);
+  --logo-filter: drop-shadow(0 0 10px rgba(245, 158, 11, 0.7));
 }
 
 [data-theme="ruby"] {
@@ -111,12 +111,12 @@
   --accent-primary-dark: #be123c;
   --accent-rgb: 244, 63, 94;
   --accent-purple: var(--accent-primary);
-  --accent-purple-glow: rgba(244, 63, 94, 0.4);
-  --accent-glow: rgba(244, 63, 94, 0.45);
-  --accent-subtle: rgba(244, 63, 94, 0.2);
-  --border-active: rgba(244, 63, 94, 0.65);
+  --accent-purple-glow: rgba(244, 63, 94, 0.55);
+  --accent-glow: rgba(244, 63, 94, 0.6);
+  --accent-subtle: rgba(244, 63, 94, 0.24);
+  --border-active: rgba(244, 63, 94, 0.7);
   --accent-gradient: linear-gradient(135deg, #f43f5e 0%, #be123c 100%);
-  --logo-filter: drop-shadow(0 0 12px rgba(244, 63, 94, 0.75)) hue-rotate(65deg) saturate(2);
+  --logo-filter: drop-shadow(0 0 10px rgba(244, 63, 94, 0.7));
 }
 
 body {
@@ -347,9 +347,12 @@ body {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: 440px;
-  height: 440px;
-  background: radial-gradient(circle, var(--accent-glow) 0%, rgba(17, 18, 24, 0) 70%);
+  width: 85%;
+  max-width: 1050px;
+  height: 85%;
+  max-height: 900px;
+  background: radial-gradient(ellipse at center, rgba(var(--accent-rgb), 0.52) 0%, rgba(var(--accent-rgb), 0.25) 42%, rgba(var(--accent-rgb), 0.08) 65%, rgba(17, 18, 24, 0) 80%);
+  filter: blur(28px);
   pointer-events: none;
   z-index: 1;
   transition: all 0.4s ease;
@@ -545,8 +548,8 @@ body {
 }
 
 .version-item.selected {
-  background: rgba(168, 85, 247, 0.15);
-  color: #d8b4fe;
+  background: var(--accent-subtle);
+  color: var(--accent-primary-hover);
   font-weight: 600;
 }
 
@@ -737,8 +740,8 @@ body {
 }
 
 .version-card.active {
-  border-color: var(--accent-purple);
-  background: rgba(168, 85, 247, 0.08);
+  border-color: var(--accent-primary);
+  background: var(--accent-subtle);
 }
 
 .version-card-top {
@@ -761,8 +764,19 @@ body {
 .settings-section {
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  max-width: 680px;
+  gap: 16px;
+  width: 100%;
+  max-width: 1250px;
+  margin: 0 auto;
+}
+
+@media (min-width: 1100px) {
+  .settings-section {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 18px;
+    align-items: start;
+  }
 }
 
 .setting-row {
@@ -889,14 +903,16 @@ input[type="checkbox"] {
 
 /* MODAL OVERLAY (Login & Accounts) */
 .modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
   background: rgba(5, 6, 9, 0.85);
   backdrop-filter: blur(8px);
-  z-index: 1000;
+  z-index: 9999 !important;
   display: none;
   align-items: center;
   justify-content: center;
@@ -1012,7 +1028,7 @@ input[type="checkbox"] {
 .modal-status-text {
   margin-top: 16px;
   font-size: 12.5px;
-  color: #a855f7;
+  color: var(--accent-primary);
   min-height: 20px;
 }
 
@@ -1150,8 +1166,8 @@ input[type="checkbox"] {
    ========================================================================== */
 .sidebar-server-card {
   margin-top: auto;
-  background: rgba(168, 85, 247, 0.05);
-  border: 1px solid rgba(168, 85, 247, 0.2);
+  background: rgba(var(--accent-rgb), 0.06);
+  border: 1px solid var(--border-active);
   border-radius: 14px;
   padding: 12px 14px;
   display: flex;
@@ -1161,8 +1177,9 @@ input[type="checkbox"] {
 }
 
 .sidebar-server-card:hover {
-  border-color: rgba(168, 85, 247, 0.4);
-  background: rgba(168, 85, 247, 0.09);
+  border-color: var(--accent-primary);
+  background: rgba(var(--accent-rgb), 0.12);
+  box-shadow: 0 4px 16px var(--accent-glow);
 }
 
 .server-card-top {
@@ -1175,7 +1192,7 @@ input[type="checkbox"] {
   font-size: 9px;
   font-weight: 800;
   letter-spacing: 0.8px;
-  color: #c084fc;
+  color: var(--accent-primary-hover);
   text-transform: uppercase;
 }
 
@@ -1237,9 +1254,9 @@ input[type="checkbox"] {
 }
 
 .server-ip-btn:hover {
-  border-color: rgba(168, 85, 247, 0.5);
+  border-color: var(--accent-primary);
   color: #ffffff;
-  background: rgba(168, 85, 247, 0.15);
+  background: var(--accent-subtle);
 }
 
 .server-card-footer {
@@ -1381,8 +1398,10 @@ input[type="checkbox"] {
 .server-host-panel {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  max-width: 820px;
+  gap: 14px;
+  width: 100%;
+  max-width: 1300px;
+  margin: 0 auto;
 }
 
 .server-host-header {
@@ -1392,7 +1411,7 @@ input[type="checkbox"] {
   background: rgba(255, 255, 255, 0.02);
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 14px;
-  padding: 12px 18px;
+  padding: 14px 20px;
 }
 
 .server-host-title {
@@ -1410,24 +1429,24 @@ input[type="checkbox"] {
 
 .server-ip-cards-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: 14px;
 }
 
 .ip-info-card {
   background: rgba(0, 0, 0, 0.25);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 12px;
-  padding: 12px 16px;
+  padding: 14px 18px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
 .ip-card-label {
   font-size: 10.5px;
   font-weight: 700;
-  color: #a855f7;
+  color: var(--accent-primary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -1449,7 +1468,7 @@ input[type="checkbox"] {
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.12);
   color: #e2e8f0;
-  padding: 3px 9px;
+  padding: 4px 11px;
   font-size: 11px;
   font-weight: 600;
   border-radius: 6px;
@@ -1458,8 +1477,8 @@ input[type="checkbox"] {
 }
 
 .btn-copy-small:hover {
-  background: rgba(168, 85, 247, 0.25);
-  border-color: #a855f7;
+  background: rgba(var(--accent-rgb), 0.25);
+  border-color: var(--accent-primary);
   color: #ffffff;
 }
 
@@ -1501,7 +1520,7 @@ input[type="checkbox"] {
 }
 
 .server-select:focus, .server-input:focus {
-  border-color: #a855f7;
+  border-color: var(--accent-primary);
 }
 
 .server-console-container {
@@ -1566,7 +1585,7 @@ input[type="checkbox"] {
 }
 
 .server-console-input:focus {
-  border-color: #a855f7;
+  border-color: var(--accent-primary);
 }
 
 /* ==========================================================================
@@ -1576,12 +1595,14 @@ input[type="checkbox"] {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  max-width: 820px;
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
 }
 
 .mod-browser-header {
   display: flex;
-  gap: 10px;
+  gap: 12px;
   align-items: center;
   justify-content: space-between;
 }
@@ -1614,8 +1635,8 @@ input[type="checkbox"] {
 }
 
 .mod-browse-search-input:focus {
-  border-color: #a855f7;
-  box-shadow: 0 0 0 2px rgba(168, 85, 247, 0.2);
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px var(--accent-subtle);
   background: rgba(0, 0, 0, 0.6);
 }
 
@@ -1657,10 +1678,10 @@ input[type="checkbox"] {
   align-items: center;
   gap: 6px;
   font-size: 11.5px;
-  color: #a855f7;
+  color: var(--accent-primary);
   font-weight: 600;
-  background: rgba(168, 85, 247, 0.1);
-  border: 1px solid rgba(168, 85, 247, 0.25);
+  background: rgba(var(--accent-rgb), 0.1);
+  border: 1px solid rgba(var(--accent-rgb), 0.25);
   padding: 8px 12px;
   border-radius: 10px;
   cursor: pointer;
@@ -1668,7 +1689,7 @@ input[type="checkbox"] {
 }
 
 .mod-version-checkbox-label input[type="checkbox"] {
-  accent-color: #a855f7;
+  accent-color: var(--accent-primary);
   cursor: pointer;
 }
 
@@ -1698,18 +1719,18 @@ input[type="checkbox"] {
 }
 
 .mod-chip.active {
-  background: rgba(168, 85, 247, 0.2);
-  border-color: #a855f7;
-  color: #f3e8ff;
+  background: rgba(var(--accent-rgb), 0.22);
+  border-color: var(--accent-primary);
+  color: #ffffff;
 }
 
 .mod-browse-results-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  max-height: 480px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+  gap: 12px;
+  max-height: calc(100vh - 240px);
   overflow-y: auto;
-  padding-right: 4px;
+  padding-right: 6px;
 }
 
 .mod-browse-card {
@@ -1807,7 +1828,7 @@ input[type="checkbox"] {
 }
 
 .btn-mod-download {
-  background: linear-gradient(135deg, #a855f7 0%, #7e22ce 100%);
+  background: var(--accent-gradient);
   color: #ffffff;
   border: none;
   border-radius: 8px;
@@ -1824,7 +1845,7 @@ input[type="checkbox"] {
 
 .btn-mod-download:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(168, 85, 247, 0.35);
+  box-shadow: 0 4px 12px var(--accent-glow);
 }
 
 .btn-mod-download:disabled {
@@ -1851,8 +1872,8 @@ input[type="checkbox"] {
 .mod-browse-spinner {
   width: 24px;
   height: 24px;
-  border: 3px solid rgba(168, 85, 247, 0.2);
-  border-top-color: #a855f7;
+  border: 3px solid var(--accent-subtle);
+  border-top-color: var(--accent-primary);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
   margin: 0 auto;
@@ -2253,9 +2274,9 @@ input[type="checkbox"] {
 }
 
 /* Ensure app wrapper is above canvas */
-.app-container, .titlebar, .footer-bar, .modal-overlay, .toast-container {
+.app-container, .topbar, .footer-bar {
   position: relative;
-  z-index: 1;
+  z-index: 10;
 }
 
 /* Footer Music Player */
@@ -2463,4 +2484,254 @@ input[type="checkbox"] {
   background: var(--accent-primary);
   color: #ffffff;
   border-color: transparent;
+}
+
+/* ==========================================================================
+   FULLSCREEN & RESPONSIVE TAB FIXES
+   ========================================================================== */
+.tab-view {
+  width: 100%;
+  height: 100%;
+}
+
+.view-panel {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+#subtab-view-mods #mods-list-container {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)) !important;
+  gap: 12px !important;
+  max-width: 1400px !important;
+  width: 100% !important;
+}
+
+.messages-list-container {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* ==========================================================================
+   SPOTIFY & MUSIC HUB MODAL
+   ========================================================================== */
+.music-modal-card {
+  max-width: 820px !important;
+  width: 90% !important;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.music-hub-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.music-hub-icon-box {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: rgba(29, 185, 84, 0.15);
+  border: 1px solid rgba(29, 185, 84, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  color: #1db954;
+}
+
+.spotify-connect-card {
+  background: rgba(29, 185, 84, 0.08);
+  border: 1px solid rgba(29, 185, 84, 0.25);
+  border-radius: 14px;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.spotify-user-badge {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.spotify-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #1db954;
+}
+
+.spotify-user-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.spotify-username {
+  font-size: 14px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.spotify-status-tag {
+  font-size: 11px;
+  color: #1db954;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.btn-spotify {
+  background: #1db954;
+  color: #000000;
+  font-weight: 700;
+  font-size: 13px;
+  padding: 9px 18px;
+  border-radius: 9999px;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+}
+
+.btn-spotify:hover {
+  background: #1ed760;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(29, 185, 84, 0.4);
+}
+
+.btn-spotify-secondary {
+  background: rgba(255, 255, 255, 0.08);
+  color: #e2e8f0;
+  font-weight: 600;
+  font-size: 12px;
+  padding: 7px 14px;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-spotify-secondary:hover {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #ef4444;
+}
+
+/* In-Game Shortcuts Banner */
+.in-game-shortcuts-box {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 12px;
+  padding: 12px 16px;
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.in-game-shortcut-chips {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.shortcut-chip {
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-family: monospace;
+  color: #e2e8f0;
+}
+
+/* Spotify Playlists Grid */
+.spotify-playlists-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+  max-height: 240px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.spotify-playlist-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  padding: 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: all 0.15s ease;
+}
+
+.spotify-playlist-card:hover {
+  background: rgba(29, 185, 84, 0.1);
+  border-color: rgba(29, 185, 84, 0.35);
+  transform: translateY(-2px);
+}
+
+.spotify-playlist-card.active {
+  border-color: #1db954;
+  background: rgba(29, 185, 84, 0.15);
+}
+
+.spotify-playlist-img {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: #282828;
+}
+
+.spotify-playlist-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.spotify-playlist-name {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.spotify-playlist-count {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+/* Spotify Embed Box */
+.spotify-embed-container {
+  margin-top: 14px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #121212;
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }

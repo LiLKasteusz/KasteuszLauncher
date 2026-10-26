@@ -158,6 +158,7 @@ async function initApp() {
     setupLauncherEventListeners();
     setupFriendsListeners();
     setupServerHostingListeners();
+    setupSpotifyMusicListeners();
   } catch (listenerErr) {
     console.error('Błąd rejestracji listenerów UI:', listenerErr);
   }
@@ -178,6 +179,7 @@ async function initApp() {
   try { initOfficialServerWidget(); } catch (e) { console.error('Błąd initOfficialServerWidget:', e); }
   try { await loadServerHosting(); } catch (e) { console.error('Błąd loadServerHosting:', e); }
   try { await loadStats(); } catch (e) { console.error('Błąd loadStats:', e); }
+  try { await checkSpotifyStatus(); } catch (e) { console.error('Błąd checkSpotifyStatus:', e); }
 
   // 4. Automatyczne otwieranie okna logowania jeśli użytkownik nie jest jeszcze zalogowany
   if (!currentAccount) {
@@ -189,8 +191,10 @@ async function initApp() {
 
 // Window control buttons
 function setupWindowControls() {
-  elements.btnWinMinimize.addEventListener('click', () => window.api.minimizeWindow());
-  elements.btnWinClose.addEventListener('click', () => window.api.closeWindow());
+  elements.btnWinMinimize?.addEventListener('click', () => window.api.minimizeWindow());
+  const btnWinMaximize = document.getElementById('btn-win-maximize');
+  btnWinMaximize?.addEventListener('click', () => window.api.maximizeWindow());
+  elements.btnWinClose?.addEventListener('click', () => window.api.closeWindow());
 }
 
 // Navigation between tabs
@@ -2404,15 +2408,7 @@ function applyTheme(themeName, save = true) {
 
   const logoEl = document.querySelector(".logo-icon");
   if (logoEl) {
-    const filters = {
-      purple: "drop-shadow(0 0 10px rgba(168, 85, 247, 0.65))",
-      red: "drop-shadow(0 0 12px rgba(239, 68, 68, 0.75)) hue-rotate(85deg) saturate(2)",
-      emerald: "drop-shadow(0 0 12px rgba(16, 185, 129, 0.75)) hue-rotate(220deg) saturate(1.8)",
-      cyan: "drop-shadow(0 0 12px rgba(6, 182, 212, 0.75)) hue-rotate(280deg) saturate(2)",
-      gold: "drop-shadow(0 0 12px rgba(245, 158, 11, 0.75)) hue-rotate(130deg) saturate(2.2)",
-      ruby: "drop-shadow(0 0 12px rgba(244, 63, 94, 0.75)) hue-rotate(65deg) saturate(2)"
-    };
-    logoEl.style.filter = filters[theme] || filters.purple;
+    logoEl.style.filter = "drop-shadow(0 0 10px var(--accent-glow))";
   }
 
   // Active pill highlight
@@ -2461,6 +2457,237 @@ function setupThemesListeners() {
   });
 }
 
+
+// ==========================================================================
+// SPOTIFY & MUSIC HUB INTEGRATION
+// ==========================================================================
+let spotifyUser = null;
+let spotifyPlaylists = [];
+let currentSpotifyPlaylistId = null;
+
+function openMusicModal() {
+  const modal = document.getElementById('music-modal');
+  if (modal) {
+    modal.classList.add('open');
+    checkSpotifyStatus();
+  }
+}
+
+function closeMusicModal() {
+  const modal = document.getElementById('music-modal');
+  if (modal) modal.classList.remove('open');
+}
+
+async function checkSpotifyStatus() {
+  if (!window.api?.spotifyGetStatus) return;
+  try {
+    const status = await window.api.spotifyGetStatus();
+    updateSpotifyUI(status);
+    if (status && status.isLoggedIn) {
+      loadSpotifyPlaylists();
+    }
+  } catch (err) {
+    console.warn('[Spotify] Błąd sprawdzania statusu:', err);
+  }
+}
+
+function updateSpotifyUI(status) {
+  const cardDisconnected = document.getElementById('spotify-card-disconnected');
+  const cardConnected = document.getElementById('spotify-card-connected');
+  const avatarEl = document.getElementById('spotify-user-avatar');
+  const nameEl = document.getElementById('spotify-user-name');
+  const planEl = document.getElementById('spotify-user-plan');
+
+  if (status && status.isLoggedIn && status.user) {
+    spotifyUser = status.user;
+    if (cardDisconnected) cardDisconnected.style.display = 'none';
+    if (cardConnected) cardConnected.style.display = 'flex';
+    if (avatarEl && status.user.avatar) avatarEl.src = status.user.avatar;
+    if (nameEl) nameEl.textContent = status.user.displayName || 'Użytkownik Spotify';
+    if (planEl) planEl.textContent = `Konto Spotify (${status.user.product === 'premium' ? 'Premium ⚡' : 'Free'})`;
+  } else {
+    spotifyUser = null;
+    if (cardDisconnected) cardDisconnected.style.display = 'flex';
+    if (cardConnected) cardConnected.style.display = 'none';
+  }
+}
+
+async function loadSpotifyPlaylists() {
+  const grid = document.getElementById('spotify-playlists-grid');
+  const countLabel = document.getElementById('spotify-playlists-count-label');
+  if (!grid) return;
+
+  grid.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-dim); font-size: 12px; grid-column: 1 / -1;">Pobieranie Twoich playlist ze Spotify...</div>';
+
+  try {
+    const playlists = await window.api.spotifyGetPlaylists();
+    spotifyPlaylists = playlists || [];
+    if (countLabel) countLabel.textContent = `${spotifyPlaylists.length} playlist`;
+
+    if (spotifyPlaylists.length === 0) {
+      grid.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-dim); font-size: 12px; grid-column: 1 / -1;">Brak playlist na Twoim koncie Spotify. Utwórz playlistę w Spotify lub wklej jej link poniżej.</div>';
+      return;
+    }
+
+    grid.innerHTML = '';
+    spotifyPlaylists.forEach(pl => {
+      const card = document.createElement('div');
+      card.className = `spotify-playlist-card ${currentSpotifyPlaylistId === pl.id ? 'active' : ''}`;
+      card.innerHTML = `
+        <img src="${pl.image || 'assets/icon-256.png'}" class="spotify-playlist-img" alt="${pl.name}" onerror="this.src='assets/icon-256.png'">
+        <div class="spotify-playlist-details">
+          <span class="spotify-playlist-name" title="${pl.name}">${pl.name}</span>
+          <span class="spotify-playlist-count">${pl.tracksCount} utworów</span>
+        </div>
+      `;
+
+      card.addEventListener('click', () => {
+        playSpotifyPlaylist(pl);
+      });
+
+      grid.appendChild(card);
+    });
+  } catch (err) {
+    grid.innerHTML = `<div style="padding: 20px; text-align: center; color: #f87171; font-size: 12px; grid-column: 1 / -1;">Błąd: ${err.message}</div>`;
+  }
+}
+
+function playSpotifyPlaylist(playlist) {
+  currentSpotifyPlaylistId = playlist.id;
+
+  // Podświetlenie aktywnej karty
+  document.querySelectorAll('.spotify-playlist-card').forEach(c => c.classList.remove('active'));
+
+  // Osadzenie odtwarzacza Spotify Web Embed
+  const embedContainer = document.getElementById('spotify-embed-container');
+  const embedIframe = document.getElementById('spotify-embed-iframe');
+  if (embedContainer && embedIframe) {
+    embedIframe.src = `https://open.spotify.com/embed/playlist/${playlist.id}?utm_source=generator&theme=0`;
+    embedContainer.style.display = 'block';
+  }
+
+  // Wysłanie komendy do Spotify Web Connect / MPRIS
+  window.api?.spotifyControl('play', playlist.uri).catch(() => {});
+
+  // Zaktualizuj dolny mini player
+  const titleEl = document.getElementById('music-title');
+  const genreEl = document.getElementById('music-genre');
+  if (titleEl) titleEl.textContent = playlist.name;
+  if (genreEl) genreEl.textContent = '🟢 Playlista Spotify';
+
+  const visualizer = document.getElementById('music-visualizer');
+  if (visualizer) visualizer.classList.add('animating');
+
+  showToast(`Odtwarzanie playlisty Spotify: ${playlist.name}`);
+}
+
+function setupSpotifyMusicListeners() {
+  const btnOpenHub = document.getElementById('btn-open-spotify-hub');
+  const musicInfoClick = document.getElementById('music-info-click');
+  const btnCloseModal = document.getElementById('btn-close-music-modal');
+  const musicModal = document.getElementById('music-modal');
+  const btnLogin = document.getElementById('btn-spotify-login');
+  const btnLogout = document.getElementById('btn-spotify-logout');
+  const btnRefresh = document.getElementById('btn-spotify-refresh-playlists');
+  const btnLoadUrl = document.getElementById('btn-load-spotify-url');
+  const urlInput = document.getElementById('spotify-playlist-url-input');
+
+  btnOpenHub?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    openMusicModal();
+  });
+
+  musicInfoClick?.addEventListener('click', () => {
+    openMusicModal();
+  });
+
+  btnCloseModal?.addEventListener('click', closeMusicModal);
+  musicModal?.addEventListener('click', (e) => {
+    if (e.target === musicModal) closeMusicModal();
+  });
+
+  btnLogin?.addEventListener('click', async () => {
+    try {
+      showToast('Otwieranie logowania do Spotify...');
+      const auth = await window.api.spotifyLogin();
+      if (auth && auth.accessToken) {
+        showToast('Pomyślnie połączono z kontem Spotify! 🎉');
+        await checkSpotifyStatus();
+      }
+    } catch (err) {
+      showToast(`Błąd logowania Spotify: ${err.message}`);
+    }
+  });
+
+  btnLogout?.addEventListener('click', async () => {
+    await window.api.spotifyLogout();
+    currentSpotifyPlaylistId = null;
+    const embedContainer = document.getElementById('spotify-embed-container');
+    if (embedContainer) embedContainer.style.display = 'none';
+    showToast('Odłączono konto Spotify.');
+    checkSpotifyStatus();
+  });
+
+  btnRefresh?.addEventListener('click', () => {
+    loadSpotifyPlaylists();
+  });
+
+  btnLoadUrl?.addEventListener('click', () => {
+    const url = urlInput?.value?.trim();
+    if (!url) {
+      showToast('Wklej prawidłowy link do playlisty Spotify.');
+      return;
+    }
+
+    const match = url.match(/(playlist|album|track)[\/:]([a-zA-Z0-9]+)/);
+    if (!match) {
+      showToast('Nie rozpoznano formatu linku Spotify.');
+      return;
+    }
+
+    const type = match[1];
+    const id = match[2];
+
+    const embedContainer = document.getElementById('spotify-embed-container');
+    const embedIframe = document.getElementById('spotify-embed-iframe');
+    if (embedContainer && embedIframe) {
+      embedIframe.src = `https://open.spotify.com/embed/${type}/${id}?utm_source=generator&theme=0`;
+      embedContainer.style.display = 'block';
+    }
+
+    const uri = `spotify:${type}:${id}`;
+    window.api?.spotifyControl('play', uri).catch(() => {});
+
+    const titleEl = document.getElementById('music-title');
+    const genreEl = document.getElementById('music-genre');
+    if (titleEl) titleEl.textContent = 'Playlista Spotify';
+    if (genreEl) genreEl.textContent = '🟢 Spotify';
+
+    showToast('Załadowano playlistę Spotify!');
+  });
+
+  // Stacje radiowe wbudowane w launcher
+  document.getElementById('btn-station-lofi')?.addEventListener('click', () => {
+    window.musicPlayer.playStation('lofi');
+    const embedContainer = document.getElementById('spotify-embed-container');
+    if (embedContainer) embedContainer.style.display = 'none';
+    showToast('Przełączono na stację: Lofi Chill Beats');
+  });
+
+  document.getElementById('btn-station-synthwave')?.addEventListener('click', () => {
+    window.musicPlayer.playStation('synthwave');
+    const embedContainer = document.getElementById('spotify-embed-container');
+    if (embedContainer) embedContainer.style.display = 'none';
+    showToast('Przełączono na stację: Synthwave & Cyberpunk');
+  });
+
+  document.getElementById('btn-station-ambient')?.addEventListener('click', () => {
+    window.musicPlayer.playStation('ambient');
+    const embedContainer = document.getElementById('spotify-embed-container');
+    if (embedContainer) embedContainer.style.display = 'none';
+    showToast('Przełączono na stację: Minecraft Ambient');
+  });
+}
 
 // Run init
 if (document.readyState === 'loading') {

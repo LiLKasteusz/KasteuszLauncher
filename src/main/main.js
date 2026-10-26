@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, globalShortcut } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const config = require('./config');
@@ -10,6 +10,7 @@ const friends = require('./friends');
 const serverHost = require('./server');
 const discord = require('./discord');
 const stats = require('./stats');
+const spotify = require('./spotify');
 
 let mainWindow = null;
 
@@ -59,11 +60,36 @@ app.whenReady().then(() => {
   createWindow();
   discord.initDiscordRPC();
 
+  // Rejestracja globalnych skrótów klawiszowych do muzyki (działających w tle i w grze Minecraft)
+  const registerShortcut = (key, action) => {
+    try {
+      globalShortcut.register(key, () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('music:action', action);
+        }
+        spotify.controlSpotifyWeb(action).catch(() => {});
+      });
+    } catch (err) {
+      console.warn(`[Shortcut] Nie udało się zarejestrować skrótu ${key}:`, err.message);
+    }
+  };
+
+  registerShortcut('MediaPlayPause', 'toggle');
+  registerShortcut('CommandOrControl+Alt+Space', 'toggle');
+  registerShortcut('MediaNextTrack', 'next');
+  registerShortcut('CommandOrControl+Alt+Right', 'next');
+  registerShortcut('MediaPreviousTrack', 'prev');
+  registerShortcut('CommandOrControl+Alt+Left', 'prev');
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
     }
   });
+});
+
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll();
 });
 
 app.on('window-all-closed', () => {
@@ -223,13 +249,6 @@ ipcMain.handle('wardrobe:select-cape', async () => {
   return null;
 });
 
-// IPC: Zewnętrzne linki
-ipcMain.on('system:open-external', (_e, url) => {
-  if (url && (url.startsWith('https://') || url.startsWith('http://'))) {
-    shell.openExternal(url);
-  }
-});
-
 // IPC: Minecraft i wersje
 ipcMain.handle('game:get-versions', async () => {
   return await mojang.getAvailableVersions();
@@ -327,4 +346,36 @@ ipcMain.on('system:open-external', (_e, url) => {
   if (url && (url.startsWith('https://') || url.startsWith('http://'))) {
     shell.openExternal(url);
   }
+});
+
+// IPC: Spotify & Muzyka w tle
+ipcMain.handle('spotify:login', async (_e, clientId) => {
+  return await spotify.loginWithSpotify(clientId);
+});
+
+ipcMain.handle('spotify:logout', async () => {
+  return spotify.logoutSpotify();
+});
+
+ipcMain.handle('spotify:get-status', async () => {
+  const cfg = config.getConfig();
+  const authData = cfg?.spotifyAuth || null;
+  return {
+    isLoggedIn: !!(authData && authData.accessToken),
+    user: authData?.user || null
+  };
+});
+
+ipcMain.handle('spotify:get-playlists', async () => {
+  return await spotify.getUserPlaylists();
+});
+
+ipcMain.handle('spotify:get-tracks', async (_e, playlistId) => {
+  return await spotify.getPlaylistTracks(playlistId);
+});
+
+ipcMain.handle('spotify:control', async (_e, arg1, arg2) => {
+  const action = typeof arg1 === 'object' && arg1 !== null ? arg1.action : arg1;
+  const uri = typeof arg1 === 'object' && arg1 !== null ? arg1.uri : arg2;
+  return await spotify.controlSpotifyWeb(action, uri);
 });

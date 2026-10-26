@@ -113,5 +113,18 @@ contextBridge.exposeInMainWorld('api', {
     const sub = (_event, val) => callback(val);
     ipcRenderer.on('launcher:error', sub);
     return () => ipcRenderer.removeListener('launcher:error', sub);
+  },
+
+  // Spotify & In-Game Music Control
+  spotifyLogin: (clientId) => ipcRenderer.invoke('spotify:login', clientId),
+  spotifyLogout: () => ipcRenderer.invoke('spotify:logout'),
+  spotifyGetStatus: () => ipcRenderer.invoke('spotify:get-status'),
+  spotifyGetPlaylists: () => ipcRenderer.invoke('spotify:get-playlists'),
+  spotifyGetTracks: (playlistId) => ipcRenderer.invoke('spotify:get-tracks', playlistId),
+  spotifyControl: (action, uri) => ipcRenderer.invoke('spotify:control', action, uri),
+  onMusicAction: (callback) => {
+    const sub = (_event, action) => callback(action);
+    ipcRenderer.on('music:action', sub);
+    return () => ipcRenderer.removeListener('music:action', sub);
   }
 });
