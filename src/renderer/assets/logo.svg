@@ -1,0 +1,37 @@
+<svg width="40" height="40" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="topFace" x1="50" y1="12" x2="50" y2="50" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#b882ff"/>
+      <stop offset="100%" stop-color="#9333ea"/>
+    </linearGradient>
+    <linearGradient id="leftFace" x1="15" y1="31" x2="50" y2="88" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#7e22ce"/>
+      <stop offset="100%" stop-color="#581c87"/>
+    </linearGradient>
+    <linearGradient id="rightFace" x1="50" y1="50" x2="85" y2="69" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#9333ea"/>
+      <stop offset="100%" stop-color="#6b21a8"/>
+    </linearGradient>
+    <filter id="purpleGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+  </defs>
+
+  <!-- Glowing outer ambient -->
+  <polygon points="50,12 85,31 85,69 50,88 15,69 15,31" fill="#a855f7" opacity="0.3" filter="url(#purpleGlow)"/>
+
+  <!-- Cube faces -->
+  <!-- Top Face -->
+  <polygon points="50,15 82,32.5 50,50 18,32.5" fill="url(#topFace)"/>
+  
+  <!-- Left Face -->
+  <polygon points="18,32.5 50,50 50,85 18,67.5" fill="url(#leftFace)"/>
+  
+  <!-- Right Face -->
+  <polygon points="50,50 82,32.5 82,67.5 50,85" fill="url(#rightFace)"/>
+
+  <!-- Subtle inner stylized K or crystal -->
+  <polygon points="50,38 65,47 50,56 35,47" fill="#ffffff" opacity="0.25"/>
+  <circle cx="50" cy="50" r="4.5" fill="#ffffff" opacity="0.85"/>
+</svg>

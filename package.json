@@ -1,0 +1,26 @@
+{
+  "name": "kasteusz-launcher",
+  "productName": "KasteuszLauncher",
+  "version": "1.0.0",
+  "description": "Nowoczesny launcher Minecraft z obsługą kont Microsoft Premium",
+  "main": "src/main/main.js",
+  "scripts": {
+    "start": "electron --no-sandbox ."
+  },
+  "keywords": [
+    "minecraft",
+    "launcher",
+    "kasteusz",
+    "premium",
+    "microsoft"
+  ],
+  "author": "Kasteusz",
+  "license": "MIT",
+  "dependencies": {
+    "discord-rpc": "^4.0.1",
+    "electron": "^41.7.1",
+    "lucide": "^1.61.0",
+    "minecraft-launcher-core": "^3.18.2",
+    "skinview3d": "^3.4.2"
+  }
+}
