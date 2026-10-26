@@ -366,6 +366,10 @@ ipcMain.handle('spotify:get-status', async () => {
   };
 });
 
+ipcMain.handle('spotify:get-mpris-status', async () => {
+  return await spotify.getMprisStatus();
+});
+
 ipcMain.handle('spotify:get-playlists', async () => {
   return await spotify.getUserPlaylists();
 });

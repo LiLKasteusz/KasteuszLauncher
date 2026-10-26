@@ -3,7 +3,11 @@ const { BrowserWindow } = require('electron');
 const { exec } = require('child_process');
 const http = require('http');
 const crypto = require('crypto');
+const fs = require('fs');
 const config = require('./config');
+
+const isFlatpak = fs.existsSync('/.flatpak-info');
+const hostPrefix = isFlatpak ? 'flatpak-spawn --host ' : '';
 
 const DEFAULT_SPOTIFY_CLIENT_ID = '65b708073fc0480ea92a077233ca87bd'; // Registered Spotify PKCE Client ID (Spotube/Desktop standard)
 const REDIRECT_PORT = 4304;
@@ -332,19 +336,89 @@ async function getPlaylistTracks(playlistId, tokenOverride) {
 }
 
 /**
+ * Uruchamia aplikację Spotify na pulpicie Linuxa jeśli nie jest uruchomiona
+ */
+function launchSpotifyApp() {
+  return new Promise((resolve) => {
+    exec(`${hostPrefix}flatpak run com.spotify.Client &`, (err) => {
+      if (err) {
+        exec(`${hostPrefix}spotify &`, () => resolve(true));
+      } else {
+        resolve(true);
+      }
+    });
+  });
+}
+
+/**
+ * Sprawdza status odtwarzania Spotify przez MPRIS (Desktop Linux)
+ */
+function getMprisStatus() {
+  return new Promise((resolve) => {
+    exec(`${hostPrefix}dbus-send --print-reply --dest=org.mpris.MediaPlayer2.spotify /org/mpris/MediaPlayer2 org.freedesktop.DBus.Properties.Get string:org.mpris.MediaPlayer2.Player string:PlaybackStatus`, (err, stdout) => {
+      if (err) {
+        return resolve({ running: false, status: 'Stopped', title: '', artist: '', album: '', artUrl: '' });
+      }
+
+      const statusMatch = stdout.match(/variant\s+string "([^"]+)"/);
+      const status = statusMatch ? statusMatch[1] : 'Unknown';
+
+      exec(`${hostPrefix}dbus-send --print-reply --dest=org.mpris.MediaPlayer2.spotify /org/mpris/MediaPlayer2 org.freedesktop.DBus.Properties.Get string:org.mpris.MediaPlayer2.Player string:Metadata`, (metaErr, metaOut) => {
+        if (metaErr) {
+          return resolve({ running: true, status, title: '', artist: '', album: '', artUrl: '' });
+        }
+
+        const title = (metaOut.match(/string "xesam:title"\s+variant\s+string "([^"]+)"/) || [])[1] || '';
+        const artist = (metaOut.match(/string "xesam:artist"\s+variant\s+array \[\s+string "([^"]+)"/) || [])[1] || '';
+        const album = (metaOut.match(/string "xesam:album"\s+variant\s+string "([^"]+)"/) || [])[1] || '';
+        const artUrl = (metaOut.match(/string "mpris:artUrl"\s+variant\s+string "([^"]+)"/) || [])[1] || '';
+
+        resolve({
+          running: true,
+          status,
+          title,
+          artist,
+          album,
+          artUrl
+        });
+      });
+    });
+  });
+}
+
+/**
+ * Konwertuje linki HTTP Spotify na URI spotify:type:id
+ */
+function formatSpotifyUri(raw) {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  if (trimmed.startsWith('spotify:')) return trimmed;
+
+  const match = trimmed.match(/(playlist|album|track|artist)[\/:]([a-zA-Z0-9]+)/);
+  if (match) {
+    return `spotify:${match[1]}:${match[2]}`;
+  }
+  return trimmed;
+}
+
+/**
  * Sterowanie aplikacją Spotify na Linuxie (MPRIS DBus)
  */
 function sendLinuxMprisCommand(cmd, arg = '') {
   return new Promise((resolve) => {
     let bashCmd = '';
     if (cmd === 'PlayPause') {
-      bashCmd = 'dbus-send --print-reply --dest=org.mpris.MediaPlayer2.spotify /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player.PlayPause';
+      bashCmd = `${hostPrefix}dbus-send --print-reply --dest=org.mpris.MediaPlayer2.spotify /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player.PlayPause`;
+    } else if (cmd === 'Play') {
+      bashCmd = `${hostPrefix}dbus-send --print-reply --dest=org.mpris.MediaPlayer2.spotify /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player.Play`;
+    } else if (cmd === 'Pause') {
+      bashCmd = `${hostPrefix}dbus-send --print-reply --dest=org.mpris.MediaPlayer2.spotify /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player.Pause`;
     } else if (cmd === 'Next') {
-      bashCmd = 'dbus-send --print-reply --dest=org.mpris.MediaPlayer2.spotify /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player.Next';
+      bashCmd = `${hostPrefix}dbus-send --print-reply --dest=org.mpris.MediaPlayer2.spotify /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player.Next`;
     } else if (cmd === 'Previous') {
-      bashCmd = 'dbus-send --print-reply --dest=org.mpris.MediaPlayer2.spotify /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player.Previous';
+      bashCmd = `${hostPrefix}dbus-send --print-reply --dest=org.mpris.MediaPlayer2.spotify /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player.Previous`;
     } else if (cmd === 'OpenUri' && arg) {
-      bashCmd = `dbus-send --print-reply --dest=org.mpris.MediaPlayer2.spotify /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player.OpenUri string:"${arg}"`;
+      bashCmd = `${hostPrefix}dbus-send --print-reply --dest=org.mpris.MediaPlayer2.spotify /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player.OpenUri string:"${arg}"`;
     }
 
     if (!bashCmd) return resolve(false);
@@ -356,27 +430,52 @@ function sendLinuxMprisCommand(cmd, arg = '') {
 }
 
 /**
- * Sterowanie odtwarzaczem Spotify Web API
+ * Sterowanie odtwarzaczem Spotify Web API / Linux MPRIS
  */
 async function controlSpotifyWeb(action, uri = null) {
-  const token = await getValidToken();
+  const formattedUri = uri ? formatSpotifyUri(uri) : null;
 
-  // Najpierw próbujemy sterować natywnym Spotify na Linuxie jeśli jest uruchomione
-  if (action === 'play' && uri) {
-    const mprisSuccess = await sendLinuxMprisCommand('OpenUri', uri);
-    if (mprisSuccess) return { success: true, method: 'mpris' };
-  } else if (action === 'toggle') {
-    const mprisSuccess = await sendLinuxMprisCommand('PlayPause');
-    if (mprisSuccess) return { success: true, method: 'mpris' };
-  } else if (action === 'next') {
-    const mprisSuccess = await sendLinuxMprisCommand('Next');
-    if (mprisSuccess) return { success: true, method: 'mpris' };
-  } else if (action === 'prev') {
-    const mprisSuccess = await sendLinuxMprisCommand('Previous');
-    if (mprisSuccess) return { success: true, method: 'mpris' };
+  // 1. Sprawdzamy stan Spotify na Linuxie (MPRIS)
+  const currentMpris = await getMprisStatus();
+
+  if (action === 'launch') {
+    await launchSpotifyApp();
+    return { success: true, method: 'launch' };
   }
 
-  // Jeśli brak MPRIS, próbujemy przez oficjalne Spotify Web API Connect
+  if (action === 'play' && formattedUri) {
+    if (!currentMpris.running) {
+      await launchSpotifyApp();
+      await new Promise(r => setTimeout(r, 1500));
+    }
+    const openSuccess = await sendLinuxMprisCommand('OpenUri', formattedUri);
+    if (openSuccess) {
+      await sendLinuxMprisCommand('Play');
+      const updated = await getMprisStatus();
+      return { success: true, method: 'mpris', track: updated };
+    }
+  } else if (action === 'toggle' || action === 'play' || action === 'pause') {
+    if (!currentMpris.running && action !== 'pause') {
+      await launchSpotifyApp();
+      await new Promise(r => setTimeout(r, 1500));
+    }
+    const cmd = action === 'toggle' ? 'PlayPause' : (action === 'play' ? 'Play' : 'Pause');
+    const mprisSuccess = await sendLinuxMprisCommand(cmd);
+    if (mprisSuccess) {
+      const updated = await getMprisStatus();
+      return { success: true, method: 'mpris', track: updated };
+    }
+  } else if (action === 'next' || action === 'prev') {
+    const cmd = action === 'next' ? 'Next' : 'Previous';
+    const mprisSuccess = await sendLinuxMprisCommand(cmd);
+    if (mprisSuccess) {
+      const updated = await getMprisStatus();
+      return { success: true, method: 'mpris', track: updated };
+    }
+  }
+
+  // 2. Fallback: Spotify Web API Connect jeśli token istnieje
+  const token = await getValidToken();
   if (!token) return { success: false, reason: 'no_token' };
 
   try {
@@ -384,8 +483,8 @@ async function controlSpotifyWeb(action, uri = null) {
     let method = 'PUT';
     let body = undefined;
 
-    if (action === 'play' && uri) {
-      body = JSON.stringify(uri.includes(':playlist:') ? { context_uri: uri } : { uris: [uri] });
+    if (action === 'play' && formattedUri) {
+      body = JSON.stringify(formattedUri.includes(':playlist:') ? { context_uri: formattedUri } : { uris: [formattedUri] });
     } else if (action === 'pause') {
       url = 'https://api.spotify.com/v1/me/player/pause';
     } else if (action === 'next') {
@@ -405,7 +504,7 @@ async function controlSpotifyWeb(action, uri = null) {
       body
     });
 
-    return { success: res.ok || res.status === 204 };
+    return { success: res.ok || res.status === 204, method: 'web_api' };
   } catch (e) {
     return { success: false, error: e.message };
   }
@@ -426,5 +525,8 @@ module.exports = {
   getPlaylistTracks,
   controlSpotifyWeb,
   fetchUserProfile,
-  refreshAccessToken
+  refreshAccessToken,
+  getMprisStatus,
+  launchSpotifyApp,
+  formatSpotifyUri
 };

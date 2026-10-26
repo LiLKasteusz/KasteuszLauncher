@@ -26,6 +26,7 @@
   let currentStationIdx = 0;
   let volume = 0.35;
   let currentCustomTrack = null; // Informacje o aktualnym utworze Spotify
+  let radioActive = false; // czy aktualnie odtwarzana jest stacja radiowa (lofi/synthwave/ambient)
 
   const player = {
     init(userStation = 'lofi', userVol = 0.35) {
@@ -111,48 +112,61 @@
     },
 
     toggle() {
-      if (isPlaying) {
-        player.pause();
+      if (radioActive) {
+        if (isPlaying) {
+          player.pause();
+        } else {
+          player.play();
+        }
       } else {
-        player.play();
+        // Kontrolujemy odtwarzacz Spotify (Desktop Linux / MPRIS / Web)
+        window.api?.spotifyControl('toggle').catch(() => {});
+        if (window.syncMprisStatus) {
+          setTimeout(window.syncMprisStatus, 250);
+        }
       }
     },
 
     next() {
-      if (currentCustomTrack) {
-        // Jeśli odtwarzana była playlista Spotify, powiadom UI
-        window.dispatchEvent(new CustomEvent('spotify:next'));
-        return;
-      }
-      currentStationIdx = (currentStationIdx + 1) % STATIONS.length;
-      const wasPlaying = isPlaying;
-      if (audioEl) audioEl.pause();
-      const station = STATIONS[currentStationIdx];
-      if (audioEl) audioEl.src = station.url;
-      if (wasPlaying) {
-        player.play();
+      if (radioActive) {
+        currentStationIdx = (currentStationIdx + 1) % STATIONS.length;
+        const wasPlaying = isPlaying;
+        if (audioEl) audioEl.pause();
+        const station = STATIONS[currentStationIdx];
+        if (audioEl) audioEl.src = station.url;
+        if (wasPlaying) {
+          player.play();
+        } else {
+          player.updateUI();
+        }
+        window.api?.saveConfig({ musicPlayerStation: station.id });
       } else {
-        player.updateUI();
+        window.api?.spotifyControl('next').catch(() => {});
+        if (window.syncMprisStatus) {
+          setTimeout(window.syncMprisStatus, 300);
+        }
       }
-      window.api?.saveConfig({ musicPlayerStation: station.id });
     },
 
     prev() {
-      if (currentCustomTrack) {
-        window.dispatchEvent(new CustomEvent('spotify:prev'));
-        return;
-      }
-      currentStationIdx = (currentStationIdx - 1 + STATIONS.length) % STATIONS.length;
-      const wasPlaying = isPlaying;
-      if (audioEl) audioEl.pause();
-      const station = STATIONS[currentStationIdx];
-      if (audioEl) audioEl.src = station.url;
-      if (wasPlaying) {
-        player.play();
+      if (radioActive) {
+        currentStationIdx = (currentStationIdx - 1 + STATIONS.length) % STATIONS.length;
+        const wasPlaying = isPlaying;
+        if (audioEl) audioEl.pause();
+        const station = STATIONS[currentStationIdx];
+        if (audioEl) audioEl.src = station.url;
+        if (wasPlaying) {
+          player.play();
+        } else {
+          player.updateUI();
+        }
+        window.api?.saveConfig({ musicPlayerStation: station.id });
       } else {
-        player.updateUI();
+        window.api?.spotifyControl('prev').catch(() => {});
+        if (window.syncMprisStatus) {
+          setTimeout(window.syncMprisStatus, 300);
+        }
       }
-      window.api?.saveConfig({ musicPlayerStation: station.id });
     },
 
     playSpotifyTrack(track) {
@@ -176,6 +190,7 @@
     playStation(stationId) {
       const idx = STATIONS.findIndex(s => s.id === stationId);
       if (idx >= 0) {
+        radioActive = true;
         currentCustomTrack = null;
         currentStationIdx = idx;
         if (audioEl) {
@@ -184,6 +199,15 @@
         }
         player.play();
         window.api?.saveConfig({ musicPlayerStation: stationId });
+      }
+    },
+
+    stopRadio() {
+      radioActive = false;
+      if (audioEl) {
+        audioEl.pause();
+        isPlaying = false;
+        player.updateUI();
       }
     },
 
@@ -266,6 +290,10 @@
 
     isPlaying() {
       return isPlaying;
+    },
+
+    isRadioPlaying() {
+      return radioActive && isPlaying;
     }
   };
 

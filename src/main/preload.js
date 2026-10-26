@@ -119,6 +119,7 @@ contextBridge.exposeInMainWorld('api', {
   spotifyLogin: (clientId) => ipcRenderer.invoke('spotify:login', clientId),
   spotifyLogout: () => ipcRenderer.invoke('spotify:logout'),
   spotifyGetStatus: () => ipcRenderer.invoke('spotify:get-status'),
+  spotifyGetMprisStatus: () => ipcRenderer.invoke('spotify:get-mpris-status'),
   spotifyGetPlaylists: () => ipcRenderer.invoke('spotify:get-playlists'),
   spotifyGetTracks: (playlistId) => ipcRenderer.invoke('spotify:get-tracks', playlistId),
   spotifyControl: (action, uri) => ipcRenderer.invoke('spotify:control', action, uri),
