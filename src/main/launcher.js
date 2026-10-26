@@ -266,18 +266,22 @@ async function launchMinecraft(window, versionOverride) {
       const line = e.toString().trim();
       safeSend('launcher:log', { level: 'info', text: line });
 
-      // Dynamiczne wykrywanie stanu gry i serwera dla Discord RPC
-      if (line.includes('Connecting to ')) {
-        const match = line.match(/Connecting to\s+([a-zA-Z0-9.\-_]+)/i);
+      // Dynamiczne wykrywanie stanu gry i serwera dla Discord RPC (ignorujemy Simple Voice Chat)
+      if (line.includes('[voicechat]') || line.toLowerCase().includes('voice chat')) {
+        // Ignorujemy logi modu voicechat, żeby nie nadpisywały IP serwera
+      } else if (line.includes('Connecting to ')) {
+        const match = line.match(/Connecting to\s+([a-zA-Z0-9.\-_]+)(?:,\s*\d+)?/i);
         if (match && match[1]) {
-          const rawHost = match[1];
-          const serverName = (rawHost === 'localhost' || rawHost === '127.0.0.1') ? 'Lokalny serwer' : rawHost;
-          discord.setLauncherActivity({
-            isPlaying: true,
-            serverIp: serverName,
-            statusDetails: `Gra na serwerze: ${serverName}`,
-            gameVersion: versionToLaunch
-          });
+          const rawHost = match[1].trim();
+          if (rawHost.toLowerCase() !== 'voice' && rawHost.toLowerCase() !== 'chat') {
+            const serverName = (rawHost === 'localhost' || rawHost === '127.0.0.1') ? 'Lokalny serwer' : rawHost;
+            discord.setLauncherActivity({
+              isPlaying: true,
+              serverIp: serverName,
+              statusDetails: `Gra na serwerze: ${serverName}`,
+              gameVersion: versionToLaunch
+            });
+          }
         }
       } else if (line.includes('Starting integrated minecraft server') || line.includes('Starting integrated server')) {
         discord.setLauncherActivity({
@@ -290,7 +294,6 @@ async function launchMinecraft(window, versionOverride) {
         line.includes('Stopping singleplayer server') ||
         line.includes('Client disconnected with reason') ||
         line.includes('lost connection: Disconnected') ||
-        line.includes('Disconnecting from previous connection') ||
         line.includes('Disconnected from server')
       ) {
         discord.setLauncherActivity({
