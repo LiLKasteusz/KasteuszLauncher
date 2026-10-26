@@ -17,10 +17,12 @@
   "author": "Kasteusz",
   "license": "MIT",
   "dependencies": {
+    "@distube/ytdl-core": "^5.0.2",
     "discord-rpc": "^4.0.1",
     "electron": "^41.7.1",
     "lucide": "^1.61.0",
     "minecraft-launcher-core": "^3.18.2",
+    "play-dl": "^1.9.7",
     "skinview3d": "^3.4.2"
   }
 }

@@ -2565,6 +2565,7 @@ async function loadSpotifyPlaylists() {
 }
 
 async function syncMprisStatus() {
+  if (window.musicPlayer?.isStandalone?.()) return; // Samodzielny odtwarzacz w launcherze ma pierwszeństwo
   if (!window.api?.spotifyGetMprisStatus) return;
   try {
     const data = await window.api.spotifyGetMprisStatus();
@@ -2615,17 +2616,26 @@ async function playSpotifyPlaylist(playlist) {
   // Podświetlenie aktywnej karty
   document.querySelectorAll('.spotify-playlist-card').forEach(c => c.classList.remove('active'));
 
-  // Zatrzymaj wbudowane radio, by nie nakładało się na Spotify
-  window.musicPlayer?.stopRadio?.();
-
-  showToast(`Uruchamianie Spotify: ${playlist.name}...`);
+  showToast(`Ładowanie playlisty: ${playlist.name}...`);
   try {
-    await window.api?.spotifyControl('play', playlist.uri);
-    setTimeout(syncMprisStatus, 500);
-    setTimeout(syncMprisStatus, 1500);
-    showToast(`▶ Pełna playlista gra w tle (steruj z gry Ctrl+Alt+Spacja)!`);
+    const playlistInfo = await window.api.spotifyGetPlaylistInfo(playlist.id || playlist.uri);
+    if (playlistInfo && playlistInfo.tracks && playlistInfo.tracks.length) {
+      window.musicPlayer.loadSpotifyPlaylist(playlistInfo);
+      showToast(`▶ Odtwarzanie bez aplikacji Spotify: ${playlistInfo.name} (${playlistInfo.tracks.length} utworów)!`);
+    } else {
+      const tracks = await window.api.spotifyGetTracks(playlist.id);
+      if (tracks && tracks.length) {
+        window.musicPlayer.loadSpotifyPlaylist({
+          id: playlist.id,
+          name: playlist.name,
+          coverUrl: playlist.image,
+          tracks: tracks.map(t => ({ title: t.name, artist: t.artists, durationMs: t.durationMs }))
+        });
+        showToast(`▶ Odtwarzanie: ${playlist.name} (${tracks.length} utworów)!`);
+      }
+    }
   } catch (err) {
-    showToast(`Błąd odtwarzania: ${err.message}`);
+    showToast(`Błąd odtwarzania playlisty: ${err.message}`);
   }
 }
 
@@ -2660,21 +2670,17 @@ function setupSpotifyMusicListeners() {
     if (e.target === musicModal) closeMusicModal();
   });
 
-  // Kontrolki odtwarzania Spotify w modalu
-  btnModalPlay?.addEventListener('click', async () => {
-    window.musicPlayer?.stopRadio?.();
-    await window.api?.spotifyControl('toggle');
-    setTimeout(syncMprisStatus, 300);
+  // Kontrolki odtwarzania w modalu (działają standalone bez Spotify!)
+  btnModalPlay?.addEventListener('click', () => {
+    window.musicPlayer?.toggle();
   });
 
-  btnModalNext?.addEventListener('click', async () => {
-    await window.api?.spotifyControl('next');
-    setTimeout(syncMprisStatus, 300);
+  btnModalNext?.addEventListener('click', () => {
+    window.musicPlayer?.next();
   });
 
-  btnModalPrev?.addEventListener('click', async () => {
-    await window.api?.spotifyControl('prev');
-    setTimeout(syncMprisStatus, 300);
+  btnModalPrev?.addEventListener('click', () => {
+    window.musicPlayer?.prev();
   });
 
   btnLogin?.addEventListener('click', async () => {
@@ -2708,45 +2714,31 @@ function setupSpotifyMusicListeners() {
       return;
     }
 
-    const match = url.match(/(playlist|album|track|artist)[\/:]([a-zA-Z0-9]+)/);
-    if (!match) {
-      showToast('Nie rozpoznano formatu linku Spotify.');
-      return;
-    }
-
-    const type = match[1];
-    const id = match[2];
-    const uri = `spotify:${type}:${id}`;
-
-    // Zatrzymaj radio i puść pełny utwór w Spotify Desktop
-    window.musicPlayer?.stopRadio?.();
-    showToast('Wysyłanie playlisty do Spotify Desktop...');
-
+    showToast('Ładowanie playlisty bez potrzeby odpalania Spotify...');
     try {
-      await window.api?.spotifyControl('play', uri);
-      setTimeout(syncMprisStatus, 500);
-      setTimeout(syncMprisStatus, 1500);
-      showToast('▶ Piosenka/Playlista leci w tle w pełnej wersji (bez ucięć)!');
+      const playlistInfo = await window.api.spotifyGetPlaylistInfo(url);
+      if (!playlistInfo || !playlistInfo.tracks || !playlistInfo.tracks.length) {
+        throw new Error('Nie znaleziono utworów w podanej playliście.');
+      }
+      window.musicPlayer.loadSpotifyPlaylist(playlistInfo);
+      showToast(`▶ Odtwarzanie: ${playlistInfo.name} (${playlistInfo.tracks.length} utworów) w tle w grze!`);
     } catch (err) {
-      showToast(`Błąd odtwarzacza: ${err.message}`);
+      showToast(`Błąd playlisty: ${err.message}`);
     }
   });
 
   // Stacje radiowe wbudowane w launcher
   document.getElementById('btn-station-lofi')?.addEventListener('click', () => {
-    window.api?.spotifyControl('pause').catch(() => {});
     window.musicPlayer.playStation('lofi');
     showToast('Przełączono na stację: Lofi Chill Beats');
   });
 
   document.getElementById('btn-station-synthwave')?.addEventListener('click', () => {
-    window.api?.spotifyControl('pause').catch(() => {});
     window.musicPlayer.playStation('synthwave');
     showToast('Przełączono na stację: Synthwave & Cyberpunk');
   });
 
   document.getElementById('btn-station-ambient')?.addEventListener('click', () => {
-    window.api?.spotifyControl('pause').catch(() => {});
     window.musicPlayer.playStation('ambient');
     showToast('Przełączono na stację: Minecraft Ambient');
   });

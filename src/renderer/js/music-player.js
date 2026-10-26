@@ -26,7 +26,13 @@
   let currentStationIdx = 0;
   let volume = 0.35;
   let currentCustomTrack = null; // Informacje o aktualnym utworze Spotify
-  let radioActive = false; // czy aktualnie odtwarzana jest stacja radiowa (lofi/synthwave/ambient)
+  let radioActive = false; // czy gra stacja radiowa (lofi/synthwave/ambient)
+  let isStandaloneSpotify = false; // czy gra samodzielny odtwarzacz Spotify (bez aplikacji Spotify!)
+  let currentPlaylist = [];
+  let currentPlaylistIndex = 0;
+  let playlistName = '';
+  let playlistCover = '';
+  let isResolvingTrack = false;
 
   const player = {
     init(userStation = 'lofi', userVol = 0.35) {
@@ -36,7 +42,7 @@
         audioEl.preload = 'none';
 
         audioEl.addEventListener('error', (e) => {
-          console.warn('[Music Player] Błąd streamu/utworu:', e);
+          console.warn('[Music Player] Błąd odtwarzania utworu/strumienia:', e);
           isPlaying = false;
           player.updateUI();
         });
@@ -52,6 +58,7 @@
         });
 
         audioEl.addEventListener('ended', () => {
+          console.log('[Music Player] Utwór zakończony. Następuje przejście do kolejnego utworu...');
           player.next();
         });
       }
@@ -68,7 +75,7 @@
     setupGlobalShortcuts() {
       if (window.api?.onMusicAction) {
         window.api.onMusicAction((action) => {
-          console.log('[Music Player] Odebrano skrót globalny:', action);
+          console.log('[Music Player] Odebrano skrót globalny (działa w Minecraft):', action);
           if (action === 'toggle') {
             player.toggle();
           } else if (action === 'next') {
@@ -80,13 +87,73 @@
       }
     },
 
+    async loadSpotifyPlaylist(playlistInfo) {
+      if (!playlistInfo || !playlistInfo.tracks || !playlistInfo.tracks.length) return;
+      radioActive = false;
+      isStandaloneSpotify = true;
+      currentPlaylist = playlistInfo.tracks;
+      currentPlaylistIndex = 0;
+      playlistName = playlistInfo.name || 'Playlista Spotify';
+      playlistCover = playlistInfo.coverUrl || 'assets/icon-256.png';
+      await player.playCurrentStandaloneTrack();
+    },
+
+    async playCurrentStandaloneTrack() {
+      if (!currentPlaylist || !currentPlaylist.length) return;
+      if (currentPlaylistIndex < 0) currentPlaylistIndex = 0;
+      if (currentPlaylistIndex >= currentPlaylist.length) currentPlaylistIndex = 0;
+
+      const track = currentPlaylist[currentPlaylistIndex];
+      if (!track) return;
+
+      currentCustomTrack = {
+        name: track.title,
+        artists: track.artist,
+        coverUrl: playlistCover
+      };
+
+      player.updateUI();
+      player.updateModalView('Wyszukiwanie strumienia audio...');
+
+      try {
+        isResolvingTrack = true;
+        const audioData = await window.api.spotifyResolveAudio(track.title, track.artist);
+        isResolvingTrack = false;
+
+        if (!audioData || !audioData.streamUrl) {
+          throw new Error('Brak strumienia audio');
+        }
+
+        if (audioEl) {
+          audioEl.src = audioData.streamUrl;
+          audioEl.play().then(() => {
+            isPlaying = true;
+            player.updateUI();
+            player.updateModalView('Spotify Standalone • Gra bez aplikacji Spotify!');
+          }).catch(err => {
+            console.warn('[Music Player] Błąd autoplay:', err);
+            isPlaying = false;
+            player.updateUI();
+          });
+        }
+      } catch (err) {
+        isResolvingTrack = false;
+        console.warn('[Music Player] Błąd utworu:', err.message);
+        player.updateModalView(`Błąd utworu: ${err.message}`);
+        setTimeout(() => {
+          if (isStandaloneSpotify) player.next();
+        }, 2000);
+      }
+    },
+
     play() {
       if (!audioEl) return;
-      if (currentCustomTrack && currentCustomTrack.previewUrl) {
-        if (audioEl.src !== currentCustomTrack.previewUrl) {
-          audioEl.src = currentCustomTrack.previewUrl;
+      if (isStandaloneSpotify) {
+        if (!audioEl.src && currentPlaylist.length) {
+          player.playCurrentStandaloneTrack();
+          return;
         }
-      } else {
+      } else if (!radioActive) {
         const station = STATIONS[currentStationIdx];
         if (audioEl.src !== station.url) {
           audioEl.src = station.url;
@@ -97,7 +164,7 @@
         isPlaying = true;
         player.updateUI();
       }).catch(err => {
-        console.warn('[Music Player] Autoplay prevented or stream error:', err);
+        console.warn('[Music Player] Autoplay error:', err);
         isPlaying = false;
         player.updateUI();
       });
@@ -112,86 +179,62 @@
     },
 
     toggle() {
-      if (radioActive) {
+      if (isStandaloneSpotify) {
+        if (isPlaying) {
+          player.pause();
+        } else {
+          player.play();
+        }
+      } else if (radioActive) {
         if (isPlaying) {
           player.pause();
         } else {
           player.play();
         }
       } else {
-        // Kontrolujemy odtwarzacz Spotify (Desktop Linux / MPRIS / Web)
-        window.api?.spotifyControl('toggle').catch(() => {});
-        if (window.syncMprisStatus) {
-          setTimeout(window.syncMprisStatus, 250);
-        }
+        // Jeśli nic nie było aktywne, włącz radio lub sprawdź Spotify
+        player.play();
       }
     },
 
     next() {
-      if (radioActive) {
+      if (isStandaloneSpotify && currentPlaylist.length) {
+        currentPlaylistIndex = (currentPlaylistIndex + 1) % currentPlaylist.length;
+        player.playCurrentStandaloneTrack();
+      } else if (radioActive) {
         currentStationIdx = (currentStationIdx + 1) % STATIONS.length;
         const wasPlaying = isPlaying;
         if (audioEl) audioEl.pause();
         const station = STATIONS[currentStationIdx];
         if (audioEl) audioEl.src = station.url;
-        if (wasPlaying) {
-          player.play();
-        } else {
-          player.updateUI();
-        }
+        if (wasPlaying) player.play();
+        else player.updateUI();
         window.api?.saveConfig({ musicPlayerStation: station.id });
-      } else {
-        window.api?.spotifyControl('next').catch(() => {});
-        if (window.syncMprisStatus) {
-          setTimeout(window.syncMprisStatus, 300);
-        }
       }
     },
 
     prev() {
-      if (radioActive) {
+      if (isStandaloneSpotify && currentPlaylist.length) {
+        currentPlaylistIndex = (currentPlaylistIndex - 1 + currentPlaylist.length) % currentPlaylist.length;
+        player.playCurrentStandaloneTrack();
+      } else if (radioActive) {
         currentStationIdx = (currentStationIdx - 1 + STATIONS.length) % STATIONS.length;
         const wasPlaying = isPlaying;
         if (audioEl) audioEl.pause();
         const station = STATIONS[currentStationIdx];
         if (audioEl) audioEl.src = station.url;
-        if (wasPlaying) {
-          player.play();
-        } else {
-          player.updateUI();
-        }
+        if (wasPlaying) player.play();
+        else player.updateUI();
         window.api?.saveConfig({ musicPlayerStation: station.id });
-      } else {
-        window.api?.spotifyControl('prev').catch(() => {});
-        if (window.syncMprisStatus) {
-          setTimeout(window.syncMprisStatus, 300);
-        }
       }
-    },
-
-    playSpotifyTrack(track) {
-      if (!track) return;
-      currentCustomTrack = track;
-      if (audioEl) {
-        audioEl.pause();
-        if (track.previewUrl) {
-          audioEl.src = track.previewUrl;
-          player.play();
-        } else {
-          // Jeśli brak podglądu 30s, wysyłamy komendę do natywnego Spotify (MPRIS/Web)
-          window.api?.spotifyControl('play', track.uri).catch(() => {});
-          isPlaying = true;
-          player.updateUI();
-        }
-      }
-      player.updateUI();
     },
 
     playStation(stationId) {
+      isStandaloneSpotify = false;
+      radioActive = true;
+      currentCustomTrack = null;
       const idx = STATIONS.findIndex(s => s.id === stationId);
       if (idx >= 0) {
-        radioActive = true;
-        currentCustomTrack = null;
         currentStationIdx = idx;
         if (audioEl) {
           audioEl.pause();
@@ -208,6 +251,24 @@
         audioEl.pause();
         isPlaying = false;
         player.updateUI();
+      }
+    },
+
+    updateModalView(statusText = '') {
+      const titleEl = document.getElementById('spotify-now-playing-title');
+      const artistEl = document.getElementById('spotify-now-playing-artist');
+      const artEl = document.getElementById('spotify-now-playing-art');
+      const playBtn = document.getElementById('btn-spotify-modal-play');
+      const badgeText = document.getElementById('spotify-playback-badge-text');
+
+      if (currentCustomTrack) {
+        if (titleEl) titleEl.textContent = currentCustomTrack.name || 'Utwór Spotify';
+        if (artistEl) artistEl.textContent = currentCustomTrack.artists || playlistName || 'Spotify Standalone';
+        if (artEl && currentCustomTrack.coverUrl) artEl.src = currentCustomTrack.coverUrl;
+      }
+      if (playBtn) playBtn.textContent = isPlaying ? '⏸' : '▶';
+      if (badgeText) {
+        badgeText.textContent = statusText || (isPlaying ? 'Spotify Standalone • Gra w tle w Minecraft' : 'Spotify Standalone • Wstrzymano');
       }
     },
 
@@ -290,6 +351,10 @@
 
     isPlaying() {
       return isPlaying;
+    },
+
+    isStandalone() {
+      return isStandaloneSpotify;
     },
 
     isRadioPlaying() {

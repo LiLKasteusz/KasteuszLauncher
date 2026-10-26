@@ -518,6 +518,107 @@ function logoutSpotify() {
   return { success: true };
 }
 
+let playDl = null;
+let distubeYtdl = null;
+
+function getAudioResolvers() {
+  if (!playDl) {
+    try { playDl = require('play-dl'); } catch (e) { console.warn('play-dl load error:', e); }
+  }
+  if (!distubeYtdl) {
+    try {
+      const { Ytdl } = require('@distube/ytdl-core');
+      distubeYtdl = new Ytdl();
+    } catch (e) {
+      console.warn('@distube/ytdl-core load error:', e);
+    }
+  }
+  return { playDl, distubeYtdl };
+}
+
+const audioCache = new Map();
+
+/**
+ * Rozwiązuje strumień audio dla podanego utworu (Spotube Standalone engine)
+ * Odtwarza pełny utwór w tle bez potrzeby uruchamiania Spotify na komputerze!
+ */
+async function resolveTrackAudio(title, artist = '') {
+  const cacheKey = `${artist}_${title}`.toLowerCase().trim();
+  if (audioCache.has(cacheKey)) {
+    const cached = audioCache.get(cacheKey);
+    if (Date.now() - cached.timestamp < 2 * 60 * 60 * 1000) {
+      return cached.data;
+    }
+  }
+
+  const { playDl: p, distubeYtdl: y } = getAudioResolvers();
+  if (!p || !y) throw new Error('Brak bibliotek strumieniowania audio.');
+
+  const query = (artist ? `${artist} - ` : '') + title;
+  const searchResults = await p.search(query, { limit: 1 });
+  if (!searchResults || !searchResults.length) {
+    throw new Error(`Nie znaleziono utworu dla: ${query}`);
+  }
+
+  const video = searchResults[0];
+  const info = await y.getInfo(video.url);
+  const audioFormats = info.formats.filter(f => f.hasAudio && !f.hasVideo);
+  const bestAudio = audioFormats.find(f => f.container === 'mp4') || audioFormats[0];
+
+  if (!bestAudio || !bestAudio.url) {
+    throw new Error('Nie udało się wyodrębnić bezpośredniego strumienia audio.');
+  }
+
+  const result = {
+    streamUrl: bestAudio.url,
+    title: video.title || title,
+    duration: video.durationInSec || 0,
+    videoUrl: video.url
+  };
+
+  audioCache.set(cacheKey, { timestamp: Date.now(), data: result });
+  return result;
+}
+
+/**
+ * Pobiera publiczne metadane playlisty lub utworu Spotify bez konieczności logowania
+ */
+async function getPublicSpotifyPlaylist(urlOrId) {
+  if (!urlOrId) throw new Error('Brak linku do playlisty');
+  const match = urlOrId.match(/(playlist|album|track|artist)[\/:]([a-zA-Z0-9]+)/);
+  const type = match ? match[1] : 'playlist';
+  const id = match ? match[2] : urlOrId.trim();
+
+  const res = await fetch(`https://open.spotify.com/embed/${type}/${id}`);
+  if (!res.ok) throw new Error(`Nie udało się otworzyć playlisty Spotify (${res.status})`);
+
+  const html = await res.text();
+  const jsonMatch = html.match(/<script id=\"__NEXT_DATA__\"[^>]*>(.*?)<\/script>/);
+  if (!jsonMatch) throw new Error('Nie znaleziono metadanych playlisty Spotify.');
+
+  const parsed = JSON.parse(jsonMatch[1]);
+  const entity = parsed.props?.pageProps?.state?.data?.entity;
+  if (!entity) throw new Error('Pusta playlista Spotify.');
+
+  const rawTracks = entity.trackList || (entity.type === 'track' ? [entity] : []);
+  const tracks = rawTracks.map(t => ({
+    title: t.title || 'Nieznany utwór',
+    artist: t.subtitle || (t.artists ? t.artists.map(a => a.name).join(', ') : ''),
+    durationMs: t.duration || 0,
+    uri: t.uri || ''
+  }));
+
+  const coverUrl = entity.visualIdentity?.image?.[0]?.url || entity.images?.[0]?.url || null;
+
+  return {
+    id: entity.id || id,
+    name: entity.name || entity.title || 'Playlista Spotify',
+    type: entity.type || type,
+    coverUrl,
+    tracks
+  };
+}
+
 module.exports = {
   loginWithSpotify,
   logoutSpotify,
@@ -528,5 +629,7 @@ module.exports = {
   refreshAccessToken,
   getMprisStatus,
   launchSpotifyApp,
-  formatSpotifyUri
+  formatSpotifyUri,
+  resolveTrackAudio,
+  getPublicSpotifyPlaylist
 };

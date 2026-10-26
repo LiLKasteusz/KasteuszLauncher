@@ -122,6 +122,8 @@ contextBridge.exposeInMainWorld('api', {
   spotifyGetMprisStatus: () => ipcRenderer.invoke('spotify:get-mpris-status'),
   spotifyGetPlaylists: () => ipcRenderer.invoke('spotify:get-playlists'),
   spotifyGetTracks: (playlistId) => ipcRenderer.invoke('spotify:get-tracks', playlistId),
+  spotifyGetPlaylistInfo: (urlOrId) => ipcRenderer.invoke('spotify:get-playlist-info', urlOrId),
+  spotifyResolveAudio: (title, artist) => ipcRenderer.invoke('spotify:resolve-audio', title, artist),
   spotifyControl: (action, uri) => ipcRenderer.invoke('spotify:control', action, uri),
   onMusicAction: (callback) => {
     const sub = (_event, action) => callback(action);

@@ -378,6 +378,14 @@ ipcMain.handle('spotify:get-tracks', async (_e, playlistId) => {
   return await spotify.getPlaylistTracks(playlistId);
 });
 
+ipcMain.handle('spotify:get-playlist-info', async (_e, urlOrId) => {
+  return await spotify.getPublicSpotifyPlaylist(urlOrId);
+});
+
+ipcMain.handle('spotify:resolve-audio', async (_e, title, artist) => {
+  return await spotify.resolveTrackAudio(title, artist);
+});
+
 ipcMain.handle('spotify:control', async (_e, arg1, arg2) => {
   const action = typeof arg1 === 'object' && arg1 !== null ? arg1.action : arg1;
   const uri = typeof arg1 === 'object' && arg1 !== null ? arg1.uri : arg2;
