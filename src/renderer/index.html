@@ -100,6 +100,24 @@
       <section class="hero-card">
         <div class="hero-ambient-glow"></div>
 
+        <!-- FEATURE 4 & 5: Hero Top Toolbar (Wardrobe, Rotate, Playtime) -->
+        <div class="hero-top-toolbar">
+          <div class="hero-toolbar-left">
+            <button class="hero-tool-btn" id="btn-open-wardrobe" title="Otwórz garderobę (pelerynki i skórki)">
+              <span class="tool-emoji">👕</span>
+              <span>Garderoba</span>
+            </button>
+            <button class="hero-tool-btn" id="btn-rotate-player" title="Obróć postać o 180° tyłem/przodem">
+              <span class="tool-emoji">🔄</span>
+              <span>Obróć</span>
+            </button>
+          </div>
+          <div class="hero-stats-pill" id="hero-playtime-pill" title="Łączny czas spędzony w grze">
+            <span class="pill-dot"></span>
+            <span id="hero-playtime-text">Czas: 0h 0m</span>
+          </div>
+        </div>
+
         <!-- 3D Minecraft Skin Viewport -->
         <div class="skin-viewport-container" id="skin-container">
           <canvas id="skin-canvas"></canvas>
@@ -460,7 +478,90 @@
               </div>
             </div>
             <div style="display: flex; align-items: center;">
-              <input type="checkbox" id="setting-fps-boost" checked style="width: 20px; height: 20px; accent-color: #22c55e; cursor: pointer;">
+              <input type="checkbox" id="setting-fps-boost" checked style="width: 20px; height: 20px; accent-color: var(--accent-primary); cursor: pointer;">
+            </div>
+          </div>
+
+          <!-- THEME & ACCENT COLOR PERSONALIZATION -->
+          <div class="settings-card-group">
+            <div style="margin-bottom: 14px;">
+              <h3 style="font-size: 15px; font-weight: 700; color: #ffffff; display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                <span>🎨</span>
+                <span>Personalizacja i Kolor Akcentu</span>
+              </h3>
+              <span style="font-size: 12px; color: var(--text-dim);">Wybierz styl wizualny interfejsu launchera oraz prędkość animacji 3D.</span>
+            </div>
+
+            <div class="theme-palette-grid">
+              <div class="theme-card active" data-theme="purple" title="Fiolet Kasteusza (Domyślny)">
+                <div class="theme-circle" style="background: linear-gradient(135deg, #c084fc, #7e22ce);"></div>
+                <div class="theme-card-info">
+                  <span class="theme-title">Kasteusz Purple</span>
+                  <span class="theme-tag">Domyślny</span>
+                </div>
+              </div>
+
+              <div class="theme-card" data-theme="red" title="Czerwień Zygzaka McQueena #95">
+                <div class="theme-circle" style="background: linear-gradient(135deg, #f87171, #b91c1c);"></div>
+                <div class="theme-card-info">
+                  <span class="theme-title">McQueen #95 Red</span>
+                  <span class="theme-tag">Wyścigowy</span>
+                </div>
+              </div>
+
+              <div class="theme-card" data-theme="emerald" title="Szmaragd Szkolne SMP">
+                <div class="theme-circle" style="background: linear-gradient(135deg, #34d399, #047857);"></div>
+                <div class="theme-card-info">
+                  <span class="theme-title">Szkolne SMP</span>
+                  <span class="theme-tag">Szmaragd</span>
+                </div>
+              </div>
+
+              <div class="theme-card" data-theme="cyan" title="Cyber Cyan Neon">
+                <div class="theme-circle" style="background: linear-gradient(135deg, #22d3ee, #0891b2);"></div>
+                <div class="theme-card-info">
+                  <span class="theme-title">Cyber Cyan</span>
+                  <span class="theme-tag">Neon</span>
+                </div>
+              </div>
+
+              <div class="theme-card" data-theme="gold" title="Złoto Kasteusza">
+                <div class="theme-circle" style="background: linear-gradient(135deg, #fbbf24, #d97706);"></div>
+                <div class="theme-card-info">
+                  <span class="theme-title">Złoto Kasteusza</span>
+                  <span class="theme-tag">Złoty</span>
+                </div>
+              </div>
+
+              <div class="theme-card" data-theme="ruby" title="Krwawy Rubin">
+                <div class="theme-circle" style="background: linear-gradient(135deg, #fb7185, #be123c);"></div>
+                <div class="theme-card-info">
+                  <span class="theme-title">Krwawy Rubin</span>
+                  <span class="theme-tag">Rubin</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Toggles for Ambient glow & animation speed -->
+            <div style="margin-top: 18px; display: flex; flex-direction: column; gap: 14px; border-top: 1px solid rgba(255, 255, 255, 0.06); padding-top: 16px;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: flex; flex-direction: column; gap: 2px;">
+                  <span style="font-size: 13px; font-weight: 600; color: #ffffff;">Poświata tła modelu (Ambient Glow)</span>
+                  <span style="font-size: 11px; color: var(--text-dim);">Barwna poświata w tle dopasowująca się do wybranego motywu</span>
+                </div>
+                <input type="checkbox" id="setting-ambient-glow" checked style="width: 18px; height: 18px; accent-color: var(--accent-primary); cursor: pointer;">
+              </div>
+
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: flex; flex-direction: column; gap: 2px;">
+                  <span style="font-size: 13px; font-weight: 600; color: #ffffff;">Prędkość animacji postaci 3D</span>
+                  <span style="font-size: 11px; color: var(--text-dim);">Reguluje ruchy postaci i powiewanie pelerynki w menu</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <input type="range" id="setting-anim-speed" min="0" max="150" step="10" value="60" style="width: 130px; cursor: pointer;">
+                  <span id="setting-anim-val" style="font-size: 12px; font-weight: 700; color: var(--accent-primary); min-width: 32px;">0.6x</span>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -471,7 +572,7 @@
               <span class="setting-desc">Wyłącza zbędne cienie i chmury, wyłącza V-Sync usuwając opóźnienia myszki</span>
             </div>
             <div class="setting-control">
-              <input type="checkbox" id="setting-optimize-options" checked style="width: 18px; height: 18px; accent-color: #a855f7; cursor: pointer;">
+              <input type="checkbox" id="setting-optimize-options" checked style="width: 18px; height: 18px; accent-color: var(--accent-primary); cursor: pointer;">
             </div>
           </div>
 
@@ -518,7 +619,7 @@
               <span class="setting-desc">Oszczędza zasoby komputera podczas grania</span>
             </div>
             <div class="setting-control">
-              <input type="checkbox" id="setting-close-on-launch" style="width: 18px; height: 18px; accent-color: #a855f7; cursor: pointer;">
+              <input type="checkbox" id="setting-close-on-launch" style="width: 18px; height: 18px; accent-color: var(--accent-primary); cursor: pointer;">
             </div>
           </div>
 
@@ -613,6 +714,22 @@
         </div>
       </div>
 
+      <!-- Player Statistics in Modal -->
+      <div class="profile-stats-grid">
+        <div class="p-stat-box">
+          <span class="p-stat-val" id="profile-stat-playtime">0h 0m</span>
+          <span class="p-stat-lbl">Czas w grze</span>
+        </div>
+        <div class="p-stat-box">
+          <span class="p-stat-val" id="profile-stat-launches">0</span>
+          <span class="p-stat-lbl">Uruchomienia</span>
+        </div>
+        <div class="p-stat-box">
+          <span class="p-stat-val" id="profile-stat-rank" style="color: var(--accent-primary);">Nowicjusz</span>
+          <span class="p-stat-lbl">Ranga gracza</span>
+        </div>
+      </div>
+
       <!-- Change Nick & Skin Section -->
       <div style="width: 100%; display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; text-align: left;">
         <label style="font-size: 12px; font-weight: 600; color: #cbd5e1;">Zmień nick i pobierz skórkę z Minecraft:</label>
@@ -660,6 +777,113 @@
         <button class="btn-primary" id="btn-submit-add-friend" style="padding: 10px 18px; font-weight: 700; white-space: nowrap; border-radius: 8px; background: #a855f7; border: none; color: #ffffff; cursor: pointer;">Dodaj</button>
       </div>
       <div id="friend-modal-error" style="font-size: 12px; color: #f87171; min-height: 18px; text-align: left;"></div>
+    </div>
+  </div>
+
+  <!-- WARDROBE & CAPES MODAL -->
+  <div class="modal-overlay" id="wardrobe-modal">
+    <div class="modal-card wardrobe-modal-card">
+      <button class="modal-close-btn" id="btn-close-wardrobe-modal">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+
+      <div class="wardrobe-header">
+        <div class="wardrobe-icon-box">👕</div>
+        <div>
+          <h3 class="modal-title" style="margin: 0; text-align: left;">Garderoba i Kosmetyki</h3>
+          <p class="modal-desc" style="margin: 2px 0 0 0; text-align: left;">Wybierz pelerynkę lub skórkę dla swojej postaci 3D.</p>
+        </div>
+      </div>
+
+      <!-- Wardrobe tabs -->
+      <div class="wardrobe-tabs">
+        <button class="wardrobe-tab active" id="tab-btn-capes">Pelerynki (Capes)</button>
+        <button class="wardrobe-tab" id="tab-btn-skins">Skórki (Skins)</button>
+      </div>
+
+      <!-- Capes section -->
+      <div class="wardrobe-content active" id="wardrobe-content-capes">
+        <div class="wardrobe-section-label">PELERYNKI AUTORSKIE KASTEUSZ LAUNCHER</div>
+        <div class="capes-grid" id="capes-grid">
+          <div class="cape-item-card active" data-cape-id="kasteusz">
+            <div class="cape-preview-wrapper" id="cape-preview-kasteusz"></div>
+            <div class="cape-item-info">
+              <span class="cape-item-title">Kasteusz Studio</span>
+              <span class="cape-item-badge purple">Oficjalna</span>
+            </div>
+          </div>
+          <div class="cape-item-card" data-cape-id="mcqueen95">
+            <div class="cape-preview-wrapper" id="cape-preview-mcqueen95"></div>
+            <div class="cape-item-info">
+              <span class="cape-item-title">Zygzak McQueen #95</span>
+              <span class="cape-item-badge red">Wyścigowa</span>
+            </div>
+          </div>
+          <div class="cape-item-card" data-cape-id="szkolnesmp">
+            <div class="cape-preview-wrapper" id="cape-preview-szkolnesmp"></div>
+            <div class="cape-item-info">
+              <span class="cape-item-title">Szkolne SMP</span>
+              <span class="cape-item-badge emerald">Serwerowa</span>
+            </div>
+          </div>
+          <div class="cape-item-card" data-cape-id="fire_dragon">
+            <div class="cape-preview-wrapper" id="cape-preview-fire_dragon"></div>
+            <div class="cape-item-info">
+              <span class="cape-item-title">Ognisty Płomień</span>
+              <span class="cape-item-badge gold">Ognista</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="wardrobe-section-label" style="margin-top: 14px;">PELERYNKI KONTA MOJANG / MICROSOFT</div>
+        <div class="capes-grid" id="account-capes-container">
+          <!-- Dynamically populated or empty -->
+        </div>
+
+        <div style="margin-top: 16px; display: flex; gap: 10px;">
+          <button class="btn-secondary" id="btn-custom-cape-file" style="flex: 1; padding: 10px; font-size: 12px; display: flex; align-items: center; justify-content: center; gap: 6px;">
+            <span>📁</span>
+            <span>Wgraj własną pelerynkę (.png)</span>
+          </button>
+          <button class="btn-secondary" id="btn-remove-cape" style="padding: 10px 14px; font-size: 12px; color: var(--text-dim);" title="Zdejmij pelerynkę">
+            Zdejmij
+          </button>
+        </div>
+      </div>
+
+      <!-- Skins section -->
+      <div class="wardrobe-content" id="wardrobe-content-skins">
+        <div class="wardrobe-section-label">SZYBKIE SKÓRKI PRESETOWE</div>
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+          <button class="skin-preset-btn" id="btn-preset-mcqueen">
+            <span style="font-size: 20px;">🏎️</span>
+            <span style="font-weight: 600; font-size: 12px;">Zygzak McQueen</span>
+          </button>
+          <button class="skin-preset-btn" id="btn-preset-steve">
+            <span style="font-size: 20px;">⛏️</span>
+            <span style="font-weight: 600; font-size: 12px;">Klasyczny Steve</span>
+          </button>
+          <button class="skin-preset-btn" id="btn-preset-alex">
+            <span style="font-size: 20px;">🏹</span>
+            <span style="font-weight: 600; font-size: 12px;">Klasyczna Alex</span>
+          </button>
+        </div>
+
+        <div class="wardrobe-section-label" style="margin-top: 16px;">POBIERZ PO NICKU Z MOJANG</div>
+        <div style="display: flex; gap: 8px;">
+          <input type="text" class="form-input" id="wardrobe-nick-input" placeholder="Wpisz nick gracza Minecraft..." style="flex: 1;">
+          <button class="btn-primary" id="btn-wardrobe-fetch-nick" style="padding: 0 16px; font-size: 12px;">Pobierz</button>
+        </div>
+
+        <div style="margin-top: 14px;">
+          <button class="btn-secondary" id="btn-wardrobe-upload-skin" style="width: 100%; padding: 10px; font-size: 12px;">
+            Wybierz plik skórki (.png) z dysku
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 

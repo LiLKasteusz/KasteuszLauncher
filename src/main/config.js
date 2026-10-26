@@ -44,6 +44,10 @@ const DEFAULT_CONFIG = {
   fpsBoostMode: true,
   fpsPreset: 'ultra',
   optimizeGameOptions: true,
+  themeAccent: 'purple',
+  selectedCape: 'kasteusz',
+  ambientGlow: true,
+  animationSpeed: 0.6,
   favoriteServers: [
     { name: 'Szkolne SMP', ip: 'szkolnesmp.com.pl', description: 'Oficjalny serwer Kasteusza (1.21.11)', isOfficial: true },
     { name: 'Hypixel', ip: 'mc.hypixel.net', description: 'Serwer minigier' }

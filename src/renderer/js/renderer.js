@@ -73,6 +73,38 @@ const elements = {
   btnInstallFabric: document.getElementById('btn-install-fabric'),
   btnInstallSodium: document.getElementById('btn-install-sodium'),
 
+  // Wardrobe & Capes
+  btnOpenWardrobe: document.getElementById('btn-open-wardrobe'),
+  btnRotatePlayer: document.getElementById('btn-rotate-player'),
+  heroPlaytimePill: document.getElementById('hero-playtime-pill'),
+  heroPlaytimeText: document.getElementById('hero-playtime-text'),
+  wardrobeModal: document.getElementById('wardrobe-modal'),
+  btnCloseWardrobeModal: document.getElementById('btn-close-wardrobe-modal'),
+  tabBtnCapes: document.getElementById('tab-btn-capes'),
+  tabBtnSkins: document.getElementById('tab-btn-skins'),
+  wardrobeContentCapes: document.getElementById('wardrobe-content-capes'),
+  wardrobeContentSkins: document.getElementById('wardrobe-content-skins'),
+  capesGrid: document.getElementById('capes-grid'),
+  accountCapesContainer: document.getElementById('account-capes-container'),
+  btnCustomCapeFile: document.getElementById('btn-custom-cape-file'),
+  btnRemoveCape: document.getElementById('btn-remove-cape'),
+  btnPresetMcqueen: document.getElementById('btn-preset-mcqueen'),
+  btnPresetSteve: document.getElementById('btn-preset-steve'),
+  btnPresetAlex: document.getElementById('btn-preset-alex'),
+  wardrobeNickInput: document.getElementById('wardrobe-nick-input'),
+  btnWardrobeFetchNick: document.getElementById('btn-wardrobe-fetch-nick'),
+  btnWardrobeUploadSkin: document.getElementById('btn-wardrobe-upload-skin'),
+
+  // Stats
+  profileStatPlaytime: document.getElementById('profile-stat-playtime'),
+  profileStatLaunches: document.getElementById('profile-stat-launches'),
+  profileStatRank: document.getElementById('profile-stat-rank'),
+
+  // Personalization
+  settingAmbientGlow: document.getElementById('setting-ambient-glow'),
+  settingAnimSpeed: document.getElementById('setting-anim-speed'),
+  settingAnimVal: document.getElementById('setting-anim-val'),
+
   toastContainer: document.getElementById('toast-container')
 };
 
@@ -95,6 +127,10 @@ async function initApp() {
   initOfficialServerWidget();
   setupServerHostingListeners();
   await loadServerHosting();
+
+  setupWardrobeListeners();
+  setupThemesListeners();
+  await loadStats();
 
   // "przed tym trzeba sie zalogowac na konto premium"
   // Automatycznie otwieramy okno logowania, jeśli użytkownik nie jest jeszcze zalogowany
@@ -216,6 +252,12 @@ function createStanceAnimationClass() {
       // Head tilted slightly towards viewer with clear eye contact
       player.skin.head.rotation.y = 0.30 + 0.02 * Math.sin(t * 0.5);
       player.skin.head.rotation.x = -0.02 + 0.01 * Math.cos(t * 0.5);
+
+      // Cape natural billowing animation in wind
+      if (player.cape && player.cape.visible) {
+        player.cape.rotation.x = 0.20 + 0.08 * Math.sin(t * 1.3);
+        player.cape.rotation.z = 0.03 * Math.cos(t * 0.9);
+      }
     }
   };
 }
@@ -320,6 +362,29 @@ async function loadConfig() {
     // Selected Version
     const version = currentConfig.selectedVersion || '1.21.4';
     updateSelectedVersion(version, false);
+
+    // Themes & Personalization
+    const theme = currentConfig.themeAccent || 'purple';
+    applyTheme(theme, false);
+
+    if (elements.settingAmbientGlow) {
+      elements.settingAmbientGlow.checked = currentConfig.ambientGlow !== false;
+      const glowEl = document.querySelector('.hero-ambient-glow');
+      if (glowEl) glowEl.style.display = currentConfig.ambientGlow !== false ? 'block' : 'none';
+    }
+
+    if (elements.settingAnimSpeed) {
+      const speed = currentConfig.animationSpeed || 0.6;
+      elements.settingAnimSpeed.value = Math.round(speed * 100);
+      if (elements.settingAnimVal) elements.settingAnimVal.textContent = `${speed.toFixed(1)}x`;
+      if (skinViewer?.animation) skinViewer.animation.speed = speed;
+    }
+
+    // Selected Cape
+    const savedCape = currentConfig.selectedCape || 'kasteusz';
+    setTimeout(() => {
+      applyCape(savedCape, false);
+    }, 250);
   } catch (err) {
     console.error('Błąd ładowania konfiguracji:', err);
   }
@@ -410,6 +475,8 @@ async function applyAccountToUI(account) {
       updateSkinDisplay('assets/default-skin.png');
       if (elements.userAvatarHead) elements.userAvatarHead.src = 'assets/default-skin.png';
     }
+
+    renderAccountCapes(account);
   } else {
     elements.userNicknameText.textContent = 'Zaloguj się';
     if (elements.userStatusDot) elements.userStatusDot.style.background = '#f59e0b';
@@ -1609,6 +1676,359 @@ function setupServerHostingListeners() {
     if (statusText) statusText.textContent = `Pobieranie server.jar 1.21.11: ${data.pct}%`;
   });
 }
+
+
+// ========================================================
+// FEATURE 4: WARDROBE & CAPES
+// ========================================================
+const BUILTIN_CAPES = {
+  kasteusz: { name: "Kasteusz Studio", url: "assets/capes/kasteusz.png" },
+  mcqueen95: { name: "Zygzak McQueen #95", url: "assets/capes/mcqueen95.png" },
+  szkolnesmp: { name: "Szkolne SMP", url: "assets/capes/szkolnesmp.png" },
+  fire_dragon: { name: "Ognisty Płomień", url: "assets/capes/fire_dragon.png" }
+};
+
+let currentCapeId = "kasteusz";
+let isPlayerFlipped = false;
+
+function openWardrobeModal() {
+  if (elements.wardrobeModal) elements.wardrobeModal.classList.add("open");
+}
+
+function closeWardrobeModal() {
+  if (elements.wardrobeModal) elements.wardrobeModal.classList.remove("open");
+}
+
+function applyCape(capeIdOrUrl, save = true) {
+  if (!skinViewer) return;
+  currentCapeId = capeIdOrUrl;
+
+  document.querySelectorAll(".cape-item-card").forEach(card => {
+    card.classList.toggle("active", card.dataset.capeId === capeIdOrUrl);
+  });
+
+  if (capeIdOrUrl === "none" || !capeIdOrUrl) {
+    skinViewer.loadCape(null);
+    if (skinViewer.playerObject?.cape) skinViewer.playerObject.cape.visible = false;
+    if (save) window.api.saveConfig({ selectedCape: "none" });
+    return;
+  }
+
+  const capeEntry = BUILTIN_CAPES[capeIdOrUrl];
+  const urlToLoad = capeEntry ? capeEntry.url : capeIdOrUrl;
+
+  try {
+    skinViewer.loadCape(urlToLoad).then(() => {
+      if (skinViewer.playerObject?.cape) skinViewer.playerObject.cape.visible = true;
+    }).catch(err => {
+      console.warn("Błąd ładowania pelerynki:", err);
+    });
+    if (save) window.api.saveConfig({ selectedCape: capeIdOrUrl });
+  } catch (err) {
+    console.warn("Wyjątek ładowania pelerynki:", err);
+  }
+}
+
+function renderCapeCanvasPreview(wrapperEl, capeSrc) {
+  if (!wrapperEl || !capeSrc) return;
+  const canvas = document.createElement("canvas");
+  canvas.width = 44;
+  canvas.height = 70;
+  canvas.style.width = "100%";
+  canvas.style.height = "100%";
+  canvas.style.imageRendering = "pixelated";
+  const ctx = canvas.getContext("2d");
+  ctx.imageSmoothingEnabled = false;
+
+  const img = new Image();
+  img.crossOrigin = "anonymous";
+  img.onload = () => {
+    const scale = img.width / 64;
+    ctx.drawImage(img, 12 * scale, 1 * scale, 10 * scale, 16 * scale, 0, 0, 44, 70);
+  };
+  img.src = capeSrc;
+  wrapperEl.innerHTML = "";
+  wrapperEl.appendChild(canvas);
+}
+
+function renderAccountCapes(account) {
+  const container = elements.accountCapesContainer;
+  if (!container) return;
+  container.innerHTML = "";
+
+  if (!account || !Array.isArray(account.capes) || account.capes.length === 0) {
+    container.innerHTML = '<div style="grid-column: 1 / -1; font-size: 12px; color: var(--text-dim); text-align: center; padding: 12px;">Brak dodatkowych pelerynek na koncie Minecraft.</div>';
+    return;
+  }
+
+  account.capes.forEach((c) => {
+    const card = document.createElement("div");
+    card.className = "cape-item-card";
+    card.dataset.capeId = c.url;
+
+    const preview = document.createElement("div");
+    preview.className = "cape-preview-wrapper";
+    renderCapeCanvasPreview(preview, c.url);
+
+    const info = document.createElement("div");
+    info.className = "cape-item-info";
+    info.innerHTML = `
+      <span class="cape-item-title">${c.alias || "Pelerynka"}</span>
+      <span class="cape-item-badge blue">Mojang</span>
+    `;
+
+    card.appendChild(preview);
+    card.appendChild(info);
+
+    card.addEventListener("click", () => {
+      applyCape(c.url, true);
+      showToast(`Założono oficjalną pelerynkę: ${c.alias || "Mojang"}!`);
+    });
+
+    if (currentCapeId === c.url) card.classList.add("active");
+    container.appendChild(card);
+  });
+}
+
+function setupWardrobeListeners() {
+  // Render canvas previews for built-in capes
+  document.querySelectorAll(".cape-item-card[data-cape-id]").forEach(card => {
+    const id = card.dataset.capeId;
+    const cape = BUILTIN_CAPES[id];
+    if (cape) {
+      const preview = card.querySelector(".cape-preview-wrapper");
+      if (preview) renderCapeCanvasPreview(preview, cape.url);
+    }
+  });
+
+  elements.btnOpenWardrobe?.addEventListener("click", openWardrobeModal);
+  elements.btnCloseWardrobeModal?.addEventListener("click", closeWardrobeModal);
+  elements.wardrobeModal?.addEventListener("click", (e) => {
+    if (e.target === elements.wardrobeModal) closeWardrobeModal();
+  });
+
+  // Rotate player 180 deg to inspect cape
+  elements.btnRotatePlayer?.addEventListener("click", () => {
+    if (!skinViewer) return;
+    isPlayerFlipped = !isPlayerFlipped;
+    const targetObj = skinViewer.playerWrapper || skinViewer.playerObject;
+    if (targetObj) {
+      targetObj.rotation.y = isPlayerFlipped ? 2.72 : -0.42;
+    }
+    elements.btnRotatePlayer.classList.toggle("active", isPlayerFlipped);
+  });
+
+  // Wardrobe tabs (Capes vs Skins)
+  elements.tabBtnCapes?.addEventListener("click", () => {
+    elements.tabBtnCapes.classList.add("active");
+    elements.tabBtnSkins.classList.remove("active");
+    elements.wardrobeContentCapes.classList.add("active");
+    elements.wardrobeContentSkins.classList.remove("active");
+  });
+
+  elements.tabBtnSkins?.addEventListener("click", () => {
+    elements.tabBtnSkins.classList.add("active");
+    elements.tabBtnCapes.classList.remove("active");
+    elements.wardrobeContentSkins.classList.add("active");
+    elements.wardrobeContentCapes.classList.remove("active");
+  });
+
+  // Built-in cape selection
+  document.querySelectorAll("#capes-grid .cape-item-card").forEach(card => {
+    card.addEventListener("click", () => {
+      const id = card.dataset.capeId;
+      applyCape(id, true);
+      const name = BUILTIN_CAPES[id]?.name || "Pelerynka";
+      showToast(`Założono pelerynkę: ${name}!`);
+    });
+  });
+
+  // Custom cape file upload (.png)
+  elements.btnCustomCapeFile?.addEventListener("click", async () => {
+    try {
+      const dataUrl = await window.api.selectCapeFile();
+      if (dataUrl) {
+        applyCape(dataUrl, true);
+        showToast("Własna pelerynka została pomyślnie załadowana!");
+      }
+    } catch (err) {
+      showToast(`Błąd ładowania pelerynki: ${err.message}`);
+    }
+  });
+
+  // Remove cape
+  elements.btnRemoveCape?.addEventListener("click", () => {
+    applyCape("none", true);
+    showToast("Pelerynka została zdjęta.");
+  });
+
+  // Preset Skins
+  elements.btnPresetMcqueen?.addEventListener("click", () => {
+    updateSkinDisplay("assets/default-skin.png");
+    showToast("Założono skin: Zygzak McQueen #95!");
+  });
+
+  elements.btnPresetSteve?.addEventListener("click", () => {
+    updateSkinDisplay("https://textures.minecraft.net/texture/1a406e897914457613d760ab577a34d35388b73d263f9d4ca4570b5f816b3fb9");
+    showToast("Założono skin: Steve!");
+  });
+
+  elements.btnPresetAlex?.addEventListener("click", () => {
+    updateSkinDisplay("https://textures.minecraft.net/texture/e5585b88c7dd884ec71b83d693eeab61a5867ff4691bc9dbb2eb5420a32194b6");
+    showToast("Założono skin: Alex!");
+  });
+
+  // Fetch skin by nickname
+  elements.btnWardrobeFetchNick?.addEventListener("click", async () => {
+    const nick = elements.wardrobeNickInput?.value.trim();
+    if (!nick) return;
+    try {
+      const url = await window.api.getSkinUrl(nick);
+      if (url) {
+        updateSkinDisplay(url);
+        showToast(`Pobrano skórkę dla gracza ${nick}!`);
+      }
+    } catch (err) {
+      showToast(`Błąd pobierania skórki: ${err.message}`);
+    }
+  });
+
+  // Upload skin file
+  elements.btnWardrobeUploadSkin?.addEventListener("click", async () => {
+    try {
+      const newSkinUrl = await window.api.selectSkinFile();
+      if (newSkinUrl) {
+        updateSkinDisplay(newSkinUrl);
+        showToast("Załadowano własną skórkę z pliku!");
+      }
+    } catch (err) {
+      showToast(`Błąd ładowania skórki: ${err.message}`);
+    }
+  });
+}
+
+// ========================================================
+// FEATURE 5: PLAYER STATS & PLAYTIME
+// ========================================================
+function formatPlaytime(totalMinutes) {
+  const m = Math.max(0, parseInt(totalMinutes, 10) || 0);
+  const hours = Math.floor(m / 60);
+  const mins = m % 60;
+  return `${hours}h ${mins}m`;
+}
+
+function updateStatsUI(statsData) {
+  if (!statsData) return;
+  const timeFormatted = formatPlaytime(statsData.totalPlaytimeMinutes);
+
+  if (elements.heroPlaytimeText) {
+    elements.heroPlaytimeText.textContent = `Czas: ${timeFormatted}`;
+  }
+
+  if (elements.profileStatPlaytime) {
+    elements.profileStatPlaytime.textContent = timeFormatted;
+  }
+
+  if (elements.profileStatLaunches) {
+    elements.profileStatLaunches.textContent = statsData.totalLaunches || 0;
+  }
+
+  if (elements.profileStatRank) {
+    elements.profileStatRank.textContent = statsData.rankTitle || "Zygzak #95 ⚡";
+  }
+}
+
+async function loadStats() {
+  try {
+    const s = await window.api.getStats();
+    updateStatsUI(s);
+
+    window.api.onStatsUpdated((updated) => {
+      updateStatsUI(updated);
+    });
+  } catch (err) {
+    console.warn("Błąd pobierania statystyk:", err);
+  }
+}
+
+// ========================================================
+// FEATURE 7: THEMES & PERSONALIZATION
+// ========================================================
+const THEME_NAMES = {
+  purple: "Kasteusz Purple",
+  red: "McQueen #95 Red",
+  emerald: "Szkolne SMP",
+  cyan: "Cyber Cyan",
+  gold: "Złoto Kasteusza",
+  ruby: "Krwawy Rubin"
+};
+
+function applyTheme(themeName, save = true) {
+  const allowed = ["purple", "red", "emerald", "cyan", "gold", "ruby"];
+  const theme = allowed.includes(themeName) ? themeName : "purple";
+
+  document.documentElement.setAttribute("data-theme", theme);
+  document.body.setAttribute("data-theme", theme);
+
+  document.querySelectorAll(".theme-card").forEach(card => {
+    card.classList.toggle("active", card.dataset.theme === theme);
+  });
+
+  const logoEl = document.querySelector(".logo-icon");
+  if (logoEl) {
+    const filters = {
+      purple: "drop-shadow(0 0 10px rgba(168, 85, 247, 0.65))",
+      red: "drop-shadow(0 0 12px rgba(239, 68, 68, 0.75)) hue-rotate(85deg) saturate(2)",
+      emerald: "drop-shadow(0 0 12px rgba(16, 185, 129, 0.75)) hue-rotate(220deg) saturate(1.8)",
+      cyan: "drop-shadow(0 0 12px rgba(6, 182, 212, 0.75)) hue-rotate(280deg) saturate(2)",
+      gold: "drop-shadow(0 0 12px rgba(245, 158, 11, 0.75)) hue-rotate(130deg) saturate(2.2)",
+      ruby: "drop-shadow(0 0 12px rgba(244, 63, 94, 0.75)) hue-rotate(65deg) saturate(2)"
+    };
+    logoEl.style.filter = filters[theme] || filters.purple;
+  }
+
+  // Active pill highlight
+  const activeNav = document.querySelector(".nav-pill.active");
+  if (activeNav) {
+    activeNav.style.borderColor = "var(--accent-primary)";
+    activeNav.style.boxShadow = "0 0 14px var(--accent-glow)";
+  }
+
+  if (save) {
+    window.api.saveConfig({ themeAccent: theme });
+    showToast(`Aktywowano motyw: ${THEME_NAMES[theme] || theme}!`);
+  }
+}
+
+function setupThemesListeners() {
+  document.querySelectorAll(".theme-card").forEach(card => {
+    card.addEventListener("click", () => {
+      const theme = card.dataset.theme;
+      applyTheme(theme, true);
+    });
+  });
+
+  elements.settingAmbientGlow?.addEventListener("change", (e) => {
+    const glowEl = document.querySelector(".hero-ambient-glow");
+    if (glowEl) glowEl.style.display = e.target.checked ? "block" : "none";
+    window.api.saveConfig({ ambientGlow: e.target.checked });
+  });
+
+  elements.settingAnimSpeed?.addEventListener("input", (e) => {
+    const rawVal = parseInt(e.target.value, 10);
+    const speed = rawVal / 100;
+    if (elements.settingAnimVal) elements.settingAnimVal.textContent = `${speed.toFixed(1)}x`;
+    if (skinViewer?.animation) {
+      skinViewer.animation.speed = speed;
+    }
+  });
+
+  elements.settingAnimSpeed?.addEventListener("change", (e) => {
+    const speed = parseInt(e.target.value, 10) / 100;
+    window.api.saveConfig({ animationSpeed: speed });
+  });
+}
+
 
 // Run init
 window.addEventListener('DOMContentLoaded', initApp);
