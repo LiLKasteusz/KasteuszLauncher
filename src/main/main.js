@@ -165,7 +165,11 @@ ipcMain.handle('config:get', async () => {
 });
 
 ipcMain.handle('config:save', async (_e, data) => {
-  return config.saveConfig(data);
+  const updated = config.saveConfig(data);
+  if (data && (data.discordClientId !== undefined || data.discordRpcEnabled !== undefined)) {
+    discord.reconfigureRPC();
+  }
+  return updated;
 });
 
 ipcMain.handle('config:select-directory', async () => {

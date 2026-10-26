@@ -48,7 +48,8 @@ const DEFAULT_CONFIG = {
   selectedCape: 'none',
   ambientGlow: true,
   animationSpeed: 0.6,
-  discordClientId: '1557751696900489296',
+  discordRpcEnabled: true,
+  discordClientId: '',
   favoriteServers: [
     { name: 'Szkolne SMP', ip: 'szkolnesmp.com.pl', description: 'Oficjalny serwer Kasteusza (1.21.11)', isOfficial: true },
     { name: 'Hypixel', ip: 'mc.hypixel.net', description: 'Serwer minigier' }

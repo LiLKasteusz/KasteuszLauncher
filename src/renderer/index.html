@@ -576,6 +576,33 @@
             </div>
           </div>
 
+          <!-- DISCORD RICH PRESENCE SETTINGS -->
+          <div class="settings-card-group">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+              <div>
+                <h3 style="font-size: 15px; font-weight: 700; color: #ffffff; display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                  <span>👾</span>
+                  <span>Discord Rich Presence (Status Kasteusz Launcher)</span>
+                </h3>
+                <span style="font-size: 12px; color: var(--text-dim);">Wyświetla status launchera i gry na Twoim profilu Discord.</span>
+              </div>
+              <input type="checkbox" id="setting-discord-rpc" checked style="width: 20px; height: 20px; accent-color: var(--accent-primary); cursor: pointer;">
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <label style="font-size: 12px; color: #cbd5e1; font-weight: 600;">ID Aplikacji Discord (Dedykowany Client ID dla Kasteusz Launcher):</label>
+              <div style="display: flex; gap: 8px;">
+                <input type="text" class="form-input" id="setting-discord-client-id" placeholder="Wklej Application ID z Discord Developer Portal..." style="flex: 1; font-size: 12px; font-family: monospace;">
+                <button class="btn-secondary" id="btn-open-discord-dev" style="font-size: 11px; padding: 0 14px; white-space: nowrap;">
+                  <span>🔗</span> Otwórz Portal Discord
+                </button>
+              </div>
+              <span style="font-size: 11px; color: var(--text-dim); line-height: 1.4;">
+                💡 KasteuszClient to Twoje mody, a KasteuszLauncher to osobny program. Aby Discord pokazywał <b>Playing KasteuszLauncher</b>, utwórz aplikację o tej nazwie na portalu Discorda i wklej jej ID powyżej.
+              </span>
+            </div>
+          </div>
+
           <!-- RAM Min/Max -->
           <div class="setting-row">
             <div class="setting-info">

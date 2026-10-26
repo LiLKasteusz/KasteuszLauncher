@@ -35,6 +35,9 @@ const elements = {
   // Settings View
   settingFpsBoost: document.getElementById('setting-fps-boost'),
   settingOptimizeOptions: document.getElementById('setting-optimize-options'),
+  settingDiscordRpc: document.getElementById('setting-discord-rpc'),
+  settingDiscordClientId: document.getElementById('setting-discord-client-id'),
+  btnOpenDiscordDev: document.getElementById('btn-open-discord-dev'),
   settingRamMax: document.getElementById('setting-ram-max'),
   settingRamVal: document.getElementById('setting-ram-val'),
   settingJavaPath: document.getElementById('setting-java-path'),
@@ -401,6 +404,14 @@ async function loadConfig() {
       elements.settingOptimizeOptions.checked = currentConfig.optimizeGameOptions !== false;
     }
 
+    // Discord RPC
+    if (elements.settingDiscordRpc) {
+      elements.settingDiscordRpc.checked = currentConfig.discordRpcEnabled !== false;
+    }
+    if (elements.settingDiscordClientId) {
+      elements.settingDiscordClientId.value = currentConfig.discordClientId || '';
+    }
+
     // RAM
     elements.settingRamMax.value = currentConfig.memoryMax || 4;
     elements.settingRamVal.textContent = `${currentConfig.memoryMax || 4} GB`;
@@ -451,6 +462,22 @@ function setupSettingsListeners() {
   // Optimize Options Toggle
   elements.settingOptimizeOptions?.addEventListener('change', (e) => {
     window.api.saveConfig({ optimizeGameOptions: e.target.checked });
+  });
+
+  // Discord RPC Settings
+  elements.settingDiscordRpc?.addEventListener('change', (e) => {
+    window.api.saveConfig({ discordRpcEnabled: e.target.checked });
+    showToast(e.target.checked ? '👾 Włączono Discord RPC!' : 'Wyłączono Discord RPC.');
+  });
+
+  elements.settingDiscordClientId?.addEventListener('change', (e) => {
+    const val = e.target.value.trim();
+    window.api.saveConfig({ discordClientId: val });
+    showToast(val ? 'Zaktualizowano Client ID dla Discord RPC!' : 'Wyczyszczono Client ID.');
+  });
+
+  elements.btnOpenDiscordDev?.addEventListener('click', () => {
+    window.api.openExternal('https://discord.com/developers/applications');
   });
 
   // RAM slider

@@ -19,16 +19,25 @@ let reconnectTimer = null;
 function getClientId() {
   try {
     const userConfig = config.getConfig();
-    return userConfig?.discordClientId || DEFAULT_CLIENT_ID;
+    return userConfig?.discordClientId || '';
   } catch (_) {
-    return DEFAULT_CLIENT_ID;
+    return '';
   }
 }
 
 function initDiscordRPC() {
   if (rpc || isConnected) return;
 
+  const userConfig = config.getConfig();
+  if (userConfig?.discordRpcEnabled === false) {
+    return;
+  }
+
   const clientId = getClientId();
+  if (!clientId) {
+    console.log('[Discord RPC] Brak skonfigurowanego dedykowanego ID aplikacji dla KasteuszLauncher. Aby aktywować, wpisz ID aplikacji w Parametrach.');
+    return;
+  }
 
   try {
     rpc = new DiscordRPC.Client({ transport: 'ipc' });
@@ -159,9 +168,15 @@ function destroyDiscordRPC() {
   }
 }
 
+function reconfigureRPC() {
+  destroyDiscordRPC();
+  initDiscordRPC();
+}
+
 module.exports = {
   initDiscordRPC,
   setLauncherActivity,
   updateUsername,
-  destroyDiscordRPC
+  destroyDiscordRPC,
+  reconfigureRPC
 };
