@@ -90,6 +90,9 @@ app.whenReady().then(() => {
 
 app.on('will-quit', () => {
   globalShortcut.unregisterAll();
+  try {
+    fs.writeFileSync(CURRENT_TRACK_PATH, JSON.stringify({ active: false, isPlaying: false, timestamp: Date.now() }), 'utf8');
+  } catch (e) {}
 });
 
 app.on('window-all-closed', () => {
@@ -390,4 +393,24 @@ ipcMain.handle('spotify:control', async (_e, arg1, arg2) => {
   const action = typeof arg1 === 'object' && arg1 !== null ? arg1.action : arg1;
   const uri = typeof arg1 === 'object' && arg1 !== null ? arg1.uri : arg2;
   return await spotify.controlSpotifyWeb(action, uri);
+});
+
+const CURRENT_TRACK_PATH = path.join(config.APP_DIR, 'current_track.json');
+
+ipcMain.handle('music:update-state', async (_e, state) => {
+  try {
+    const data = JSON.stringify({
+      active: !!state?.active,
+      isPlaying: !!state?.isPlaying,
+      title: state?.title || '',
+      artist: state?.artist || '',
+      positionMs: Number(state?.positionMs) || 0,
+      durationMs: Number(state?.durationMs) || 0,
+      timestamp: Date.now()
+    });
+    fs.writeFileSync(CURRENT_TRACK_PATH, data, 'utf8');
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
 });

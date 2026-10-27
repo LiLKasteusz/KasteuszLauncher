@@ -125,6 +125,7 @@ contextBridge.exposeInMainWorld('api', {
   spotifyGetPlaylistInfo: (urlOrId) => ipcRenderer.invoke('spotify:get-playlist-info', urlOrId),
   spotifyResolveAudio: (title, artist) => ipcRenderer.invoke('spotify:resolve-audio', title, artist),
   spotifyControl: (action, uri) => ipcRenderer.invoke('spotify:control', action, uri),
+  updateMusicState: (state) => ipcRenderer.invoke('music:update-state', state),
   onMusicAction: (callback) => {
     const sub = (_event, action) => callback(action);
     ipcRenderer.on('music:action', sub);
