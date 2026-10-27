@@ -33,6 +33,7 @@
   let playlistName = '';
   let playlistCover = '';
   let isResolvingTrack = false;
+  let lastStateSync = 0;
 
   const player = {
     init(userStation = 'lofi', userVol = 0.35) {
@@ -45,21 +46,28 @@
           console.warn('[Music Player] Błąd odtwarzania utworu/strumienia:', e);
           isPlaying = false;
           player.updateUI();
+          player.syncTrackState(true);
         });
 
         audioEl.addEventListener('playing', () => {
           isPlaying = true;
           player.updateUI();
+          player.syncTrackState(true);
         });
 
         audioEl.addEventListener('pause', () => {
           isPlaying = false;
           player.updateUI();
+          player.syncTrackState(true);
         });
 
         audioEl.addEventListener('ended', () => {
           console.log('[Music Player] Utwór zakończony. Następuje przejście do kolejnego utworu...');
           player.next();
+        });
+
+        audioEl.addEventListener('timeupdate', () => {
+          player.syncTrackState(false);
         });
       }
 
@@ -70,6 +78,13 @@
 
       player.setupUI();
       player.setupGlobalShortcuts();
+
+      // Ciągły heartbeat synchronizacji dla HUDu w Minecraft (LyricsService)
+      setInterval(() => {
+        if (isPlaying || currentCustomTrack || radioActive) {
+          player.syncTrackState(false);
+        }
+      }, 250);
     },
 
     setupGlobalShortcuts() {
@@ -317,6 +332,30 @@
       player.updateUI();
     },
 
+    syncTrackState(force = false) {
+      const now = Date.now();
+      if (!force && now - lastStateSync < 200) return;
+      lastStateSync = now;
+
+      const title = currentCustomTrack ? currentCustomTrack.name : (radioActive ? STATIONS[currentStationIdx]?.name : '');
+      const artist = currentCustomTrack ? currentCustomTrack.artists : (radioActive ? STATIONS[currentStationIdx]?.genre : '');
+      const cover = currentCustomTrack ? (currentCustomTrack.coverUrl || playlistCover || '') : '';
+      const posMs = audioEl && !isNaN(audioEl.currentTime) ? Math.round(audioEl.currentTime * 1000) : 0;
+      const durMs = audioEl && !isNaN(audioEl.duration) ? (Math.round(audioEl.duration * 1000) || 0) : 0;
+
+      const active = (isPlaying || !!currentCustomTrack || radioActive) && !!title;
+
+      window.api?.updateMusicState?.({
+        active: active,
+        isPlaying: isPlaying,
+        title: title || '',
+        artist: artist || '',
+        artUrl: cover || '',
+        positionMs: posMs,
+        durationMs: durMs
+      });
+    },
+
     updateUI() {
       const titleEl = document.getElementById('music-title');
       const genreEl = document.getElementById('music-genre');
@@ -339,6 +378,7 @@
       if (visualizer) {
         visualizer.classList.toggle('animating', isPlaying);
       }
+      player.syncTrackState(true);
     },
 
     getStations() {
