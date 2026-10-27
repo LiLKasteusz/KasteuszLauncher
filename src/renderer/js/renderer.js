@@ -2524,44 +2524,46 @@ function updateSpotifyUI(status) {
   }
 }
 
+const FEATURED_SPOTIFY_PLAYLISTS = [
+  { id: '37i9dQZF1DXcBWIGoYBM5M', name: 'Today\'s Top Hits', tracksCount: 50, image: 'https://i.scdn.co/image/ab67706f00000002b8d5a1f2674e7dfc757a3e74' },
+  { id: '37i9dQZF1DX0k8z58Zk88K', name: 'Top Utwory Polska', tracksCount: 50, image: 'https://i.scdn.co/image/ab67706f00000002e7d71cd3fca000b21eec4d57' },
+  { id: '37i9dQZF1DWY4lFlSbtbk1', name: 'Polski Hip-Hop & Rap', tracksCount: 50, image: 'https://i.scdn.co/image/ab67706f0000000213d29a5975eb1f87aa61a6b4' },
+  { id: '37i9dQZF1DX4t95PZ0T4U0', name: 'TikTok Viral & Gaming Hits', tracksCount: 50, image: 'https://i.scdn.co/image/ab67706f00000002444b005118ce5288515ad47a' }
+];
+
 async function loadSpotifyPlaylists() {
   const grid = document.getElementById('spotify-playlists-grid');
   const countLabel = document.getElementById('spotify-playlists-count-label');
   if (!grid) return;
 
-  grid.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-dim); font-size: 12px; grid-column: 1 / -1;">Pobieranie Twoich playlist ze Spotify...</div>';
+  grid.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-dim); font-size: 12px; grid-column: 1 / -1;">Pobieranie playlist Spotify...</div>';
 
+  let playlists = [];
   try {
-    const playlists = await window.api.spotifyGetPlaylists();
-    spotifyPlaylists = playlists || [];
-    if (countLabel) countLabel.textContent = `${spotifyPlaylists.length} playlist`;
+    playlists = await window.api.spotifyGetPlaylists();
+  } catch (_) {}
 
-    if (spotifyPlaylists.length === 0) {
-      grid.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-dim); font-size: 12px; grid-column: 1 / -1;">Brak playlist na Twoim koncie Spotify. Utwórz playlistę w Spotify lub wklej jej link poniżej.</div>';
-      return;
-    }
+  spotifyPlaylists = (playlists && playlists.length > 0) ? playlists : FEATURED_SPOTIFY_PLAYLISTS;
+  if (countLabel) countLabel.textContent = `${spotifyPlaylists.length} playlist`;
 
-    grid.innerHTML = '';
-    spotifyPlaylists.forEach(pl => {
-      const card = document.createElement('div');
-      card.className = `spotify-playlist-card ${currentSpotifyPlaylistId === pl.id ? 'active' : ''}`;
-      card.innerHTML = `
-        <img src="${pl.image || 'assets/icon-256.png'}" class="spotify-playlist-img" alt="${pl.name}" onerror="this.src='assets/icon-256.png'">
-        <div class="spotify-playlist-details">
-          <span class="spotify-playlist-name" title="${pl.name}">${pl.name}</span>
-          <span class="spotify-playlist-count">${pl.tracksCount} utworów</span>
-        </div>
-      `;
+  grid.innerHTML = '';
+  spotifyPlaylists.forEach(pl => {
+    const card = document.createElement('div');
+    card.className = `spotify-playlist-card ${currentSpotifyPlaylistId === pl.id ? 'active' : ''}`;
+    card.innerHTML = `
+      <img src="${pl.image || 'assets/icon-256.png'}" class="spotify-playlist-img" alt="${pl.name}" onerror="this.src='assets/icon-256.png'">
+      <div class="spotify-playlist-details">
+        <span class="spotify-playlist-name" title="${pl.name}">${pl.name}</span>
+        <span class="spotify-playlist-count">${pl.tracksCount || 50} utworów</span>
+      </div>
+    `;
 
-      card.addEventListener('click', () => {
-        playSpotifyPlaylist(pl);
-      });
-
-      grid.appendChild(card);
+    card.addEventListener('click', () => {
+      playSpotifyPlaylist(pl);
     });
-  } catch (err) {
-    grid.innerHTML = `<div style="padding: 20px; text-align: center; color: #f87171; font-size: 12px; grid-column: 1 / -1;">Błąd: ${err.message}</div>`;
-  }
+
+    grid.appendChild(card);
+  });
 }
 
 async function syncMprisStatus() {

@@ -33,7 +33,6 @@
   let playlistName = '';
   let playlistCover = '';
   let isResolvingTrack = false;
-  let lastStateSync = 0;
 
   const player = {
     init(userStation = 'lofi', userVol = 0.35) {
@@ -61,10 +60,6 @@
         audioEl.addEventListener('ended', () => {
           console.log('[Music Player] Utwór zakończony. Następuje przejście do kolejnego utworu...');
           player.next();
-        });
-
-        audioEl.addEventListener('timeupdate', () => {
-          player.syncTrackState(false);
         });
       }
 
@@ -322,26 +317,6 @@
       player.updateUI();
     },
 
-    syncTrackState(force = false) {
-      const now = Date.now();
-      if (!force && now - lastStateSync < 350) return;
-      lastStateSync = now;
-
-      const title = currentCustomTrack ? currentCustomTrack.name : (radioActive ? STATIONS[currentStationIdx]?.name : '');
-      const artist = currentCustomTrack ? currentCustomTrack.artists : (radioActive ? STATIONS[currentStationIdx]?.genre : '');
-      const posMs = audioEl ? Math.round(audioEl.currentTime * 1000) : 0;
-      const durMs = audioEl ? (Math.round(audioEl.duration * 1000) || 0) : 0;
-
-      window.api?.updateMusicState?.({
-        active: isPlaying || !!currentCustomTrack || radioActive,
-        isPlaying: isPlaying,
-        title: title || '',
-        artist: artist || '',
-        positionMs: posMs,
-        durationMs: durMs
-      });
-    },
-
     updateUI() {
       const titleEl = document.getElementById('music-title');
       const genreEl = document.getElementById('music-genre');
@@ -364,7 +339,6 @@
       if (visualizer) {
         visualizer.classList.toggle('animating', isPlaying);
       }
-      player.syncTrackState(true);
     },
 
     getStations() {
