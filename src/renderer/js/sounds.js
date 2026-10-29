@@ -1,4 +1,3 @@
-// KasteuszLauncher UI Sound Synthesizer (Web Audio API - 100% Native & Ultra-Low Latency on Linux)
 (function() {
   let audioCtx = null;
   let masterGain = null;
@@ -41,7 +40,6 @@
       }
     },
 
-    // Tactile modern UI button click
     playClick() {
       if (!enabled) return;
       const ctx = getAudioContext();
@@ -65,7 +63,6 @@
       osc.stop(now + 0.05);
     },
 
-    // Ultra-subtle hover tick (debounced to avoid auditory clutter on rapid mouse movement)
     playHover() {
       if (!enabled) return;
       const nowMs = Date.now();
@@ -93,7 +90,6 @@
       osc.stop(now + 0.02);
     },
 
-    // Epic whoosh/charging sound when clicking "Graj 1.21.11"
     playLaunch() {
       if (!enabled) return;
       const ctx = getAudioContext();
@@ -101,7 +97,6 @@
 
       const now = ctx.currentTime;
       
-      // Rising pitch synth
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
 
@@ -113,7 +108,6 @@
       gain.gain.linearRampToValueAtTime(0.30, now + 0.2);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
 
-      // Low pass filter for warmth
       const filter = ctx.createBiquadFilter();
       filter.type = 'lowpass';
       filter.frequency.setValueAtTime(800, now);
@@ -127,7 +121,6 @@
       osc.stop(now + 0.42);
     },
 
-    // Harmonious notification chime
     playToast() {
       if (!enabled) return;
       const ctx = getAudioContext();
@@ -152,7 +145,6 @@
       });
     },
 
-    // Crisp gear equip sound for wardrobe / capes / cosmetics
     playEquip() {
       if (!enabled) return;
       const ctx = getAudioContext();
@@ -176,7 +168,6 @@
       osc.stop(now + 0.12);
     },
 
-    // Attach listeners to interactive UI elements
     attachInteractiveListeners() {
       const clickSelector = '.nav-pill, .hero-tool-btn, .btn-primary, .btn-secondary, .skin-preset-btn, .cape-item-card, .theme-card, .btn-play-hero, .window-btn, .tab-btn, .wardrobe-tab, .cosmetic-card';
       const hoverSelector = '.nav-pill, .hero-tool-btn, .theme-card, .cape-item-card, .cosmetic-card, .btn-play-hero';

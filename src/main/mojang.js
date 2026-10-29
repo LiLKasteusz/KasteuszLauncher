@@ -34,14 +34,13 @@ async function getAvailableVersions() {
           releaseTime: v.releaseTime ? v.releaseTime.split('T')[0] : ''
         }));
       
-      // Upewnij się że 1.21.11 jest na szczycie listy
       if (!releases.some(r => r.id === '1.21.11')) {
         releases.unshift({ id: '1.21.11', type: 'release', releaseTime: '2026-10-25' });
       }
 
       cachedVersions = {
         latest: '1.21.11',
-        releases: releases.slice(0, 30) // 30 ostatnich wydań
+        releases: releases.slice(0, 30)
       };
       lastFetchTime = now;
       return cachedVersions;

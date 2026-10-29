@@ -1,8 +1,3 @@
-/**
- * KasteuszLauncher — PC Performance Benchmark & Auto-Tuning Engine
- * Skanowanie podzespołów (CPU, GPU, RAM, Dysk, Java), test wydajności
- * oraz automatyczne dostosowanie ustawień Minecrafta, Sodium i JVM.
- */
 
 const fs = require('fs');
 const path = require('path');
@@ -12,23 +7,18 @@ const config = require('./config');
 const profiles = require('./profiles');
 const launcher = require('./launcher');
 
-/**
- * Wykrywa model dedykowanej i zintegrowanej karty graficznej (GPU)
- */
 function detectGpu() {
   if (process.platform === 'linux') {
     try {
       const output = execSync("lspci 2>/dev/null | grep -i 'vga\\|3d\\|display'", { encoding: 'utf8' });
       const lines = output.trim().split('\n').filter(Boolean);
       const gpus = lines.map(line => {
-        // Czyści prefiks np. "01:00.0 VGA compatible controller: "
         const parts = line.split(/controller:\s*|controller\s+/i);
         let name = parts.length > 1 ? parts[1].trim() : line;
         name = name.replace(/\(rev [a-z0-9]+\)/i, '').trim();
         return name;
       });
 
-      // Preferuj dedykowaną kartę (NVIDIA / AMD Radeon RX) nad zintegrowaną
       const dedicated = gpus.find(g => /nvidia|geforce|rtx|gtx|radeon rx/i.test(g));
       return {
         primary: dedicated || gpus[0] || 'Zintegrowana karta graficzna',
@@ -55,15 +45,11 @@ function detectGpu() {
   };
 }
 
-/**
- * Zwraca szczegółowe parametry sprzętowe komputera
- */
 function getDetailedSystemSpecs() {
   const cpus = os.cpus() || [];
   const cpuModel = cpus[0]?.model || 'Wielordzeniowy procesor x86_64';
   const cpuSpeed = cpus[0]?.speed || 0;
   const threadCount = cpus.length || 4;
-  // Szacunkowa liczba fizycznych rdzeni (zwykle połowa wątków przy SMT/HyperThreading)
   const estimatedPhysicalCores = Math.max(1, Math.round(threadCount / (threadCount > 4 ? 2 : 1)));
 
   const totalBytes = os.totalmem();
@@ -71,7 +57,6 @@ function getDetailedSystemSpecs() {
   const totalRamGb = parseFloat((totalBytes / (1024 ** 3)).toFixed(1));
   const freeRamGb = parseFloat((freeBytes / (1024 ** 3)).toFixed(1));
 
-  // Dysk
   let diskTotalGb = 0;
   let diskFreeGb = 0;
   try {
@@ -83,7 +68,6 @@ function getDetailedSystemSpecs() {
 
   const gpuInfo = detectGpu();
 
-  // Wersja Javy
   let javaPath = config.getConfig()?.javaPath || 'java';
   let javaVersion = '21.0.6 (Temurin LTS)';
   try {
@@ -123,32 +107,25 @@ function getDetailedSystemSpecs() {
   };
 }
 
-/**
- * Uruchamia syntetyczny benchmark wydajnościowy
- */
 async function runSyntheticBenchmark() {
   const specs = getDetailedSystemSpecs();
 
-  // 1. Test CPU (Single-thread & Math loop)
   const startCpu = Date.now();
   let dummy = 0;
   for (let i = 0; i < 4000000; i++) {
     dummy += Math.sqrt(i) * Math.sin(i);
   }
   const cpuDuration = Math.max(1, Date.now() - startCpu);
-  // Niższy czas = wyższy wynik
   const cpuScore = Math.min(4500, Math.round(180000 / cpuDuration));
 
-  // 2. Test RAM (Alokacja buforów i przepustowość pamięci)
   const startRam = Date.now();
-  const arr = new Float64Array(1024 * 1024); // 8 MB
+  const arr = new Float64Array(1024 * 1024);
   for (let i = 0; i < arr.length; i += 4) {
     arr[i] = i * 1.5;
   }
   const ramDuration = Math.max(1, Date.now() - startRam);
   const ramScore = Math.min(3000, Math.round(120000 / ramDuration) + Math.round(specs.ram.totalGb * 120));
 
-  // 3. Ocena GPU
   let gpuScore = 2000;
   const gpuName = specs.gpu.primary.toLowerCase();
   if (/rtx\s*40|rx\s*7900|rtx\s*3080|rtx\s*3090/i.test(gpuName)) {
@@ -163,7 +140,6 @@ async function runSyntheticBenchmark() {
     gpuScore = 1500;
   }
 
-  // 4. Ocena wielowątkowości CPU (wątki pod chunk buildery)
   const threadBonus = Math.min(2500, specs.cpu.threads * 180);
 
   const totalScore = Math.round(cpuScore * 0.35 + ramScore * 0.25 + gpuScore * 0.25 + threadBonus * 0.15);
@@ -203,9 +179,6 @@ async function runSyntheticBenchmark() {
   };
 }
 
-/**
- * Oblicza rekomendowane ustawienia dla wskazanego profilu na podstawie benchmarku
- */
 async function getOptimalConfig(profileId = 'active') {
   const benchmark = await runSyntheticBenchmark();
   const specs = benchmark.specs;
@@ -214,14 +187,12 @@ async function getOptimalConfig(profileId = 'active') {
     ? profiles.getInstanceDirectory(targetProfile)
     : path.join(os.homedir(), '.kasteuszlauncher', 'minecraft');
 
-  // 1. Rekomendacja RAM (uwzględnia pamięć zarezerwowaną dla iGPU)
   let optimalRam = 4;
   if (specs.ram.totalGb >= 28) optimalRam = 8;
   else if (specs.ram.totalGb >= 12) optimalRam = 6;
   else if (specs.ram.totalGb >= 7) optimalRam = 4;
   else optimalRam = 2.5;
 
-  // 2. Rekomendacja flag JVM
   let optimalJvmPreset = 'g1gc';
   let jvmPresetName = 'G1GC Aikar High Performance';
   if (specs.cpu.threads >= 8 && specs.ram.totalGb >= 12) {
@@ -232,11 +203,10 @@ async function getOptimalConfig(profileId = 'active') {
     jvmPresetName = 'Low-End PC (Zoptymalizowany Parallel GC)';
   }
 
-  // 3. Rekomendacja ustawień Minecrafta (options.txt)
   let renderDistance = 12;
   let simulationDistance = 8;
   let entityDistance = 1.0;
-  let particles = 0; // 0=Wszystkie, 1=Zmniejszone, 2=Minimalne
+  let particles = 0;
 
   if (benchmark.tier === 'ULTRA_GAMING') {
     renderDistance = 16;
@@ -255,7 +225,6 @@ async function getOptimalConfig(profileId = 'active') {
     particles = 2;
   }
 
-  // 4. Rekomendacje Sodium
   const chunkBuilderThreads = Math.max(1, Math.min(6, Math.floor(specs.cpu.threads / 2)));
   const sodiumOptimizations = {
     animate_only_visible_textures: true,
@@ -265,7 +234,6 @@ async function getOptimalConfig(profileId = 'active') {
     chunk_builder_threads: chunkBuilderThreads
   };
 
-  // Odczytaj obecne wartości z profilu lub konfiguracji globalnej
   const currentConfig = config.getConfig();
   const currentRam = (targetProfile && targetProfile.memoryMax) || currentConfig.memoryMax || 4;
   const currentJvmPreset = (targetProfile && targetProfile.jvmPreset) || currentConfig.jvmPreset || 'g1gc';
@@ -318,9 +286,6 @@ async function getOptimalConfig(profileId = 'active') {
   };
 }
 
-/**
- * Aplikuje obliczone optymalne ustawienia 1-kliknięciem
- */
 async function applyOptimalSettings(payload = {}, profileId = 'active') {
   const targetProfile = profiles.getProfileById ? profiles.getProfileById(profileId) : profiles.getActiveProfile();
   const instanceDir = profiles.getInstanceDirectory
@@ -330,7 +295,6 @@ async function applyOptimalSettings(payload = {}, profileId = 'active') {
   const appliedChanges = [];
 
   try {
-    // 1. Zapis RAM i flag JVM w konfiguracji profilu i Launchera
     const optimalRam = payload.ram || 6;
     const optimalPreset = payload.jvmPreset || 'ultra';
 
@@ -353,7 +317,6 @@ async function applyOptimalSettings(payload = {}, profileId = 'active') {
     appliedChanges.push(`Przydział pamięci RAM: ${optimalRam} GB`);
     appliedChanges.push(`Profil flag JVM: ${optimalPreset.toUpperCase()}`);
 
-    // 2. Aktualizacja options.txt
     const optionsPath = path.join(instanceDir, 'options.txt');
     const defaultOptionsPath = path.join(os.homedir(), '.kasteuszlauncher', 'minecraft', 'options.txt');
     if (!fs.existsSync(optionsPath) && fs.existsSync(defaultOptionsPath)) {
@@ -383,7 +346,6 @@ async function applyOptimalSettings(payload = {}, profileId = 'active') {
       fs.writeFileSync(optionsPath, optText, 'utf8');
     }
 
-    // 3. Aktualizacja Sodium (config/sodium-options.json)
     const sodiumPath = path.join(instanceDir, 'config', 'sodium-options.json');
     const sodiumDir = path.dirname(sodiumPath);
     if (!fs.existsSync(sodiumDir)) {

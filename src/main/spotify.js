@@ -1,4 +1,3 @@
-// KasteuszLauncher Spotify Integration Module (OAuth 2.0 PKCE Flow)
 const { BrowserWindow } = require('electron');
 const { exec } = require('child_process');
 const http = require('http');
@@ -9,7 +8,7 @@ const config = require('./config');
 const isFlatpak = fs.existsSync('/.flatpak-info');
 const hostPrefix = isFlatpak ? 'flatpak-spawn --host ' : '';
 
-const DEFAULT_SPOTIFY_CLIENT_ID = '65b708073fc0480ea92a077233ca87bd'; // Registered Spotify PKCE Client ID (Spotify Desktop standard)
+const DEFAULT_SPOTIFY_CLIENT_ID = '65b708073fc0480ea92a077233ca87bd';
 const REDIRECT_PORT = 8989;
 const REDIRECT_URI = `http://127.0.0.1:${REDIRECT_PORT}/login`;
 const SCOPES = [
@@ -29,9 +28,6 @@ function generateCodeChallenge(verifier) {
   return crypto.createHash('sha256').update(verifier).digest('base64url');
 }
 
-/**
- * Wymienia kod autoryzacji PKCE na token dostępu (access_token i refresh_token)
- */
 async function exchangeCodeForToken(code, codeVerifier, clientId) {
   const res = await fetch('https://accounts.spotify.com/api/token', {
     method: 'POST',
@@ -59,9 +55,6 @@ async function exchangeCodeForToken(code, codeVerifier, clientId) {
   };
 }
 
-/**
- * Odświeża access_token za pomocą refresh_token
- */
 async function refreshAccessToken() {
   const cfg = config.getConfig();
   const refreshToken = cfg?.spotifyAuth?.refreshToken;
@@ -98,9 +91,6 @@ async function refreshAccessToken() {
   return null;
 }
 
-/**
- * Zwraca aktywny token, odświeżając go automatycznie jeśli wygasł
- */
 async function getValidToken() {
   const cfg = config.getConfig();
   const auth = cfg?.spotifyAuth;
@@ -113,9 +103,6 @@ async function getValidToken() {
   return auth.accessToken;
 }
 
-/**
- * Rozpoczyna logowanie do konta Spotify (obsługuje Google login, Apple, login e-mail przez PKCE)
- */
 async function loginWithSpotify(customClientId) {
   const trimmedCustom = typeof customClientId === 'string' ? customClientId.trim() : '';
   if (trimmedCustom) {
@@ -202,7 +189,6 @@ async function loginWithSpotify(customClientId) {
       return false;
     }
 
-    // Uruchomienie lokalnego mikroserwera HTTP do przechwycenia przekierowania
     try {
       localServer = http.createServer((req, res) => {
         const fullUrl = `http://127.0.0.1:${REDIRECT_PORT}${req.url}`;
@@ -234,7 +220,6 @@ async function loginWithSpotify(customClientId) {
       console.warn('[Spotify] Nie udało się uruchomić serwera callback:', e);
     }
 
-    // Przechwytywanie przekierowań w oknie Electron (will-navigate, will-redirect, did-fail-load)
     authWin.webContents.on('will-navigate', (_e, url) => {
       if (checkRedirectUrl(url)) _e.preventDefault();
     });
@@ -258,9 +243,6 @@ async function loginWithSpotify(customClientId) {
   });
 }
 
-/**
- * Pobiera profil użytkownika Spotify
- */
 async function fetchUserProfile(token) {
   const res = await fetch('https://api.spotify.com/v1/me', {
     headers: { 'Authorization': `Bearer ${token}` }
@@ -296,9 +278,6 @@ function mergePlaylists(accountPlaylists = [], savedPlaylists = []) {
   return out;
 }
 
-/**
- * Pobiera listę playlist użytkownika z konta Spotify (Web API) i zapisuje w pamięci podręcznej
- */
 async function getUserPlaylists(tokenOverride) {
   const token = tokenOverride || await getValidToken();
   if (!token) throw new Error('Brak połączonego konta Spotify. Kliknij „Połącz konto Spotify”.');
@@ -328,7 +307,6 @@ async function getUserPlaylists(tokenOverride) {
   const data = await res.json();
   let rawItems = Array.isArray(data.items) ? [...data.items] : [];
 
-  // Pobierz kolejną stronę jeśli użytkownik ma >50 playlist
   if (data.next) {
     try {
       const res2 = await fetch('https://api.spotify.com/v1/me/playlists?limit=50&offset=50', {
@@ -352,7 +330,6 @@ async function getUserPlaylists(tokenOverride) {
     owner: p.owner?.display_name || ''
   }));
 
-  // Sprawdź również „Polubione utwory” (Liked Songs) z biblioteki konta
   try {
     const likedRes = await fetch('https://api.spotify.com/v1/me/tracks?limit=1', {
       headers: { 'Authorization': `Bearer ${token}` }
@@ -376,7 +353,6 @@ async function getUserPlaylists(tokenOverride) {
     }
   } catch (_) {}
 
-  // Odśwież profil jeśli wcześniej nie pobrało nicku/avatara
   const cfg = config.getConfig();
   if (!cfg?.spotifyAuth?.user?.id) {
     fetchUserProfile(token).then(profile => {
@@ -391,9 +367,6 @@ async function getUserPlaylists(tokenOverride) {
   return playlists;
 }
 
-/**
- * Zwraca pełny pakiet playlist z konta + zapisanych ręcznie wraz z obsługą cache i auto-retry 429
- */
 async function getAccountPlaylistsBundle(onRetrySuccess) {
   const cfg = config.getConfig();
   const isLoggedIn = !!(cfg?.spotifyAuth && cfg.spotifyAuth.accessToken);
@@ -495,9 +468,6 @@ function setSpotifyClientId(clientId) {
   return { success: true, clientId: cleaned };
 }
 
-/**
- * Pobiera utwory z wybranej playlisty lub „Polubionych utworów”
- */
 async function getPlaylistTracks(playlistId, tokenOverride) {
   const token = tokenOverride || await getValidToken();
   if (!token) throw new Error('Brak połączonego konta Spotify.');
@@ -530,9 +500,6 @@ async function getPlaylistTracks(playlistId, tokenOverride) {
   }).filter(Boolean);
 }
 
-/**
- * Uruchamia aplikację Spotify na pulpicie Linuxa jeśli nie jest uruchomiona
- */
 function launchSpotifyApp() {
   return new Promise((resolve) => {
     exec(`${hostPrefix}flatpak run com.spotify.Client &`, (err) => {
@@ -545,9 +512,6 @@ function launchSpotifyApp() {
   });
 }
 
-/**
- * Sprawdza status odtwarzania Spotify przez MPRIS (Desktop Linux)
- */
 function getMprisStatus() {
   return new Promise((resolve) => {
     exec(`${hostPrefix}dbus-send --print-reply --dest=org.mpris.MediaPlayer2.spotify /org/mpris/MediaPlayer2 org.freedesktop.DBus.Properties.Get string:org.mpris.MediaPlayer2.Player string:PlaybackStatus`, (err, stdout) => {
@@ -581,9 +545,6 @@ function getMprisStatus() {
   });
 }
 
-/**
- * Konwertuje linki HTTP Spotify na URI spotify:type:id
- */
 function formatSpotifyUri(raw) {
   if (!raw) return null;
   const trimmed = raw.trim();
@@ -596,9 +557,6 @@ function formatSpotifyUri(raw) {
   return trimmed;
 }
 
-/**
- * Sterowanie aplikacją Spotify na Linuxie (MPRIS DBus)
- */
 function sendLinuxMprisCommand(cmd, arg = '') {
   return new Promise((resolve) => {
     let bashCmd = '';
@@ -624,13 +582,9 @@ function sendLinuxMprisCommand(cmd, arg = '') {
   });
 }
 
-/**
- * Sterowanie odtwarzaczem Spotify Web API / Linux MPRIS
- */
 async function controlSpotifyWeb(action, uri = null) {
   const formattedUri = uri ? formatSpotifyUri(uri) : null;
 
-  // 1. Sprawdzamy stan Spotify na Linuxie (MPRIS)
   const currentMpris = await getMprisStatus();
 
   if (action === 'launch') {
@@ -669,7 +623,6 @@ async function controlSpotifyWeb(action, uri = null) {
     }
   }
 
-  // 2. Fallback: Spotify Web API Connect jeśli token istnieje
   const token = await getValidToken();
   if (!token) return { success: false, reason: 'no_token' };
 
@@ -705,9 +658,6 @@ async function controlSpotifyWeb(action, uri = null) {
   }
 }
 
-/**
- * Odłączenie konta Spotify
- */
 function logoutSpotify() {
   config.saveConfig({ spotifyAuth: null, spotifyCachedPlaylists: [] });
   return { success: true };
@@ -761,10 +711,6 @@ async function searchYouTubeVideoIds(query) {
   }
 }
 
-/**
- * Rozwiązuje strumień audio dla podanego utworu (Spotube Standalone engine)
- * Odtwarza pełny utwór w tle bez potrzeby uruchamiania Spotify na komputerze!
- */
 async function resolveTrackAudio(title, artist = '') {
   const cacheKey = `${artist}_${title}`.toLowerCase().trim();
   if (audioCache.has(cacheKey)) {
@@ -777,7 +723,6 @@ async function resolveTrackAudio(title, artist = '') {
   const { playDl: p, distubeYtdl: y } = getAudioResolvers();
   const query = cleanSearchQuery(title, artist);
 
-  // 1. Zdobądź listę kandydatów wideo (Direct Scrape + play-dl fallback)
   let candidateUrls = [];
   const scrapedIds = await searchYouTubeVideoIds(query);
   if (scrapedIds.length > 0) {
@@ -797,7 +742,6 @@ async function resolveTrackAudio(title, artist = '') {
     throw new Error(`Nie znaleziono utworu dla: ${query}`);
   }
 
-  // 2. Przetestuj kandydatów aż do uzyskania działającego bezpośredniego strumienia audio
   let lastError = null;
   for (const videoUrl of candidateUrls.slice(0, 3)) {
     try {
@@ -818,7 +762,6 @@ async function resolveTrackAudio(title, artist = '') {
         }
       }
 
-      // Alternatywna próba przez play-dl stream
       if (p) {
         const streamData = await p.stream(videoUrl);
         if (streamData && streamData.url) {
@@ -840,9 +783,6 @@ async function resolveTrackAudio(title, artist = '') {
   throw new Error(lastError ? lastError.message : `Brak dostępnego strumienia audio dla: ${title}`);
 }
 
-/**
- * Pobiera publiczne metadane playlisty lub utworu Spotify bez konieczności logowania
- */
 async function getPublicSpotifyPlaylist(urlOrId) {
   if (!urlOrId) throw new Error('Brak linku do playlisty');
   const match = urlOrId.match(/(playlist|album|track|artist)[\/:]([a-zA-Z0-9]+)/);
@@ -885,9 +825,6 @@ async function getPublicSpotifyPlaylist(urlOrId) {
   return result;
 }
 
-/**
- * Wyszukuje utwory bezpośrednio bez konieczności otwartej aplikacji Spotify
- */
 async function searchTracks(query) {
   if (!query || !query.trim()) return [];
   const { playDl: p } = getAudioResolvers();
@@ -912,7 +849,6 @@ async function searchTracks(query) {
     }
   } catch (_) {}
 
-  // Fallback direct scraping
   try {
     const ids = await searchYouTubeVideoIds(query);
     return ids.map(id => ({

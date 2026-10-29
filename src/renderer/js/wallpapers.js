@@ -1,4 +1,3 @@
-// KasteuszLauncher Live Wallpapers Engine (Canvas 2D / 60 FPS / Theme-Adaptive)
 (function() {
   let canvas = null;
   let ctx = null;
@@ -9,7 +8,6 @@
   let height = 0;
   let isPaused = false;
 
-  // Particle storage for Matrix & Warp
   let particles = [];
   let stars = [];
   let waveTick = 0;
@@ -73,7 +71,6 @@
     }
   }
 
-  // Style 1: Cyber Matrix / Constellations
   function renderMatrix(rgb) {
     ctx.clearRect(0, 0, width, height);
     const maxDist = 125;
@@ -99,7 +96,6 @@
       ctx.fill();
       ctx.shadowBlur = 0;
 
-      // Connect neighbor particles with glowing neon lines
       for (let j = i + 1; j < particles.length; j++) {
         const p2 = particles[j];
         const dx = p.x - p2.x;
@@ -119,9 +115,7 @@
     }
   }
 
-  // Style 2: Hyperspace Warp Speed Starfield
   function renderWarp(rgb) {
-    // Slight motion blur background
     ctx.fillStyle = 'rgba(10, 11, 16, 0.25)';
     ctx.fillRect(0, 0, width, height);
 
@@ -161,7 +155,6 @@
     }
   }
 
-  // Style 3: Cosmic Aurora Wave
   function renderAurora(rgb) {
     ctx.clearRect(0, 0, width, height);
     waveTick += 0.012;

@@ -11,38 +11,18 @@ const stats = require('./stats');
 const JVM_PRESETS = {
   ultra: {
     id: 'ultra',
-    name: 'Ultra FPS (Generational ZGC)',
-    desc: 'Java 21 Generational ZGC – pauzy GC < 1ms, ultra wysokie klatki, brak mikro-zacięć (Rekomendowany)',
-    recommendedRam: 8,
-    flags: [
-      '-XX:+UseZGC',
-      '-XX:+ZGenerational',
-      '-XX:+UnlockExperimentalVMOptions',
-      '-XX:+AlwaysPreTouch',
-      '-XX:+DisableExplicitGC',
-      '-XX:AllocatePrefetchStyle=1',
-      '-XX:-UsePerfData',
-      '-XX:+UseNUMA',
-      '-XX:+UseStringDeduplication',
-      '-Dsun.rmi.dgc.server.gcInterval=2147483646',
-      '-Dsun.rmi.dgc.client.gcInterval=2147483646'
-    ]
-  },
-  g1gc: {
-    id: 'g1gc',
-    name: 'Stabilny (G1GC Aikar Tuned)',
-    desc: 'Sprawdzony profil G1GC – zero lag-spikes, zoptymalizowany pod paczki modów i serwery SMP',
-    recommendedRam: 6,
+    name: 'Ultra FPS (Aikar G1GC Optymalny)',
+    desc: 'Najlepszy profil dla modów i paczek Forge/Fabric – zero lag-spikes, niskie zużycie RAM i chłodny procesor (Rekomendowany)',
+    recommendedRam: 5,
     flags: [
       '-XX:+UseG1GC',
       '-XX:+ParallelRefProcEnabled',
       '-XX:MaxGCPauseMillis=200',
       '-XX:+UnlockExperimentalVMOptions',
       '-XX:+DisableExplicitGC',
-      '-XX:+AlwaysPreTouch',
-      '-XX:G1NewSizePercent=30',
-      '-XX:G1MaxNewSizePercent=40',
-      '-XX:G1ReservePercent=20',
+      '-XX:G1NewSizePercent=20',
+      '-XX:G1MaxNewSizePercent=30',
+      '-XX:G1ReservePercent=15',
       '-XX:G1HeapWastePercent=5',
       '-XX:G1MixedGCCountTarget=4',
       '-XX:InitiatingHeapOccupancyPercent=15',
@@ -56,6 +36,19 @@ const JVM_PRESETS = {
       '-Dsun.rmi.dgc.client.gcInterval=2147483646'
     ]
   },
+  g1gc: {
+    id: 'g1gc',
+    name: 'Stabilny (G1GC Standard)',
+    desc: 'Czysty silnik G1GC – minimalne obciążenie pamięci systemowej i stabilne klatki',
+    recommendedRam: 4,
+    flags: [
+      '-XX:+UseG1GC',
+      '-XX:+ParallelRefProcEnabled',
+      '-XX:MaxGCPauseMillis=200',
+      '-XX:+DisableExplicitGC',
+      '-XX:+PerfDisableSharedMem'
+    ]
+  },
   lowend: {
     id: 'lowend',
     name: 'Low-End PC (Oszczędny)',
@@ -65,11 +58,24 @@ const JVM_PRESETS = {
       '-XX:+UseParallelGC',
       '-XX:+UnlockExperimentalVMOptions',
       '-XX:+DisableExplicitGC',
-      '-XX:+AlwaysPreTouch',
       '-XX:+PerfDisableSharedMem',
       '-XX:-UsePerfData',
       '-XX:ParallelGCThreads=2',
       '-Dsun.rmi.dgc.client.gcInterval=3600000'
+    ]
+  },
+  zgc: {
+    id: 'zgc',
+    name: 'Eksperymentalny ZGC (dla komputerów z 32GB+ RAM)',
+    desc: 'Generational ZGC – wymaga minimum 12 GB przydzielonego RAM-u; niezalecany przy 16 GB RAM',
+    recommendedRam: 12,
+    flags: [
+      '-XX:+UseZGC',
+      '-XX:+ZGenerational',
+      '-XX:+UnlockExperimentalVMOptions',
+      '-XX:+DisableExplicitGC',
+      '-XX:-UsePerfData',
+      '-XX:+UseStringDeduplication'
     ]
   },
   custom: {
@@ -193,56 +199,111 @@ function ensureKasteuszClientTheme(targetDir) {
   }
 }
 
-function ensureKasteuszClientHudMod(targetDir, mcVersion = '1.21.11', loader = 'fabric') {
+function cleanupKasteuszClientHudMod(targetDir) {
   try {
-    const isTargetHudCompatible = (mcVersion === '1.21.11' || mcVersion === '1.21.1') && (loader === 'fabric' || loader === 'quilt');
-    const modsDir = path.join(targetDir, 'mods');
-    const dstMod = path.join(modsDir, 'KasteuszClient-HUD-1.21.11.jar');
+    if (!targetDir) return;
+    const dstMod = path.join(targetDir, 'mods', 'KasteuszClient-HUD-1.21.11.jar');
+    if (fs.existsSync(dstMod)) {
+      try { fs.unlinkSync(dstMod); } catch (_) {}
+    }
+    const dstCfg = path.join(targetDir, 'config', 'hudplus.json');
+    if (fs.existsSync(dstCfg)) {
+      try { fs.unlinkSync(dstCfg); } catch (_) {}
+    }
+  } catch (_) {}
+}
 
-    if (!isTargetHudCompatible) {
-      if (fs.existsSync(dstMod)) {
-        try { fs.unlinkSync(dstMod); } catch (_) {}
+function ensureKasteuszClientHudMod(targetDir) {
+  cleanupKasteuszClientHudMod(targetDir);
+}
+
+function extractVersionJvmArgs(rootDir, versionId, baseMcVer, profileLoader) {
+  const collected = [];
+  try {
+    const versionJsonPath = path.join(rootDir, 'versions', versionId, `${versionId}.json`);
+    if (!fs.existsSync(versionJsonPath)) return collected;
+
+    const versionJson = JSON.parse(fs.readFileSync(versionJsonPath, 'utf8'));
+    const rawJvm = Array.isArray(versionJson.arguments?.jvm) ? versionJson.arguments.jvm : [];
+
+    const libDir = path.join(rootDir, 'libraries');
+    const sep = process.platform === 'win32' ? ';' : ':';
+    const osName = process.platform === 'win32' ? 'windows' : (process.platform === 'darwin' ? 'osx' : 'linux');
+    const osArch = process.arch === 'ia32' ? 'x86' : process.arch;
+
+    const matchesRule = (rule) => {
+      if (!rule) return true;
+      if (rule.os) {
+        if (rule.os.name && rule.os.name !== osName) return false;
+        if (rule.os.arch && rule.os.arch !== osArch) return false;
       }
-      return;
-    }
+      return rule.action === 'allow';
+    };
 
-    const srcMod = path.join(__dirname, 'assets', 'mods', 'KasteuszClient-HUD-1.21.11.jar');
-    const srcCfg = path.join(__dirname, 'assets', 'configs', 'hudplus.json');
-    if (!fs.existsSync(srcMod)) return;
+    const processItem = (val) => {
+      if (typeof val !== 'string') return;
+      let arg = val
+        .replace(/\${library_directory}/g, libDir)
+        .replace(/\${classpath_separator}/g, sep)
+        .replace(/\${version_name}/g, versionId)
+        .replace(/\${natives_directory}/g, rootDir)
+        .replace(/\${launcher_name}/g, 'KasteuszLauncher')
+        .replace(/\${launcher_version}/g, '1.0.0');
 
-    if (!fs.existsSync(modsDir)) {
-      fs.mkdirSync(modsDir, { recursive: true });
-    }
+      if (
+        arg === '-cp' ||
+        arg === '${classpath}' ||
+        arg.startsWith('-Djava.library.path=') ||
+        arg.startsWith('-Djna.tmpdir=') ||
+        arg.startsWith('-Dorg.lwjgl.system.SharedLibraryExtractPath=') ||
+        arg.startsWith('-Dio.netty.native.workdir=') ||
+        arg.startsWith('-Xmx') ||
+        arg.startsWith('-Xms') ||
+        arg === '-Xss1M' ||
+        arg === '-XstartOnFirstThread'
+      ) {
+        return;
+      }
 
-    let shouldCopy = false;
-    if (!fs.existsSync(dstMod)) {
-      shouldCopy = true;
-    } else {
-      const srcStat = fs.statSync(srcMod);
-      const dstStat = fs.statSync(dstMod);
-      if (srcStat.size !== dstStat.size || srcStat.mtimeMs > dstStat.mtimeMs) {
-        shouldCopy = true;
+      collected.push(arg);
+    };
+
+    for (const item of rawJvm) {
+      if (typeof item === 'string') {
+        processItem(item);
+      } else if (item && typeof item === 'object') {
+        const rules = Array.isArray(item.rules) ? item.rules : [];
+        const isAllowed = rules.length === 0 || rules.some(matchesRule);
+        if (isAllowed && item.value) {
+          if (Array.isArray(item.value)) {
+            for (const v of item.value) processItem(v);
+          } else {
+            processItem(item.value);
+          }
+        }
       }
     }
 
-    if (shouldCopy) {
-      fs.copyFileSync(srcMod, dstMod);
-      console.log(`[KasteuszLauncher] Zsynchronizowano mod KasteuszClient-HUD w ${modsDir}`);
-    }
-
-    // Skopiuj domyślną konfigurację z fioletowym motywem jeśli jeszcze nie istnieje
-    const cfgDir = path.join(targetDir, 'config');
-    if (!fs.existsSync(cfgDir)) {
-      fs.mkdirSync(cfgDir, { recursive: true });
-    }
-    const dstCfg = path.join(cfgDir, 'hudplus.json');
-    if (!fs.existsSync(dstCfg) && fs.existsSync(srcCfg)) {
-      fs.copyFileSync(srcCfg, dstCfg);
-      console.log(`[KasteuszLauncher] Zastosowano domyślny fioletowy motyw HUD w ${dstCfg}`);
+    const isForge = profileLoader === 'forge' || profileLoader === 'neoforge' || versionId.includes('forge') || versionId.includes('neoforge');
+    if (isForge) {
+      const javaOpens = [
+        '--add-opens=java.base/java.lang=ALL-UNNAMED',
+        '--add-opens=java.base/java.lang.invoke=ALL-UNNAMED',
+        '--add-opens=java.base/java.lang.reflect=ALL-UNNAMED',
+        '--add-opens=java.base/java.util=ALL-UNNAMED',
+        '--add-opens=java.base/java.util.jar=ALL-UNNAMED',
+        '--add-opens=java.base/sun.security.util=ALL-UNNAMED'
+      ];
+      for (const openArg of javaOpens) {
+        if (!collected.includes(openArg)) {
+          collected.push(openArg);
+        }
+      }
     }
   } catch (err) {
-    console.warn('[KasteuszLauncher] Błąd synchronizacji moda KasteuszClient-HUD:', err.message);
+    console.warn(`[KasteuszLauncher] Błąd ekstrakcji flag JVM dla wersji ${versionId}:`, err.message);
   }
+  return collected;
 }
 
 function ensureVersionJsonArguments(rootDir, versionId) {
@@ -254,46 +315,53 @@ function ensureVersionJsonArguments(rootDir, versionId) {
     const gameArgs = Array.isArray(versionJson.arguments?.game) ? versionJson.arguments.game : [];
     const hasBasePlayerArg = gameArgs.some(a => typeof a === 'string' && (a === '${auth_player_name}' || a === '--username'));
 
-    if (gameArgs.length === 0 || !hasBasePlayerArg) {
-      let baseVer = versionJson.inheritsFrom;
-      if (!baseVer && (versionId.startsWith('fabric-') || versionId.startsWith('quilt-'))) {
-        baseVer = versionId.replace(/^(fabric|quilt)-/, '');
-      }
-      if (!baseVer) {
-        const match = versionId.match(/(\d+\.\d+(\.\d+)?)/);
-        if (match) baseVer = match[1];
-      }
+    let changed = false;
+    let baseVer = versionJson.inheritsFrom;
+    if (!baseVer && (versionId.startsWith('fabric-') || versionId.startsWith('quilt-'))) {
+      baseVer = versionId.replace(/^(fabric|quilt)-/, '');
+    }
+    if (!baseVer) {
+      const match = versionId.match(/(\d+\.\d+(\.\d+)?)/);
+      if (match) baseVer = match[1];
+    }
 
-      if (baseVer) {
-        const baseJsonPath = path.join(rootDir, 'versions', baseVer, `${baseVer}.json`);
-        if (fs.existsSync(baseJsonPath)) {
-          const baseJson = JSON.parse(fs.readFileSync(baseJsonPath, 'utf8'));
-          if (baseJson.arguments && Array.isArray(baseJson.arguments.game) && baseJson.arguments.game.length > 0) {
-            versionJson.arguments = versionJson.arguments || {};
-            // Jeśli już miał argumenty (np. Forge launchTarget), łączymy je z bazowymi argumentami Minecrafta
-            const existingGameArgs = Array.isArray(versionJson.arguments.game) ? versionJson.arguments.game : [];
-            const mergedGame = [...existingGameArgs];
-            for (const item of baseJson.arguments.game) {
-              if (typeof item === 'string' && mergedGame.includes(item)) continue;
-              mergedGame.push(item);
-            }
-            versionJson.arguments.game = mergedGame;
+    if (baseVer) {
+      const baseJsonPath = path.join(rootDir, 'versions', baseVer, `${baseVer}.json`);
+      if (fs.existsSync(baseJsonPath)) {
+        const baseJson = JSON.parse(fs.readFileSync(baseJsonPath, 'utf8'));
+        if (baseJson.arguments && Array.isArray(baseJson.arguments.game) && (gameArgs.length === 0 || !hasBasePlayerArg)) {
+          versionJson.arguments = versionJson.arguments || {};
+          const existingGameArgs = Array.isArray(versionJson.arguments.game) ? versionJson.arguments.game : [];
+          const mergedGame = [...existingGameArgs];
+          for (const item of baseJson.arguments.game) {
+            if (typeof item === 'string' && mergedGame.includes(item)) continue;
+            mergedGame.push(item);
+          }
+          versionJson.arguments.game = mergedGame;
+          changed = true;
+        }
 
-            if (baseJson.arguments.jvm && Array.isArray(baseJson.arguments.jvm)) {
-              const existingJvm = Array.isArray(versionJson.arguments.jvm) ? versionJson.arguments.jvm : [];
-              versionJson.arguments.jvm = [...baseJson.arguments.jvm, ...existingJvm];
-            }
-            if (!versionJson.assetIndex && baseJson.assetIndex) {
-              versionJson.assetIndex = baseJson.assetIndex;
-            }
-            if (!versionJson.assets && baseJson.assets) {
-              versionJson.assets = baseJson.assets;
-            }
-            fs.writeFileSync(versionJsonPath, JSON.stringify(versionJson, null, 2), 'utf8');
-            console.log(`[KasteuszLauncher] Zsynchronizowano argumenty gry w pliku JSON dla wersji ${versionId}`);
+        if (baseJson.arguments && Array.isArray(baseJson.arguments.jvm)) {
+          versionJson.arguments = versionJson.arguments || {};
+          if (!Array.isArray(versionJson.arguments.jvm) || versionJson.arguments.jvm.length === 0) {
+            versionJson.arguments.jvm = [...baseJson.arguments.jvm];
+            changed = true;
           }
         }
+        if (!versionJson.assetIndex && baseJson.assetIndex) {
+          versionJson.assetIndex = baseJson.assetIndex;
+          changed = true;
+        }
+        if (!versionJson.assets && baseJson.assets) {
+          versionJson.assets = baseJson.assets;
+          changed = true;
+        }
       }
+    }
+
+    if (changed) {
+      fs.writeFileSync(versionJsonPath, JSON.stringify(versionJson, null, 2), 'utf8');
+      console.log(`[KasteuszLauncher] Zsynchronizowano argumenty gry w pliku JSON dla wersji ${versionId}`);
     }
   } catch (err) {
     console.warn(`[KasteuszLauncher] Błąd weryfikacji JSON wersji ${versionId}:`, err);
@@ -313,11 +381,10 @@ async function launchMinecraft(window, versionOverride) {
     throw new Error('Musisz się najpierw zalogować na konto!');
   }
 
-  // Odświeżanie tokena jeśli wygasa
   let currentAccount = account;
   if (account.isPremium && account.msRefreshToken && account.expiresAt) {
     const timeRemaining = account.expiresAt - Date.now();
-    if (timeRemaining < 10 * 60 * 1000) { // mniej niż 10 minut
+    if (timeRemaining < 10 * 60 * 1000) {
       try {
         window?.webContents.send('launcher:status', { message: 'Odświeżanie sesji konta Microsoft...' });
         currentAccount = await auth.refreshAccountToken(account);
@@ -384,7 +451,6 @@ async function launchMinecraft(window, versionOverride) {
     } else if (profileLoader === 'custom' && activeProfile?.customVersionId) {
       versionToLaunch = activeProfile.customVersionId;
     } else {
-      // Profil Vanilla — czysta wersja bez wymuszania mod loadera
       versionToLaunch = baseMcVer;
     }
   } catch (loaderErr) {
@@ -392,7 +458,6 @@ async function launchMinecraft(window, versionOverride) {
     throw new Error(`Nie udało się przygotować silnika profilu (${profileLoader}): ${loaderErr.message}`);
   }
 
-  // Upewniamy się, że wersja posiada kompletne argumenty uruchomieniowe gry
   ensureVersionJsonArguments(rootDir, versionToLaunch);
 
   const isPureReleaseId = /^\d+\.\d+(\.\d+)?$/.test(versionToLaunch) && profileLoader === 'vanilla';
@@ -412,26 +477,54 @@ async function launchMinecraft(window, versionOverride) {
     versionObj.custom = versionToLaunch;
   }
 
-  // Automatyczna optymalizacja ustawień graficznych Minecraft dla FPS
   if (appConfig.fpsBoostMode && appConfig.optimizeGameOptions) {
     applyFpsBoostOptions(instanceDir);
   }
 
-  // Automatyczne wdrożenie oficjalnego motywu menu Kasteusz Client (bez modów!)
   ensureKasteuszClientTheme(instanceDir);
   if (instanceDir !== rootDir) {
     ensureKasteuszClientTheme(rootDir);
   }
 
-  // Automatyczne wdrożenie oficjalnego modułu Kasteusz Client HUD (pod RShift, tylko Fabric 1.21.x)
-  ensureKasteuszClientHudMod(instanceDir, baseMcVer, profileLoader);
+  cleanupKasteuszClientHudMod(instanceDir);
+  if (instanceDir !== rootDir) {
+    cleanupKasteuszClientHudMod(rootDir);
+  }
 
   const profileLabel = activeProfile?.name ? `${activeProfile.name} (${versionToLaunch})` : versionToLaunch;
   window?.webContents.send('launcher:status', { message: `Przygotowywanie profilu: ${profileLabel}...` });
 
   const customArgs = [];
 
-  // Aplikowanie wybranego profilu flag optymalizacyjnych JVM
+  if (profileLoader === 'forge' || profileLoader === 'neoforge' || versionToLaunch.includes('-forge-') || versionToLaunch.startsWith('forge-')) {
+    customArgs.push(
+      '--add-opens=java.base/java.lang.invoke=ALL-UNNAMED',
+      '--add-opens=java.base/java.util.jar=ALL-UNNAMED'
+    );
+    const forgeJsonPath = path.join(rootDir, 'versions', versionToLaunch, `${versionToLaunch}.json`);
+    if (fs.existsSync(forgeJsonPath)) {
+      try {
+        const forgeJson = JSON.parse(fs.readFileSync(forgeJsonPath, 'utf8'));
+        const libDir = path.join(rootDir, 'libraries');
+        const sep = path.delimiter;
+        if (Array.isArray(forgeJson.arguments?.jvm)) {
+          for (const entry of forgeJson.arguments.jvm) {
+            if (typeof entry === 'string') {
+              const resolved = entry
+                .split('${library_directory}').join(libDir)
+                .split('${classpath_separator}').join(sep)
+                .split('${version_name}').join(baseMcVer)
+                .split('${natives_directory}').join(path.join(rootDir, 'natives'));
+              customArgs.push(resolved);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('[Launcher] Nie udało się sparsować arguments.jvm dla Forge:', err.message);
+      }
+    }
+  }
+
   const selectedPresetKey = activeProfile?.jvmPreset || appConfig.jvmPreset || 'ultra';
   const preset = JVM_PRESETS[selectedPresetKey] || JVM_PRESETS.ultra;
 
@@ -448,6 +541,19 @@ async function launchMinecraft(window, versionOverride) {
   }
   if (activeProfile?.jvmArgs && activeProfile.jvmArgs.trim()) {
     customArgs.push(...activeProfile.jvmArgs.trim().split(/\s+/));
+  }
+
+  const versionJvmArgs = extractVersionJvmArgs(rootDir, versionToLaunch, baseMcVer, profileLoader);
+  if (versionJvmArgs.length > 0) {
+    for (const vArg of versionJvmArgs) {
+      if (!customArgs.includes(vArg)) {
+        customArgs.push(vArg);
+      }
+    }
+    window?.webContents.send('launcher:log', {
+      level: 'info',
+      text: `[KasteuszLauncher] Załadowano ${versionJvmArgs.length} wymaganych flag silnika gry (${profileLoader}).`
+    });
   }
 
   if (activeProfile?.id) {
@@ -495,6 +601,8 @@ async function launchMinecraft(window, versionOverride) {
     }
   };
 
+  const sessionLogs = [];
+
   return new Promise((resolve, reject) => {
     const safeSend = (channel, ...args) => {
       try {
@@ -510,11 +618,11 @@ async function launchMinecraft(window, versionOverride) {
 
     activeLauncherClient.on('data', (e) => {
       const line = e.toString().trim();
+      sessionLogs.push(line);
+      if (sessionLogs.length > 250) sessionLogs.shift();
       safeSend('launcher:log', { level: 'info', text: line });
 
-      // Dynamiczne wykrywanie stanu gry i serwera dla Discord RPC (ignorujemy Simple Voice Chat)
       if (line.includes('[voicechat]') || line.toLowerCase().includes('voice chat')) {
-        // Ignorujemy logi modu voicechat, żeby nie nadpisywały IP serwera
       } else if (line.includes('Connecting to ')) {
         const match = line.match(/Connecting to\s+([a-zA-Z0-9.\-_]+)(?:,\s*\d+)?/i);
         if (match && match[1]) {
@@ -569,16 +677,25 @@ async function launchMinecraft(window, versionOverride) {
 
     activeLauncherClient.on('close', async (code) => {
       isLaunching = false;
-      const updatedStats = stats.recordClose();
+      let updatedStats = null;
+      try {
+        if (stats && typeof stats.recordClose === 'function') {
+          updatedStats = stats.recordClose();
+        }
+      } catch (stErr) {
+        console.warn('[Stats] Błąd recordClose:', stErr.message);
+      }
       discord.setLauncherActivity({ isPlaying: false, serverIp: null, statusDetails: 'W menu launchera' });
       safeSend('launcher:closed', { code });
-      safeSend('stats:updated', updatedStats);
+      if (updatedStats) {
+        safeSend('stats:updated', updatedStats);
+      }
 
-      // Automatyczna diagnoza w przypadku nieoczekiwanego zamknięcia gry
       if (code !== 0 && code !== null) {
         try {
           const crashDoctor = require('./crashDoctor');
-          const diagnosis = await crashDoctor.diagnose('active');
+          const consoleBuffer = sessionLogs.join('\n');
+          const diagnosis = await crashDoctor.diagnose('active', consoleBuffer);
           diagnosis.exitCode = code;
           safeSend('crash:detected', diagnosis);
         } catch (doctorErr) {
@@ -590,7 +707,14 @@ async function launchMinecraft(window, versionOverride) {
     activeLauncherClient.launch(launchOptions)
       .then(() => {
         isLaunching = false;
-        const currentStats = stats.recordLaunch(versionToLaunch);
+        let currentStats = null;
+        try {
+          if (stats && typeof stats.recordLaunch === 'function') {
+            currentStats = stats.recordLaunch(versionToLaunch);
+          }
+        } catch (stErr) {
+          console.warn('[Stats] Błąd recordLaunch:', stErr.message);
+        }
         discord.setLauncherActivity({
           isPlaying: true,
           serverIp: null,
@@ -598,7 +722,9 @@ async function launchMinecraft(window, versionOverride) {
           gameVersion: versionToLaunch
         });
         safeSend('launcher:started', { version: versionToLaunch });
-        safeSend('stats:updated', currentStats);
+        if (currentStats) {
+          safeSend('stats:updated', currentStats);
+        }
         resolve({ success: true, version: versionToLaunch });
         if (appConfig.closeOnLaunch) {
           setTimeout(() => {
@@ -606,6 +732,12 @@ async function launchMinecraft(window, versionOverride) {
               window.close();
             }
           }, 3000);
+        } else {
+          setTimeout(() => {
+            if (window && !window.isDestroyed() && !window.isMinimized()) {
+              window.minimize();
+            }
+          }, 2000);
         }
       })
       .catch((err) => {
@@ -627,5 +759,7 @@ module.exports = {
   resolveJavaExecutable,
   ensureKasteuszClientTheme,
   ensureKasteuszClientHudMod,
-  ensureVersionJsonArguments
+  cleanupKasteuszClientHudMod,
+  ensureVersionJsonArguments,
+  extractVersionJvmArgs
 };

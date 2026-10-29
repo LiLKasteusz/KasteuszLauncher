@@ -51,6 +51,7 @@ function createWindow() {
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
+    mainWindow.focus();
   });
 
   mainWindow.on('closed', () => {
@@ -62,7 +63,6 @@ app.whenReady().then(() => {
   createWindow();
   discord.initDiscordRPC();
 
-  // Rejestracja globalnych skrótów klawiszowych do muzyki (działających w tle i w grze Minecraft)
   const registerShortcut = (key, action) => {
     try {
       globalShortcut.register(key, () => {
@@ -104,13 +104,20 @@ app.on('window-all-closed', () => {
   }
 });
 
-// IPC: Kontrolki okna
 ipcMain.on('window:minimize', () => {
   if (mainWindow) mainWindow.minimize();
 });
 
 ipcMain.on('window:close', () => {
   if (mainWindow) mainWindow.close();
+});
+
+ipcMain.on('window:focus', () => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    if (!mainWindow.isFocused()) {
+      mainWindow.focus();
+    }
+  }
 });
 
 ipcMain.on('window:maximize', () => {
@@ -123,7 +130,6 @@ ipcMain.on('window:maximize', () => {
   }
 });
 
-// IPC: Logowanie i autoryzacja
 ipcMain.handle('auth:get-active', async () => {
   return config.getActiveAccount();
 });
@@ -190,7 +196,6 @@ ipcMain.handle('auth:switch-account', async (_e, uuid) => {
   return config.setActiveAccount(uuid);
 });
 
-// IPC: Ustawienia
 ipcMain.handle('config:get', async () => {
   return config.getConfig();
 });
@@ -227,7 +232,6 @@ ipcMain.handle('config:select-java', async () => {
   return null;
 });
 
-// IPC: Statystyki i Czas Gry
 ipcMain.handle('stats:get', async () => {
   const s = stats.getStats();
   return {
@@ -236,7 +240,6 @@ ipcMain.handle('stats:get', async () => {
   };
 });
 
-// IPC: Wybór pliku pelerynki z dysku
 ipcMain.handle('wardrobe:select-cape', async () => {
   if (!mainWindow) return null;
   const result = await dialog.showOpenDialog(mainWindow, {
@@ -254,7 +257,6 @@ ipcMain.handle('wardrobe:select-cape', async () => {
   return null;
 });
 
-// IPC: Minecraft, Profile i Wersje
 ipcMain.handle('game:get-versions', async () => {
   return await mojang.getAvailableVersions();
 });
@@ -315,7 +317,6 @@ ipcMain.handle('system:get-specs', () => {
   };
 });
 
-// IPC: Menedżer Modów
 ipcMain.handle('mods:get-list', async () => {
   return mods.getInstalledMods();
 });
@@ -371,7 +372,6 @@ ipcMain.handle('mods:install-modpack', async (event, params) => {
   });
 });
 
-// IPC: Pakiety Zasobów & Shadery
 ipcMain.handle('packs:get-list', async (_e, type) => {
   return mods.getPacksList(type);
 });
@@ -396,7 +396,6 @@ ipcMain.handle('packs:open-folder', async (_e, type) => {
   return mods.openPacksFolder(type);
 });
 
-// IPC: Live Lyrics (LRCLIB)
 ipcMain.handle('music:get-lyrics', async (_e, title, artist) => {
   if (!title) return null;
   const cleanTitle = String(title).replace(/\s*\((feat|ft|official|video|audio|lyrics).*?\)/gi, '').trim();
@@ -441,7 +440,6 @@ ipcMain.handle('music:get-lyrics', async (_e, title, artist) => {
   return null;
 });
 
-// IPC: Znajomi
 ipcMain.handle('friends:get', async () => {
   return friends.getFriends();
 });
@@ -454,7 +452,6 @@ ipcMain.handle('friends:remove', async (_e, username) => {
   return friends.removeFriend(username);
 });
 
-// IPC: Hostowanie Serwera z PC
 ipcMain.handle('server:get-config', async () => {
   return serverHost.getServerConfig();
 });
@@ -479,14 +476,12 @@ ipcMain.handle('server:get-status', async () => {
   return serverHost.getServerStatus();
 });
 
-// IPC: Zewnętrzne linki
 ipcMain.on('system:open-external', (_e, url) => {
   if (url && (url.startsWith('https://') || url.startsWith('http://'))) {
     shell.openExternal(url);
   }
 });
 
-// IPC: Spotify & Muzyka w tle
 ipcMain.handle('spotify:login', async (_e, clientId) => {
   return await spotify.loginWithSpotify(clientId);
 });
@@ -552,7 +547,6 @@ const CURRENT_TRACK_PATH = path.join(config.APP_DIR, 'current_track.json');
 const MUSIC_COMMAND_PATH = path.join(config.APP_DIR, 'music_command.json');
 let lastProcessedCommandTime = Date.now();
 
-// Odbiór komend z Minecrafta (In-game Quick Music Menu)
 setInterval(() => {
   try {
     if (fs.existsSync(MUSIC_COMMAND_PATH)) {
@@ -591,7 +585,6 @@ ipcMain.handle('music:update-state', async (_e, state) => {
   }
 });
 
-// IPC: Screenshots & Clips Hub
 ipcMain.handle('screenshots:get-list', async (_e, profileId) => {
   return await screenshots.getScreenshots(profileId);
 });
@@ -620,7 +613,6 @@ ipcMain.handle('screenshots:open-file', async (_e, filePath) => {
   return await screenshots.openScreenshotFile(filePath);
 });
 
-// IPC: Diagnoza Crashy & Rozwiązywanie Błędów Modów
 const crashDoctor = require('./crashDoctor');
 
 ipcMain.handle('crash:diagnose', async (_e, profileId) => {
@@ -635,7 +627,6 @@ ipcMain.handle('crash:open-folder', async (_e, profileId) => {
   return await crashDoctor.executeFix('open_crash_folder', { profileId });
 });
 
-// IPC: Hardware Benchmark & PC Performance Tuning
 const benchmark = require('./benchmark');
 
 ipcMain.handle('benchmark:get-specs', async () => {

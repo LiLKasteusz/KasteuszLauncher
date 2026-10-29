@@ -152,9 +152,6 @@ function formatBytes(bytes) {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 }
 
-/**
- * Zwraca listę wszystkich zainstalowanych modów
- */
 function getInstalledMods() {
   const modsDir = getModsDirectory();
   try {
@@ -189,9 +186,6 @@ function getInstalledMods() {
   }
 }
 
-/**
- * Otwiera natywne okno wyboru plików i kopiuje mody do folderu mods
- */
 async function selectAndAddMods(parentWindow) {
   const modsDir = getModsDirectory();
   const result = await dialog.showOpenDialog(parentWindow, {
@@ -221,9 +215,6 @@ async function selectAndAddMods(parentWindow) {
   return { added, mods: getInstalledMods() };
 }
 
-/**
- * Włącza lub wyłącza moda (.jar <-> .jar.disabled)
- */
 function toggleMod(filename) {
   const modsDir = getModsDirectory();
   const currentPath = path.join(modsDir, filename);
@@ -247,9 +238,6 @@ function toggleMod(filename) {
   return getInstalledMods();
 }
 
-/**
- * Usuwa plik moda
- */
 function deleteMod(filename) {
   const modsDir = getModsDirectory();
   const filePath = path.join(modsDir, filename);
@@ -261,24 +249,16 @@ function deleteMod(filename) {
   return getInstalledMods();
 }
 
-/**
- * Otwiera folder mods w eksploratorze plików systemu Linux
- */
 function openModsFolder() {
   const modsDir = getModsDirectory();
   shell.openPath(modsDir);
   return modsDir;
 }
 
-/**
- * Automatyczna instalacja profilu Fabric Loader dla danej wersji gry
- * Scala konfigurację Mojang z Fabric, gwarantując 100% kompatybilność z MCLC
- */
 async function installFabric(minecraftVersion = '1.20.4') {
   const appConfig = config.getConfig();
   const gameDir = appConfig.gameDirectory || config.DEFAULT_GAME_DIR;
   
-  // 1. Sprawdź lub pobierz plik JSON wersji bazowej Minecraft
   let baseJson = null;
   const baseJsonPath = path.join(gameDir, 'versions', minecraftVersion, `${minecraftVersion}.json`);
   if (fs.existsSync(baseJsonPath)) {
@@ -306,7 +286,6 @@ async function installFabric(minecraftVersion = '1.20.4') {
     }
   }
 
-  // 2. Pobierz loader z Fabric Meta API
   const metaUrl = `https://meta.fabricmc.net/v2/versions/loader/${minecraftVersion}`;
   const metaRes = await fetch(metaUrl);
   if (!metaRes.ok) {
@@ -320,7 +299,6 @@ async function installFabric(minecraftVersion = '1.20.4') {
 
   const loaderVersion = loaders[0].loader.version;
 
-  // 3. Pobierz profil Fabric JSON
   const profileUrl = `https://meta.fabricmc.net/v2/versions/loader/${minecraftVersion}/${loaderVersion}/profile/json`;
   const profileRes = await fetch(profileUrl);
   if (!profileRes.ok) {
@@ -335,7 +313,6 @@ async function installFabric(minecraftVersion = '1.20.4') {
     fs.mkdirSync(versionDir, { recursive: true });
   }
 
-  // 4. Scal konfigurację Fabric z bazowym klientem Minecraft
   const baseGameArgs = (baseJson && baseJson.arguments && Array.isArray(baseJson.arguments.game))
     ? baseJson.arguments.game
     : [];
@@ -372,7 +349,6 @@ async function installFabric(minecraftVersion = '1.20.4') {
 
   fs.writeFileSync(path.join(versionDir, `${versionId}.json`), JSON.stringify(merged, null, 2), 'utf8');
 
-  // Skopiuj plik jar wersji bazowej jeśli istnieje, aby Fabric go widział
   const baseJar = path.join(gameDir, 'versions', minecraftVersion, `${minecraftVersion}.jar`);
   const fabricJar = path.join(versionDir, `${versionId}.jar`);
   if (fs.existsSync(baseJar) && !fs.existsSync(fabricJar)) {
@@ -381,7 +357,6 @@ async function installFabric(minecraftVersion = '1.20.4') {
     } catch (e) {}
   }
 
-  // Ustaw jako aktywną wersję w launcherze
   config.saveConfig({ selectedVersion: versionId });
 
   return {
@@ -391,16 +366,12 @@ async function installFabric(minecraftVersion = '1.20.4') {
   };
 }
 
-/**
- * Automatyczna instalacja silnika Minecraft Forge dla podanej wersji gry
- */
 async function installForge(minecraftVersion = '1.20.1', requestedForgeVersion = null, onProgress = null) {
   const rootDir = config.getConfig().gameDirectory || config.DEFAULT_GAME_DIR;
   if (!fs.existsSync(rootDir)) {
     fs.mkdirSync(rootDir, { recursive: true });
   }
 
-  // Upewniamy się, że launcher_profiles.json istnieje (instalator Forge tego bezwzględnie wymaga)
   const launcherProfilesPath = path.join(rootDir, 'launcher_profiles.json');
   if (!fs.existsSync(launcherProfilesPath)) {
     fs.writeFileSync(launcherProfilesPath, JSON.stringify({ profiles: {} }, null, 2), 'utf8');
@@ -483,6 +454,7 @@ async function installForge(minecraftVersion = '1.20.1', requestedForgeVersion =
 
   await new Promise((resolve, reject) => {
     const cp = require('child_process').spawn(javaExec, ['-jar', tempInstallerJar, '--installClient', rootDir], {
+      cwd: tempDir,
       stdio: ['ignore', 'pipe', 'pipe']
     });
     let errLog = '';
@@ -519,9 +491,6 @@ async function installForge(minecraftVersion = '1.20.1', requestedForgeVersion =
   return versionId;
 }
 
-/**
- * Automatyczna instalacja profilu Quilt Loader dla danej wersji gry
- */
 async function installQuilt(minecraftVersion = '1.21.1') {
   const appConfig = config.getConfig();
   const gameDir = appConfig.gameDirectory || config.DEFAULT_GAME_DIR;
@@ -651,7 +620,6 @@ async function installSodium(minecraftVersion = '1.20.4') {
   const fileBuf = await fileRes.arrayBuffer();
   fs.writeFileSync(destPath, Buffer.from(fileBuf));
 
-  // Upewnij się że Fabric jest zainstalowany
   await installFabric(minecraftVersion);
 
   return {
@@ -660,9 +628,6 @@ async function installSodium(minecraftVersion = '1.20.4') {
   };
 }
 
-/**
- * Pomocnicza funkcja generująca listę kompatybilnych wersji bazowych Minecraft (np. 1.21.11 -> 1.21.1, 1.21)
- */
 function getCandidateMcVersions(rawVersion) {
   const clean = String(rawVersion || '1.21.11').replace(/^(fabric|quilt)-/, '').trim();
   const candidates = [clean];
@@ -678,12 +643,9 @@ function getCandidateMcVersions(rawVersion) {
   return candidates;
 }
 
-/**
- * Wyszukuje mody lub modpacki w bazie Modrinth
- */
 async function searchModrinth({
   query = '',
-  projectType = 'mod',
+  projectType = 'all',
   category = '',
   loader = 'all',
   gameVersion = '1.21.11',
@@ -695,24 +657,22 @@ async function searchModrinth({
   try {
     const facets = [];
 
-    // Typ projektu: mod lub modpack
     if (projectType === 'modpack') {
       facets.push(['project_type:modpack']);
-    } else {
+    } else if (projectType === 'mod') {
       facets.push(['project_type:mod']);
+    } else {
+      facets.push(['project_type:mod', 'project_type:modpack']);
     }
 
-    // Filtr loadera (jeśli nie 'all')
     if (loader && loader !== 'all') {
       facets.push([`categories:${loader}`]);
     }
 
-    // Filtr kategorii (tylko dla modów lub jeśli wskazana)
     if (category && category !== 'all') {
       facets.push([`categories:${category}`]);
     }
 
-    // Inteligentny filtr wersji gry (OR facets)
     if (onlyCurrentVersion && gameVersion) {
       const candidates = getCandidateMcVersions(gameVersion);
       const verFacets = candidates.map(v => `versions:${v}`);
@@ -752,9 +712,6 @@ async function searchModrinth({
   }
 }
 
-/**
- * Pobiera listę wersji danego projektu (moda lub modpacka) z Modrinth
- */
 async function getModrinthProjectVersions(idOrSlug) {
   try {
     const res = await fetch(`https://api.modrinth.com/v2/project/${idOrSlug}/version`, {
@@ -768,15 +725,11 @@ async function getModrinthProjectVersions(idOrSlug) {
   }
 }
 
-/**
- * Pobiera i instaluje mod z Modrinth bezpośrednio do katalogu mods aktywnego profilu
- */
 async function installModrinthMod({ projectId, slug, gameVersion = '1.21.11', loader = 'fabric' }) {
   const modsDir = getModsDirectory();
   const idOrSlug = slug || projectId;
   const candidates = getCandidateMcVersions(gameVersion);
 
-  // 1. Sprawdzamy wersje dla wybranego loadera i kompatybilnych wersji gry
   let versions = [];
   const loadersToTry = loader === 'quilt' ? ['quilt', 'fabric'] : [loader || 'fabric'];
 
@@ -792,7 +745,6 @@ async function installModrinthMod({ projectId, slug, gameVersion = '1.21.11', lo
     console.warn(`Nie znaleziono wersji pod ${candidates.join(',')}, szukam ogólnej...`, err);
   }
 
-  // 2. Jeśli brak wersji pod konkretne wydanie, bierzemy najnowszą wersję na wybrany loader
   if (!versions || versions.length === 0) {
     const res = await fetch(
       `https://api.modrinth.com/v2/project/${idOrSlug}/version?loaders=${encodeURIComponent(JSON.stringify(loadersToTry))}`,
@@ -803,7 +755,6 @@ async function installModrinthMod({ projectId, slug, gameVersion = '1.21.11', lo
     }
   }
 
-  // 3. Fallback: jakakolwiek wersja
   if (!versions || versions.length === 0) {
     const res = await fetch(
       `https://api.modrinth.com/v2/project/${idOrSlug}/version`,
@@ -824,14 +775,12 @@ async function installModrinthMod({ projectId, slug, gameVersion = '1.21.11', lo
     throw new Error(`Brak pliku do pobrania dla moda ${idOrSlug}.`);
   }
 
-  // Pobieranie pliku moda
   const destPath = path.join(modsDir, primaryFile.filename);
   const fileRes = await fetch(primaryFile.url);
   if (!fileRes.ok) throw new Error(`Błąd pobierania pliku moda: ${fileRes.status}`);
   const buf = await fileRes.arrayBuffer();
   fs.writeFileSync(destPath, Buffer.from(buf));
 
-  // Pobieranie wymaganych zależności (np. Fabric API, Sodium itp.)
   const installedDependencies = [];
   if (Array.isArray(targetVersion.dependencies)) {
     for (const dep of targetVersion.dependencies) {
@@ -862,7 +811,6 @@ async function installModrinthMod({ projectId, slug, gameVersion = '1.21.11', lo
     }
   }
 
-  // Upewniamy się, że odpowiedni loader jest zainstalowany
   try {
     const cleanVer = candidates[0] || '1.21.11';
     if (loader === 'quilt') {
@@ -883,9 +831,6 @@ async function installModrinthMod({ projectId, slug, gameVersion = '1.21.11', lo
   };
 }
 
-/**
- * Pobiera i instaluje Modpack z Modrinth (.mrpack) jako odizolowany profil
- */
 async function installModrinthModpack({ projectId, slug, versionId, profileName, onProgress } = {}) {
   const idOrSlug = slug || projectId;
   if (!idOrSlug) throw new Error('Brak identyfikatora modpacka.');
@@ -905,7 +850,6 @@ async function installModrinthModpack({ projectId, slug, versionId, profileName,
     });
   }
 
-  // 1. Pobierz wersję modpacka
   let targetVersion = null;
   if (versionId) {
     try {
@@ -926,7 +870,6 @@ async function installModrinthModpack({ projectId, slug, versionId, profileName,
     targetVersion = versions[0];
   }
 
-  // 2. Znajdź plik .mrpack
   const mrpackFile = targetVersion.files?.find(f => f.filename?.endsWith('.mrpack') || f.primary) || targetVersion.files?.[0];
   if (!mrpackFile || !mrpackFile.url) {
     throw new Error('Brak pliku instalacyjnego .mrpack dla wybranej wersji modpacka.');
@@ -951,7 +894,6 @@ async function installModrinthModpack({ projectId, slug, versionId, profileName,
     });
   }
 
-  // 3. Pobierz plik .mrpack ze streamingiem i pomiarem prędkości
   const mrpackRes = await fetch(mrpackFile.url, {
     headers: { 'User-Agent': 'KasteuszLauncher/1.0.0 (contact@szkolnesmp.com.pl)' }
   });
@@ -1016,7 +958,6 @@ async function installModrinthModpack({ projectId, slug, versionId, profileName,
   const index = JSON.parse(indexEntry.getData().toString('utf8'));
   const mcVersion = targetVersion.game_versions?.[0] || index.dependencies?.minecraft || '1.21.1';
 
-  // Rozpoznaj loader gry
   let loader = 'fabric';
   let forgeVersion = null;
   if (index.dependencies?.['quilt-loader']) {
@@ -1041,7 +982,6 @@ async function installModrinthModpack({ projectId, slug, versionId, profileName,
   const finalProfileName = rawPackTitle.startsWith('[Modpack]') ? rawPackTitle : `[Modpack] ${rawPackTitle}`;
   const customVersionId = loader === 'forge' && forgeVersion ? `${mcVersion}-forge-${forgeVersion}` : null;
 
-  // 4. Utwórz profil w KasteuszLauncher
   const profilesResult = profiles.createProfile({
     name: finalProfileName,
     mcVersion,
@@ -1075,7 +1015,6 @@ async function installModrinthModpack({ projectId, slug, versionId, profileName,
     });
   }
 
-  // 5. Wypakuj overrides/ oraz client-overrides/
   const zipEntries = zip.getEntries();
   for (const entry of zipEntries) {
     let relPath = null;
@@ -1097,7 +1036,6 @@ async function installModrinthModpack({ projectId, slug, versionId, profileName,
     }
   }
 
-  // 6. Pobierz mody klienta zdefiniowane w modrinth.index.json
   const clientFiles = (index.files || []).filter(f => !f.env || f.env.client !== 'unsupported');
   const totalFiles = clientFiles.length;
   const totalModBytes = clientFiles.reduce((acc, f) => acc + (f.fileSize || 0), 0);
@@ -1150,7 +1088,6 @@ async function installModrinthModpack({ projectId, slug, versionId, profileName,
 
   emitModProgress('Inicjalizacja pobierania modów...', true);
 
-  // Pula współbieżnych pobrań (5 równoległych strumieni)
   const CONCURRENCY = 5;
   const queue = [...clientFiles];
 
@@ -1205,7 +1142,6 @@ async function installModrinthModpack({ projectId, slug, versionId, profileName,
   const workers = Array.from({ length: Math.min(CONCURRENCY, Math.max(1, queue.length)) }, () => downloadWorker());
   await Promise.all(workers);
 
-  // 7. Instalacja loadera gry jeśli to Fabric lub Quilt
   if (typeof onProgress === 'function') {
     onProgress({
       stage: 'installing_loader',
@@ -1226,7 +1162,7 @@ async function installModrinthModpack({ projectId, slug, versionId, profileName,
       await installFabric(mcVersion);
     } else if (loader === 'quilt') {
       await installQuilt(mcVersion);
-    } else if (loader === 'forge') {
+    } else if (loader === 'forge' || loader === 'neoforge') {
       const forgeVerId = await installForge(mcVersion, forgeVersion, (p) => {
         if (typeof onProgress === 'function') onProgress(p);
       });
@@ -1240,20 +1176,18 @@ async function installModrinthModpack({ projectId, slug, versionId, profileName,
     console.warn('[Modpack] Uwaga podczas instalacji loadera:', loaderErr.message);
   }
 
-  // 8. Wdrożenie oficjalnego motywu menu Kasteusz Client i HUD moda
   try {
     const launcher = require('./launcher');
     if (typeof launcher.ensureKasteuszClientTheme === 'function') {
       launcher.ensureKasteuszClientTheme(instanceDir);
     }
-    if (typeof launcher.ensureKasteuszClientHudMod === 'function') {
-      launcher.ensureKasteuszClientHudMod(instanceDir, mcVersion, loader);
+    if (typeof launcher.cleanupKasteuszClientHudMod === 'function') {
+      launcher.cleanupKasteuszClientHudMod(instanceDir);
     }
   } catch (tErr) {
-    console.warn('[Modpack] Uwaga podczas instalacji motywu/HUD:', tErr.message);
+    console.warn('[Modpack] Uwaga podczas instalacji motywu:', tErr.message);
   }
 
-  // 9. Ustaw profil jako aktywny
   profiles.setActiveProfile(createdProfile.id);
 
   if (typeof onProgress === 'function') {
@@ -1279,9 +1213,6 @@ async function installModrinthModpack({ projectId, slug, versionId, profileName,
   };
 }
 
-/**
- * Zarządzanie Pakietami Zasobów (resourcepacks) oraz Shaderami (shaderpacks)
- */
 function getPacksList(type = 'resourcepacks') {
   const dir = getPacksDirectory(type);
   try {

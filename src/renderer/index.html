@@ -448,7 +448,7 @@
             <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
               <div class="search-box" style="width: 240px;">
                 <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                <input type="text" class="ui-input" id="mods-local-search" placeholder="Filtruj mody w tym profilu...">
+                <input type="text" class="ui-input" id="mods-local-search" placeholder="Filtruj mody w tym profilu..." tabindex="0" autocomplete="off" spellcheck="false">
                 <button class="search-clear-btn" id="mods-local-search-clear" title="Wyczyść">✕</button>
               </div>
               <span class="mod-tag" id="mods-active-profile-pill">Profil: Kasteusz Main</span>
@@ -494,15 +494,19 @@
         <div id="mods-subtab-view-modrinth" style="display: none;">
           <div class="modrinth-filter-panel">
             <div class="modrinth-top-controls-row" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; flex-wrap: wrap;">
-              <!-- Segmented Type Switcher: Mody vs Modpacki -->
+              <!-- Segmented Type Switcher: Wszystko vs Mody vs Modpacki -->
               <div class="segmented-control" id="modrinth-type-switch">
-                <button class="seg-btn active" id="modrinth-type-mod" data-type="mod">
+                <button class="seg-btn active" id="modrinth-type-all" data-type="all">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m10 15 5-3-5-3v6z"/></svg>
+                  <span>Wszystko</span>
+                </button>
+                <button class="seg-btn" id="modrinth-type-mod" data-type="mod">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-                  <span>Mody (77k+)</span>
+                  <span>Mody</span>
                 </button>
                 <button class="seg-btn" id="modrinth-type-modpack" data-type="modpack">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
-                  <span>Paczki Modów (Modpacki)</span>
+                  <span>Modpacki</span>
                 </button>
               </div>
 
@@ -515,9 +519,14 @@
             <div class="modrinth-search-row">
               <div class="search-box">
                 <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                <input type="text" class="ui-input" id="mod-browse-search-input" placeholder="Szukaj modów na Modrinth (np. Sodium, Iris, Zoomify, Fabulously Optimized)...">
+                <input type="text" class="ui-input" id="mod-browse-search-input" placeholder="Szukaj modów i modpacków (np. Sodium, Fabulously Optimized, Zombie Invade)..." tabindex="0" autocomplete="off" spellcheck="false">
                 <button class="search-clear-btn" id="mod-browse-search-clear" title="Wyczyść">✕</button>
               </div>
+
+              <button class="btn-primary" id="btn-mod-browse-search" style="padding: 0 16px; height: 38px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <span>Szukaj</span>
+              </button>
 
               <select class="ui-select" id="mod-browse-loader-select" title="Filtruj wg silnika">
                 <option value="all">Wszystkie loadery</option>
@@ -976,7 +985,7 @@
                   <div style="font-size: 11px; color: var(--text-secondary); line-height: 1.45; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                     <span>1. Utwórz darmową aplikację w panelu Spotify Dev i dodaj Redirect URI:</span>
                     <button type="button" class="spotify-redirect-chip" id="btn-copy-spotify-redirect" title="Kliknij, aby skopiować adres Redirect URI">
-                      <span>http://127.0.0.1:8989/login</span>
+                      <span>http:
                       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                     </button>
                   </div>
@@ -1355,11 +1364,11 @@
               <div class="jvm-presets-grid" id="jvm-presets-grid">
                 <div class="jvm-preset-card active" data-preset="ultra" id="jvm-card-ultra">
                   <div class="jvm-preset-top">
-                    <span class="jvm-preset-title">Ultra FPS (ZGC)</span>
-                    <span class="mod-tag emerald">Java 21</span>
+                    <span class="jvm-preset-title">Ultra FPS (Aikar G1GC)</span>
+                    <span class="mod-tag emerald">Polecany</span>
                   </div>
-                  <div class="jvm-preset-desc">Generational ZGC. Pauzy GC &lt; 1ms, ultra wysokie FPS, zero mikro-przycięć.</div>
-                  <div class="jvm-preset-meta">Rekomendowane: 8 GB RAM</div>
+                  <div class="jvm-preset-desc">Zoptymalizowany Aikar G1GC. Zero lag-spikes, niskie zużycie RAM i chłodny procesor.</div>
+                  <div class="jvm-preset-meta">Rekomendowane: 4–6 GB RAM</div>
                 </div>
 
                 <div class="jvm-preset-card" data-preset="g1gc" id="jvm-card-g1gc">

@@ -104,11 +104,9 @@ function setLauncherActivity({ username, isPlaying = false, serverIp = null, sta
   let state = `Gracz: ${playerNick}`;
 
   if (!isPlaying) {
-    // Stan 1: Launcher otwarty, gra niewłączona - absolutnie brak IP serwera!
     details = currentActivityParams.statusDetails || 'W menu launchera';
     state = `Gracz: ${playerNick}`;
   } else {
-    // Stan 2: Gra uruchomiona
     if (currentActivityParams.serverIp) {
       details = `Serwer: ${currentActivityParams.serverIp}`;
       state = `Gracz: ${playerNick}`;

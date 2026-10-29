@@ -1,4 +1,3 @@
-// KasteuszLauncher Music Engine (Standalone Spotify Streams, 24/7 Radio, Scrubber & Live Synchronized Lyrics)
 (function() {
   const STATIONS = [
     {
@@ -43,9 +42,8 @@
   let isLoop = false;
   let isUserSeeking = false;
 
-  // Live Lyrics state
   let currentLyricsKey = '';
-  let parsedLyrics = []; // [{ timeSec: number | null, text: string }]
+  let parsedLyrics = [];
   let activeLyricIdx = -1;
 
   function formatTime(sec) {

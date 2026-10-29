@@ -1,8 +1,3 @@
-/**
- * KasteuszLauncher — Screenshot & Clip Hub Service
- * Skanowanie, optymalizacja miniatur, kopiowanie do schowka (Discord-ready)
- * i zarządzanie mediami z gry Minecraft (F2).
- */
 
 const fs = require('fs');
 const path = require('path');
@@ -15,7 +10,6 @@ const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.bmp']);
 const VIDEO_EXTENSIONS = new Set(['.mp4', '.webm', '.mov', '.mkv']);
 const ALL_MEDIA_EXTENSIONS = new Set([...IMAGE_EXTENSIONS, ...VIDEO_EXTENSIONS]);
 
-// Pamięć podręczna miniatur (ścieżka pliku + mtime -> dataURL)
 const thumbnailCache = new Map();
 const MAX_CACHE_ITEMS = 300;
 
@@ -39,16 +33,12 @@ function formatDate(timestamp) {
   });
 }
 
-/**
- * Zwraca listę folderów zrzutów ekranu do przeszukania
- */
 function getScreenshotsDirectories(filterProfileId = 'all') {
   const dirs = [];
   const defaultMcDir = path.join(os.homedir(), '.kasteuszlauncher', 'minecraft');
   const sharedScreenshots = path.join(defaultMcDir, 'screenshots');
   const vanillaScreenshots = path.join(os.homedir(), '.minecraft', 'screenshots');
 
-  // Upewnij się, że główny katalog zrzutów istnieje
   if (!fs.existsSync(sharedScreenshots)) {
     try {
       fs.mkdirSync(sharedScreenshots, { recursive: true });
@@ -84,7 +74,6 @@ function getScreenshotsDirectories(filterProfileId = 'all') {
       });
     }
   } else {
-    // Skanuj wszystkie znane profile
     for (const p of allProfiles) {
       const pDir = profiles.getInstanceDirectory(p);
       dirs.push({
@@ -94,14 +83,12 @@ function getScreenshotsDirectories(filterProfileId = 'all') {
       });
     }
 
-    // Katalog domyślny współdzielony
     dirs.push({
       dir: sharedScreenshots,
       profileId: 'shared',
       profileName: 'Domyślny Kasteusz'
     });
 
-    // Opcjonalnie oficjalny .minecraft jeśli istnieje
     if (fs.existsSync(vanillaScreenshots)) {
       dirs.push({
         dir: vanillaScreenshots,
@@ -114,9 +101,6 @@ function getScreenshotsDirectories(filterProfileId = 'all') {
   return dirs;
 }
 
-/**
- * Pobiera listę zrzutów ekranu i klipów posortowaną od najnowszych
- */
 async function getScreenshots(filterProfileId = 'all') {
   const dirs = getScreenshotsDirectories(filterProfileId);
   const seenPaths = new Set();
@@ -164,7 +148,6 @@ async function getScreenshots(filterProfileId = 'all') {
     }
   }
 
-  // Sortuj od najnowszych
   list.sort((a, b) => b.timestamp - a.timestamp);
 
   const totalBytes = list.reduce((acc, item) => acc + item.sizeBytes, 0);
@@ -178,9 +161,6 @@ async function getScreenshots(filterProfileId = 'all') {
   };
 }
 
-/**
- * Generuje szybką miniaturkę dla zrzutu (max 480px) w postaci dataURL
- */
 async function getScreenshotThumbnail(filePath) {
   if (!fs.existsSync(filePath)) {
     return { success: false, error: 'Plik nie istnieje' };
@@ -195,7 +175,6 @@ async function getScreenshotThumbnail(filePath) {
 
     const ext = path.extname(filePath).toLowerCase();
     if (VIDEO_EXTENSIONS.has(ext)) {
-      // Dla wideo zwracamy pusty thumbnail lub znacznik
       return { success: true, isVideo: true };
     }
 
@@ -225,13 +204,11 @@ async function getScreenshotThumbnail(filePath) {
     }
 
     if (!dataUrl) {
-      // Niezawodny fallback: bezpośredni odczyt bufora z dysku
       const buf = fs.readFileSync(filePath);
       const mime = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
       dataUrl = `data:${mime};base64,${buf.toString('base64')}`;
     }
 
-    // Zarządzanie pamięcią podręczną
     if (thumbnailCache.size >= MAX_CACHE_ITEMS) {
       const firstKey = thumbnailCache.keys().next().value;
       thumbnailCache.delete(firstKey);
@@ -249,9 +226,6 @@ async function getScreenshotThumbnail(filePath) {
   }
 }
 
-/**
- * Pobiera pełny obraz w postaci DataURL (do wyświetlenia w modalnym lightboxie)
- */
 async function getScreenshotFull(filePath) {
   if (!fs.existsSync(filePath)) {
     return { success: false, error: 'Plik nie istnieje' };
@@ -296,9 +270,6 @@ async function getScreenshotFull(filePath) {
   }
 }
 
-/**
- * Kopiuje zrzut ekranu do schowka systemowego w formacie surowego obrazu (Discord-ready)
- */
 async function copyScreenshotToClipboard(filePath) {
   if (!fs.existsSync(filePath)) {
     return { success: false, error: 'Plik nie istnieje' };
@@ -321,7 +292,6 @@ async function copyScreenshotToClipboard(filePath) {
       }
     }
 
-    // Fallback: kopiuj ścieżkę do pliku
     if (clipboard && typeof clipboard.writeText === 'function') {
       clipboard.writeText(filePath);
       return { success: true, message: 'Skopiowano ścieżkę do pliku.' };
@@ -333,9 +303,6 @@ async function copyScreenshotToClipboard(filePath) {
   }
 }
 
-/**
- * Usuwa zrzut ekranu z dysku
- */
 async function deleteScreenshot(filePath) {
   if (!fs.existsSync(filePath)) {
     return { success: false, error: 'Plik nie istnieje' };
@@ -344,7 +311,6 @@ async function deleteScreenshot(filePath) {
   try {
     fs.unlinkSync(filePath);
 
-    // Wyczyść z cache
     for (const key of thumbnailCache.keys()) {
       if (key.startsWith(filePath)) {
         thumbnailCache.delete(key);
@@ -357,9 +323,6 @@ async function deleteScreenshot(filePath) {
   }
 }
 
-/**
- * Otwiera folder ze zrzutami ekranu (dla aktywnego lub wybranego profilu)
- */
 async function openScreenshotsFolder(filterProfileId = 'active') {
   try {
     let targetDir = null;
@@ -393,9 +356,6 @@ async function openScreenshotsFolder(filterProfileId = 'active') {
   }
 }
 
-/**
- * Otwiera konkretny plik w domyślnej przeglądarce systemowej
- */
 async function openScreenshotFile(filePath) {
   if (!fs.existsSync(filePath)) {
     return { success: false, error: 'Plik nie istnieje' };

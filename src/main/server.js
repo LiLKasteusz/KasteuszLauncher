@@ -16,7 +16,7 @@ const CONFIG_FILE = path.join(
   'server_config.json'
 );
 
-const DEFAULT_SERVER_URL = 'https://piston-data.mojang.com/v1/objects/64bb6d763bed0a9f1d632ec347938594144943ed/server.jar'; // 1.21.11
+const DEFAULT_SERVER_URL = 'https://piston-data.mojang.com/v1/objects/64bb6d763bed0a9f1d632ec347938594144943ed/server.jar';
 
 let serverProcess = null;
 let isStarting = false;
@@ -106,11 +106,9 @@ async function ensureServerJar(window) {
 }
 
 function applyServerProperties(cfg) {
-  // 1. EULA
   const eulaPath = path.join(SERVER_DIR, 'eula.txt');
   fs.writeFileSync(eulaPath, '# EULA zaakceptowana przez KasteuszLauncher\neula=true\n', 'utf8');
 
-  // 2. server.properties
   const propsPath = path.join(SERVER_DIR, 'server.properties');
   const content = `# Plik konfiguracyjny wygenerowany przez KasteuszLauncher
 server-port=${cfg.port || 25565}

@@ -1,8 +1,3 @@
-/**
- * KasteuszLauncher — Diagnoza i Naprawa Błędów Gry (Mod Conflict Resolver)
- * Diagnoza crash-reports, analizator logów Fabric/Minecraft,
- * wykrywanie zduplikowanych i gryzących się modów oraz naprawa 1-kliknięciem.
- */
 
 const fs = require('fs');
 const path = require('path');
@@ -24,9 +19,6 @@ function formatTimestamp(d) {
   });
 }
 
-/**
- * Pobiera katalog instancji dla wskazanego lub aktywnego profilu
- */
 function resolveInstanceDir(profileId) {
   if (profileId && profileId !== 'active') {
     const all = profiles.getAllProfiles ? profiles.getAllProfiles() : [];
@@ -40,9 +32,6 @@ function resolveInstanceDir(profileId) {
     : path.join(os.homedir(), '.kasteuszlauncher', 'minecraft');
 }
 
-/**
- * Szuka najnowszego pliku crash-report
- */
 function findLatestCrashReport(instanceDir) {
   const crashDir = path.join(instanceDir, 'crash-reports');
   if (!fs.existsSync(crashDir)) return null;
@@ -78,9 +67,6 @@ function findLatestCrashReport(instanceDir) {
   }
 }
 
-/**
- * Czyta końcówkę pliku logs/latest.log
- */
 function readLatestLogTail(instanceDir, maxLines = 160) {
   const logPath = path.join(instanceDir, 'logs', 'latest.log');
   if (!fs.existsSync(logPath)) return null;
@@ -100,9 +86,6 @@ function readLatestLogTail(instanceDir, maxLines = 160) {
   }
 }
 
-/**
- * Wyszukuje zduplikowane mody w katalogu mods/
- */
 function scanDuplicateMods(instanceDir) {
   const modsDir = path.join(instanceDir, 'mods');
   if (!fs.existsSync(modsDir)) return [];
@@ -111,9 +94,6 @@ function scanDuplicateMods(instanceDir) {
   const groups = new Map();
 
   for (const file of jarFiles) {
-    // Uproszczona normalizacja nazwy: usuwamy wersję i platformę
-    // np. "sodium-fabric-0.5.8+mc1.20.4.jar" -> "sodium"
-    // "fabric-api-0.129.0+1.21.8.jar" -> "fabric-api"
     let base = file.toLowerCase()
       .replace(/\.jar$/, '')
       .replace(/[-_]?(fabric|quilt|forge|neoforge)[-_]?/g, '')
@@ -133,7 +113,6 @@ function scanDuplicateMods(instanceDir) {
   const duplicates = [];
   for (const [baseName, list] of groups.entries()) {
     if (list.length > 1) {
-      // Posortuj od najnowszego mtime
       list.sort((a, b) => b.mtime - a.mtime);
       duplicates.push({
         baseName,
@@ -147,9 +126,6 @@ function scanDuplicateMods(instanceDir) {
   return duplicates;
 }
 
-/**
- * Szuka pliku moda w folderze mods/ na podstawie identyfikatora modId lub nazwy klasy
- */
 function findModFileByModId(instanceDir, modId) {
   if (!modId) return null;
   const modsDir = path.join(instanceDir, 'mods');
@@ -158,7 +134,6 @@ function findModFileByModId(instanceDir, modId) {
   const files = fs.readdirSync(modsDir);
   const cleanId = modId.toLowerCase().replace(/[^a-z0-9]/g, '');
 
-  // 1. Dokładne lub częściowe dopasowanie nazwy pliku
   for (const f of files) {
     const cleanFileName = f.toLowerCase().replace(/[^a-z0-9]/g, '');
     if (cleanFileName.includes(cleanId)) {
@@ -169,10 +144,7 @@ function findModFileByModId(instanceDir, modId) {
   return null;
 }
 
-/**
- * Główna funkcja diagnostyczna
- */
-async function diagnose(profileId = 'active') {
+async function diagnose(profileId = 'active', consoleText = null) {
   const instanceDir = resolveInstanceDir(profileId);
   const activeProfile = profiles.getActiveProfile ? profiles.getActiveProfile() : null;
 
@@ -182,10 +154,13 @@ async function diagnose(profileId = 'active') {
 
   const combinedText = [
     crashReport?.content || '',
-    logTail?.content || ''
+    logTail?.content || '',
+    consoleText || ''
   ].join('\n');
 
-  if (!crashReport && !logTail && duplicates.length === 0) {
+  const hasConsoleTextError = consoleText && /Exception|Error|FATAL|Crash|InaccessibleObject/i.test(consoleText);
+
+  if (!crashReport && !logTail && duplicates.length === 0 && !hasConsoleTextError) {
     return {
       hasCrash: false,
       title: 'Brak zarejestrowanych błędów',
@@ -194,12 +169,11 @@ async function diagnose(profileId = 'active') {
     };
   }
 
-  // Obiekt wynikowy diagnozy
   let diagnosis = {
-    hasCrash: !!crashReport || /Exception|Error|FATAL/i.test(combinedText),
-    crashTime: crashReport ? crashReport.dateFormatted : (logTail ? 'Ostatnia sesja' : 'Brak'),
+    hasCrash: !!crashReport || /Exception|Error|FATAL|InaccessibleObject/i.test(combinedText),
+    crashTime: crashReport ? crashReport.dateFormatted : (logTail ? 'Ostatnia sesja' : 'Bieżąca sesja (Konsola)'),
     reportPath: crashReport ? crashReport.filePath : (logTail ? logTail.filePath : null),
-    reportFileName: crashReport ? crashReport.fileName : 'latest.log',
+    reportFileName: crashReport ? crashReport.fileName : (logTail ? 'latest.log' : 'Konsola gry (stderr/stdout)'),
     errorType: 'UNKNOWN',
     severity: 'critical',
     title: 'Nierozpoznany błąd gry',
@@ -209,11 +183,10 @@ async function diagnose(profileId = 'active') {
     culpritClass: null,
     solution: 'Sprawdź logi gry lub spróbuj wyłączyć ostatnio dodane mody.',
     suggestedActions: [],
-    rawReport: crashReport?.content || logTail?.content || '',
+    rawReport: crashReport?.content || logTail?.content || consoleText || '',
     duplicates
   };
 
-  // --- REGUŁA 1: Zduplikowane mody w folderze mods/ ---
   if (duplicates.length > 0) {
     const dupNames = duplicates.map(d => `${d.baseName} (${d.files.join(', ')})`).join('; ');
     diagnosis.hasCrash = true;
@@ -234,13 +207,11 @@ async function diagnose(profileId = 'active') {
     }
   }
 
-  // --- REGUŁA 2: Błąd wykonania etapu Entrypoint w Fabric (np. smartfpsbooster) ---
   const entrypointMatch = combinedText.match(/Could not execute entrypoint stage '(?<stage>[^']+)' due to errors, provided by '(?<modId>[^']+)' at '(?<entrypoint>[^']+)'/i);
   if (entrypointMatch) {
     const { stage, modId, entrypoint } = entrypointMatch.groups;
     const culpritFile = findModFileByModId(instanceDir, modId);
 
-    // Szukamy przyczyny: np. NoSuchMethodError, ClassNotFoundException
     let causeReason = 'Błąd w kodzie moda';
     const noSuchMethod = combinedText.match(/Caused by: java\.lang\.NoSuchMethodError:\s*'(?<sig>[^']+)'/i);
     const classNotFound = combinedText.match(/Caused by: java\.lang\.ClassNotFoundException:\s*(?<cls>[^\s\r\n]+)/i);
@@ -270,7 +241,6 @@ async function diagnose(profileId = 'active') {
     }
   }
 
-  // --- REGUŁA 3: Brakujące zależności lub niekompatybilność Fabric Loader ---
   if (/Incompatible mods found!|net\.fabricmc\.loader\.impl\.FormattedException/i.test(combinedText)) {
     const missingMods = new Set();
     const solutionMatches = combinedText.matchAll(/-\s*Install\s+([a-zA-Z0-9_\-]+)/gi);
@@ -338,7 +308,6 @@ async function diagnose(profileId = 'active') {
     }
   }
 
-  // --- REGUŁA 4: Brak pamięci RAM (OutOfMemoryError) ---
   if (/java\.lang\.OutOfMemoryError/i.test(combinedText) || /There is insufficient memory for the Java Runtime/i.test(combinedText)) {
     const currentRam = activeProfile?.memoryMax || config.getConfig()?.memoryMax || 4;
     const recommendedRam = Math.min(12, Math.max(6, currentRam + 2));
@@ -357,7 +326,6 @@ async function diagnose(profileId = 'active') {
     });
   }
 
-  // --- REGUŁA 5: Niezgodna wersja Javy (UnsupportedClassVersionError) ---
   const javaVersionMatch = combinedText.match(/UnsupportedClassVersionError: .* has been compiled by a more recent version of the Java Runtime \(class file version (?<version>\d+)\), this version of the Java Runtime only recognizes class file versions up to (?<currentVer>\d+)/i);
   if (javaVersionMatch) {
     const requiredClassVer = parseInt(javaVersionMatch.groups.version, 10);
@@ -376,7 +344,6 @@ async function diagnose(profileId = 'active') {
     });
   }
 
-  // --- REGUŁA 6: Uszkodzony plik archiwum .jar (ZipException) ---
   const zipExceptionMatch = combinedText.match(/ZipException: ZipFile invalid (?<hdr>[A-Za-z]+) header/i);
   if (zipExceptionMatch) {
     const failedClass = combinedText.match(/Failed to load class file for '(?<cls>[^']+)'/i);
@@ -400,7 +367,6 @@ async function diagnose(profileId = 'active') {
     }
   }
 
-  // --- REGUŁA 7: Błąd kompilacji shaderów Iris ---
   if (/ShaderCompileException|Shader compilation failed|Failed to compile shader/i.test(combinedText)) {
     diagnosis.errorType = 'SHADER_CRASH';
     diagnosis.severity = 'warning';
@@ -415,7 +381,14 @@ async function diagnose(profileId = 'active') {
     });
   }
 
-  // Zawsze dodaj akcję Kopiuj do Discorda i Otwórz Folder
+  if (/InaccessibleObjectException|module java\.base does not "opens|cannot access class/i.test(combinedText)) {
+    diagnosis.errorType = 'JAVA_MODULE_RESTRICTION';
+    diagnosis.severity = 'critical';
+    diagnosis.title = 'Konflikt modułów Java (JPMS / Reflection)';
+    diagnosis.summary = 'Silnik Forge/NeoForge lub modyfikacja próbowała uzyskać dostęp do zabezpieczonych modułów maszyny JVM (Java 17/21).';
+    diagnosis.solution = 'Uruchom ponownie grę — KasteuszLauncher automatycznie załaduje kompletne flagi otwarcia modułów JVM (--add-opens).';
+  }
+
   diagnosis.suggestedActions.push({
     id: 'copy_discord',
     label: 'Kopiuj raport dla Discorda',
@@ -431,9 +404,6 @@ async function diagnose(profileId = 'active') {
   return diagnosis;
 }
 
-/**
- * Wykonuje automatyczną naprawę 1-kliknięciem
- */
 async function executeFix(actionId, payload = {}) {
   const instanceDir = resolveInstanceDir(payload.profileId || 'active');
 
@@ -469,7 +439,6 @@ async function executeFix(actionId, payload = {}) {
         for (const modSlug of missing) {
           try {
             const slug = modSlug === 'fabric' ? 'fabric-api' : modSlug;
-            // 1. Sprawdź czy mod jest w folderze współdzielonym
             const sharedMods = path.join(os.homedir(), '.kasteuszlauncher', 'minecraft', 'mods');
             const files = fs.existsSync(sharedMods) ? fs.readdirSync(sharedMods) : [];
             const foundShared = files.find(f => f.toLowerCase().includes(slug.replace(/[^a-z0-9]/g, '')) && f.endsWith('.jar'));
@@ -479,7 +448,6 @@ async function executeFix(actionId, payload = {}) {
               continue;
             }
 
-            // 2. Jeśli nie ma w shared, pobierz z Modrinth
             const res = await fetch(`https://api.modrinth.com/v2/project/${slug}/version?loaders=["fabric"]&game_versions=["${mcVer}"]`, {
               headers: { 'User-Agent': 'KasteuszLauncher/1.0.0' }
             });
@@ -525,7 +493,6 @@ async function executeFix(actionId, payload = {}) {
 
       case 'increase_ram': {
         const targetGb = payload.targetRamGb || 6;
-        // Zapisz w konfiguracji ogólnej oraz profilu
         config.saveConfig({ memoryMax: targetGb });
         const activeProfile = profiles.getActiveProfile ? profiles.getActiveProfile() : null;
         if (activeProfile && profiles.updateProfile) {

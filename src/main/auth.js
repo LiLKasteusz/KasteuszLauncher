@@ -5,11 +5,7 @@ const MS_CLIENT_ID = '00000000402b5328';
 const MS_REDIRECT_URI = 'https://login.live.com/oauth20_desktop.srf';
 const MS_AUTH_URL = `https://login.live.com/oauth20_authorize.srf?client_id=${MS_CLIENT_ID}&response_type=code&scope=service::user.auth.xboxlive.com::MBI_SSL&redirect_uri=${encodeURIComponent(MS_REDIRECT_URI)}&prompt=select_account`;
 
-/**
- * Rozpoczyna proces logowania konta Microsoft w czystym, niezależnym oknie przeglądarki
- */
 async function loginWithMicrosoft() {
-  // Czyścimy stare/uszkodzone ciasteczka z sesji logowania, aby okno nie zamykało się samoczynnie
   const authSession = session.fromPartition('persist:ms_auth');
   try {
     await authSession.clearStorageData();
@@ -33,7 +29,6 @@ async function loginWithMicrosoft() {
       }
     });
 
-    // Ustawienie nowoczesnego User-Agenta Chrome
     const chromeUserAgent = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
     authWin.webContents.setUserAgent(chromeUserAgent);
     authWin.focus();
@@ -94,11 +89,7 @@ async function loginWithMicrosoft() {
   });
 }
 
-/**
- * Wymiana kodu autoryzacyjnego na tokeny Microsoft, Xbox, XSTS i Minecraft
- */
 async function completeMicrosoftAuth(authCode) {
-  // 1. Wymiana kodu na Microsoft Token
   const tokenRes = await fetch('https://login.live.com/oauth20_token.srf', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -123,9 +114,6 @@ async function completeMicrosoftAuth(authCode) {
   return await authenticateWithXboxAndMinecraft(msAccessToken, msRefreshToken);
 }
 
-/**
- * Odświeżanie tokena przy pomocy refresh_token
- */
 async function refreshAccountToken(account) {
   if (!account || !account.msRefreshToken) {
     throw new Error('Brak tokenu odświeżania dla tego konta.');
@@ -151,11 +139,7 @@ async function refreshAccountToken(account) {
   return await authenticateWithXboxAndMinecraft(tokenData.access_token, tokenData.refresh_token || account.msRefreshToken);
 }
 
-/**
- * Przetwarzanie tokenu MS -> Xbox Live -> XSTS -> Minecraft Services -> Profil gracza
- */
 async function authenticateWithXboxAndMinecraft(msAccessToken, msRefreshToken) {
-  // Funkcja pomocnicza do wysyłania zapytania do Xbox Live
   async function requestXBL(ticket) {
     return await fetch('https://user.auth.xboxlive.com/user/authenticate', {
       method: 'POST',
@@ -176,16 +160,10 @@ async function authenticateWithXboxAndMinecraft(msAccessToken, msRefreshToken) {
     });
   }
 
-  // 2. Xbox Live Authentication
-  // Dla client ID 00000000402b5328 i scope service::user.auth.xboxlive.com::MBI_SSL
-  // RpsTicket w specyfikacji to surowy msAccessToken.
-  // Jeśli token ma już prefiks d= lub t=, usuwamy go do surowej postaci.
   const rawTicket = (msAccessToken || '').replace(/^[dt]=/, '');
 
-  // Próba 1: Surowy token (oficjalny standard dla 00000000402b5328)
   let xblRes = await requestXBL(rawTicket);
 
-  // Próba 2: Jeśli zwróci 401, spróbuj z prefiksem d=
   if (!xblRes.ok && xblRes.status === 401) {
     console.log('XBL zwrócił 401 na surowy ticket, ponawiam z prefiksem d=...');
     const retryD = await requestXBL(`d=${rawTicket}`);
@@ -194,7 +172,6 @@ async function authenticateWithXboxAndMinecraft(msAccessToken, msRefreshToken) {
     }
   }
 
-  // Próba 3: Jeśli nadal 401, spróbuj z prefiksem t=
   if (!xblRes.ok && xblRes.status === 401) {
     console.log('XBL zwrócił 401, ponawiam z prefiksem t=...');
     const retryT = await requestXBL(`t=${rawTicket}`);
@@ -231,7 +208,6 @@ async function authenticateWithXboxAndMinecraft(msAccessToken, msRefreshToken) {
     throw new Error('Nieprawidłowa odpowiedź z usługi Xbox Live.');
   }
 
-  // 3. XSTS Token (Xbox Security Token Service)
   const xstsRes = await fetch('https://xsts.auth.xboxlive.com/xsts/authorize', {
     method: 'POST',
     headers: {
@@ -272,7 +248,6 @@ async function authenticateWithXboxAndMinecraft(msAccessToken, msRefreshToken) {
   const xstsData = await xstsRes.json();
   const xstsToken = xstsData.Token;
 
-  // 4. Logowanie w usłudze Minecraft Services
   const mcLoginRes = await fetch('https://api.minecraftservices.com/authentication/login_with_xbox', {
     method: 'POST',
     headers: {
@@ -296,7 +271,6 @@ async function authenticateWithXboxAndMinecraft(msAccessToken, msRefreshToken) {
   const mcAccessToken = mcLoginData.access_token;
   const expiresIn = mcLoginData.expires_in || 86400;
 
-  // 5. Weryfikacja posiadania licencji Minecraft Java Edition
   let ownsGame = false;
   try {
     const entRes = await fetch('https://api.minecraftservices.com/entitlements/mcstore', {
@@ -310,7 +284,6 @@ async function authenticateWithXboxAndMinecraft(msAccessToken, msRefreshToken) {
     console.warn('Nie udało się sprawdzić uprawnień mcstore:', e);
   }
 
-  // 6. Pobranie profilu Minecraft (Nazwa gracza, UUID, Skórka)
   let profile = null;
   try {
     const profileRes = await fetch('https://api.minecraftservices.com/minecraft/profile', {
@@ -323,7 +296,6 @@ async function authenticateWithXboxAndMinecraft(msAccessToken, msRefreshToken) {
     console.warn('Błąd odczytu profilu Minecraft:', err);
   }
 
-  // Jeśli konto nie posiada jeszcze profilu Java, używamy Gamertaga Xbox lub nazwy użytkownika
   const username = profile?.name || xblData.DisplayClaims?.xui?.[0]?.gtg || 'Gracz';
   const uuid = profile?.id || '00000000-0000-0000-0000-000000000000';
   let activeSkin = profile?.skins?.find(s => s.state === 'ACTIVE')?.url || profile?.skins?.[0]?.url || null;
@@ -331,14 +303,6 @@ async function authenticateWithXboxAndMinecraft(msAccessToken, msRefreshToken) {
   if (!activeSkin) {
     activeSkin = await getSkinUrlForUsername(username);
   }
-  if (activeSkin && activeSkin.startsWith('http://')) {
-    activeSkin = activeSkin.replace('http://', 'https://');
-  }
-
-  const safeCapes = (profile?.capes || []).map(c => ({
-    ...c,
-    url: c.url ? c.url.replace('http://', 'https://') : c.url
-  }));
 
   const xuid = xblData.DisplayClaims?.xui?.[0]?.xid || '';
 
@@ -348,7 +312,7 @@ async function authenticateWithXboxAndMinecraft(msAccessToken, msRefreshToken) {
     name: username,
     skinUrl: activeSkin,
     skinVariant: profile?.skins?.[0]?.variant || 'CLASSIC',
-    capes: safeCapes,
+    capes: profile?.capes || [],
     mcAccessToken,
     msRefreshToken,
     expiresAt: Date.now() + expiresIn * 1000,
@@ -362,14 +326,10 @@ async function authenticateWithXboxAndMinecraft(msAccessToken, msRefreshToken) {
   return account;
 }
 
-/**
- * Pobiera URL skórki gracza na podstawie jego nicku z oficjalnych API Minecraft / CDN
- */
 async function getSkinUrlForUsername(username) {
   if (!username) return null;
   const clean = username.trim();
 
-  // 1. Próba oficjalnego Mojang API
   try {
     const mojangRes = await fetch(`https://api.mojang.com/users/profiles/minecraft/${encodeURIComponent(clean)}`, {
       headers: { 'User-Agent': 'KasteuszLauncher/1.0' }
@@ -394,13 +354,9 @@ async function getSkinUrlForUsername(username) {
     console.warn('Mojang API niedostępne lub brak gracza:', err.message);
   }
 
-  // 2. Globalny CDN Minecraft (MC-Heads / Minotar)
   return `https://mc-heads.net/skin/${encodeURIComponent(clean)}`;
 }
 
-/**
- * Utworzenie konta testowego (offline) wraz z automatycznym pobraniem skina po nicku
- */
 async function createOfflineAccount(username) {
   const cleanName = (username || 'Gracz').replace(/[^a-zA-Z0-9_]/g, '').substring(0, 16) || 'Gracz';
   const skinUrl = await getSkinUrlForUsername(cleanName);
@@ -421,9 +377,6 @@ async function createOfflineAccount(username) {
   return offlineAccount;
 }
 
-/**
- * Zmiana nicku i automatyczna aktualizacja skórki dla konta
- */
 async function setAccountUsernameAndSkin(newUsername) {
   const active = config.getActiveAccount();
   if (!active) throw new Error('Brak aktywnego konta.');
@@ -437,9 +390,6 @@ async function setAccountUsernameAndSkin(newUsername) {
   return active;
 }
 
-/**
- * Zmiana skórki na własny URL lub plik
- */
 async function setAccountCustomSkin(skinUrl) {
   const active = config.getActiveAccount();
   if (!active) throw new Error('Brak aktywnego konta.');

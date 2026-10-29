@@ -1,12 +1,11 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('api', {
-  // Window controls
   minimizeWindow: () => ipcRenderer.send('window:minimize'),
   closeWindow: () => ipcRenderer.send('window:close'),
   maximizeWindow: () => ipcRenderer.send('window:maximize'),
+  focusWindow: () => ipcRenderer.send('window:focus'),
 
-  // Authentication
   getActiveAccount: () => ipcRenderer.invoke('auth:get-active'),
   loginMicrosoft: () => ipcRenderer.invoke('auth:login-microsoft'),
   loginOffline: (username) => ipcRenderer.invoke('auth:login-offline', username),
@@ -18,13 +17,11 @@ contextBridge.exposeInMainWorld('api', {
   getSkinUrl: (username) => ipcRenderer.invoke('auth:get-skin-url', username),
   selectSkinFile: () => ipcRenderer.invoke('auth:select-skin-file'),
 
-  // Configuration
   getConfig: () => ipcRenderer.invoke('config:get'),
   saveConfig: (data) => ipcRenderer.invoke('config:save', data),
   selectDirectory: () => ipcRenderer.invoke('config:select-directory'),
   selectJava: () => ipcRenderer.invoke('config:select-java'),
 
-  // Game, Profiles & Versions
   getVersions: () => ipcRenderer.invoke('game:get-versions'),
   launchGame: (version) => ipcRenderer.invoke('game:launch', version),
   isLaunching: () => ipcRenderer.invoke('game:is-launching'),
@@ -38,7 +35,6 @@ contextBridge.exposeInMainWorld('api', {
   deleteProfile: (id) => ipcRenderer.invoke('profiles:delete', id),
   openProfileFolder: (id) => ipcRenderer.invoke('profiles:open-folder', id),
 
-  // Mods Manager
   getModsList: () => ipcRenderer.invoke('mods:get-list'),
   addModFiles: () => ipcRenderer.invoke('mods:add-files'),
   copyModFiles: (paths) => ipcRenderer.invoke('mods:copy-files', paths),
@@ -58,7 +54,6 @@ contextBridge.exposeInMainWorld('api', {
     return () => ipcRenderer.removeListener('mods:modpack-progress', handler);
   },
 
-  // Resource Packs & Shaders
   getPacksList: (type) => ipcRenderer.invoke('packs:get-list', type),
   addPackFiles: (type) => ipcRenderer.invoke('packs:add-files', type),
   copyPackFiles: (type, paths) => ipcRenderer.invoke('packs:copy-files', type, paths),
@@ -67,13 +62,10 @@ contextBridge.exposeInMainWorld('api', {
   openPacksFolder: (type) => ipcRenderer.invoke('packs:open-folder', type),
   getLyrics: (title, artist) => ipcRenderer.invoke('music:get-lyrics', title, artist),
 
-  // External Links
   openExternal: (url) => ipcRenderer.send('system:open-external', url),
 
-  // Wardrobe & Capes
   selectCapeFile: () => ipcRenderer.invoke('wardrobe:select-cape'),
 
-  // Player Stats & Playtime
   getStats: () => ipcRenderer.invoke('stats:get'),
   onStatsUpdated: (callback) => {
     const sub = (_event, val) => callback(val);
@@ -81,12 +73,10 @@ contextBridge.exposeInMainWorld('api', {
     return () => ipcRenderer.removeListener('stats:updated', sub);
   },
 
-  // Friends System
   getFriends: () => ipcRenderer.invoke('friends:get'),
   addFriend: (username) => ipcRenderer.invoke('friends:add', username),
   removeFriend: (username) => ipcRenderer.invoke('friends:remove', username),
 
-  // Local Server Hosting
   getServerConfig: () => ipcRenderer.invoke('server:get-config'),
   saveServerConfig: (cfg) => ipcRenderer.invoke('server:save-config', cfg),
   startServer: () => ipcRenderer.invoke('server:start'),
@@ -109,7 +99,6 @@ contextBridge.exposeInMainWorld('api', {
     return () => ipcRenderer.removeListener('server:download-progress', sub);
   },
 
-  // Events from Main Process
   onLauncherStatus: (callback) => {
     const sub = (_event, val) => callback(val);
     ipcRenderer.on('launcher:status', sub);
@@ -141,7 +130,6 @@ contextBridge.exposeInMainWorld('api', {
     return () => ipcRenderer.removeListener('launcher:error', sub);
   },
 
-  // Spotify & In-Game Music Control
   spotifyLogin: (clientId) => ipcRenderer.invoke('spotify:login', clientId),
   spotifyLogout: () => ipcRenderer.invoke('spotify:logout'),
   spotifyGetStatus: () => ipcRenderer.invoke('spotify:get-status'),
@@ -166,7 +154,6 @@ contextBridge.exposeInMainWorld('api', {
     return () => ipcRenderer.removeListener('music:action', sub);
   },
 
-  // Screenshots & Media Gallery
   getScreenshots: (profileId) => ipcRenderer.invoke('screenshots:get-list', profileId),
   getScreenshotThumbnail: (filePath) => ipcRenderer.invoke('screenshots:get-thumbnail', filePath),
   getScreenshotFull: (filePath) => ipcRenderer.invoke('screenshots:get-full', filePath),
@@ -175,7 +162,6 @@ contextBridge.exposeInMainWorld('api', {
   openScreenshotsFolder: (profileId) => ipcRenderer.invoke('screenshots:open-folder', profileId),
   openScreenshotFile: (filePath) => ipcRenderer.invoke('screenshots:open-file', filePath),
 
-  // Diagnoza Crashy & Rozwiązywanie Błędów Modów
   diagnoseCrash: (profileId) => ipcRenderer.invoke('crash:diagnose', profileId),
   executeCrashFix: (actionId, payload) => ipcRenderer.invoke('crash:execute-fix', actionId, payload),
   openCrashFolder: (profileId) => ipcRenderer.invoke('crash:open-folder', profileId),
@@ -185,7 +171,6 @@ contextBridge.exposeInMainWorld('api', {
     return () => ipcRenderer.removeListener('crash:detected', sub);
   },
 
-  // PC Hardware Benchmark & Auto-Tuning
   getDetailedSpecs: () => ipcRenderer.invoke('benchmark:get-specs'),
   runBenchmark: () => ipcRenderer.invoke('benchmark:run'),
   getOptimalConfig: (profileId) => ipcRenderer.invoke('benchmark:get-optimal', profileId),

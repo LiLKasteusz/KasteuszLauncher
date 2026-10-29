@@ -1,23 +1,16 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');
 
-/* ==========================================================================
-   KASTEUSZ LAUNCHER — DARK OBSIDIAN GLASS DESIGN SYSTEM (AAA DESKTOP UI)
-   ========================================================================== */
-
 :root {
-  /* Base Obsidian Surfaces */
   --bg-base: #08090C;
   --bg-elevated: #0D0E12;
   --bg-rail: rgba(13, 14, 18, 0.78);
   --bg-dock: rgba(13, 14, 18, 0.86);
 
-  /* Elevation Cards */
   --surface-1: #13151B;
   --surface-2: #181B22;
   --surface-3: #1F232D;
   --surface-hover: #242936;
 
-  /* Hairlines & Specular Lighting */
   --border-subtle: rgba(255, 255, 255, 0.06);
   --border-medium: rgba(255, 255, 255, 0.10);
   --border-strong: rgba(255, 255, 255, 0.16);
@@ -25,7 +18,6 @@
   --specular-top: inset 0 1px 0 rgba(255, 255, 255, 0.06);
   --specular-btn: inset 0 1px 0 rgba(255, 255, 255, 0.22);
 
-  /* Primary Accent — Indigo / Violet */
   --accent-primary: #6366F1;
   --accent-primary-hover: #818CF8;
   --accent-primary-dark: #4F46E5;
@@ -35,7 +27,6 @@
   --accent-soft: rgba(99, 102, 241, 0.12);
   --accent-gradient: linear-gradient(135deg, #6366F1 0%, #7C3AED 100%);
 
-  /* Semantic Accents — Emerald & Cyan */
   --emerald: #10B981;
   --emerald-rgb: 16, 185, 129;
   --emerald-soft: rgba(16, 185, 129, 0.12);
@@ -47,7 +38,6 @@
   --danger-soft: rgba(239, 68, 68, 0.12);
   --spotify: #1DB954;
 
-  /* Typography Hierarchy */
   --text-primary: #F8FAFC;
   --text-secondary: #94A3B8;
   --text-muted: #64748B;
@@ -57,7 +47,6 @@
   --font-sans: 'Inter', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
 
-  /* Radii & Spacing Rhythm */
   --radius-xs: 6px;
   --radius-sm: 8px;
   --radius-md: 11px;
@@ -65,7 +54,6 @@
   --radius-xl: 18px;
   --radius-pill: 9999px;
 
-  /* Motion & Physics */
   --ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
   --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.28);
@@ -73,7 +61,6 @@
   --shadow-lg: 0 20px 48px rgba(0, 0, 0, 0.62);
 }
 
-/* Theme Accent Variants (Preserved & Refined) */
 [data-theme="purple"] {
   --accent-primary: #6366F1;
   --accent-primary-hover: #818CF8;
@@ -140,10 +127,6 @@
   --accent-gradient: linear-gradient(135deg, #EC4899 0%, #9333EA 100%);
 }
 
-/* ==========================================================================
-   RESET & BASE TYPOGRAPHY
-   ========================================================================== */
-
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
@@ -169,6 +152,7 @@ body {
   flex-direction: column;
   position: relative;
   border: 1px solid rgba(255, 255, 255, 0.07);
+  -webkit-app-region: no-drag;
 }
 
 h1, h2, h3, h4 {
@@ -195,13 +179,24 @@ button, input, select, textarea {
   color: inherit;
 }
 
+input, textarea, select, [contenteditable="true"] {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  -webkit-app-region: no-drag !important;
+  pointer-events: auto !important;
+}
+
+input[type="text"], input[type="search"], textarea {
+  cursor: text !important;
+}
+
 button {
   background: none;
   border: none;
   cursor: pointer;
+  -webkit-app-region: no-drag !important;
 }
 
-/* Custom Ultra-Clean Scrollbar */
 ::-webkit-scrollbar {
   width: 5px;
   height: 5px;
@@ -220,7 +215,6 @@ button {
   background: rgba(255, 255, 255, 0.20);
 }
 
-/* Live Wallpaper Layer */
 #live-wallpaper-canvas {
   position: fixed;
   inset: 0;
@@ -231,7 +225,6 @@ button {
   opacity: 0.42;
 }
 
-/* Subtle Top Atmospheric Wash */
 .app-backdrop-wash {
   position: fixed;
   inset: 0;
@@ -241,10 +234,6 @@ button {
     radial-gradient(65% 45% at 22% 0%, rgba(var(--accent-rgb), 0.09) 0%, transparent 70%),
     radial-gradient(50% 40% at 88% 100%, rgba(16, 185, 129, 0.04) 0%, transparent 70%);
 }
-
-/* ==========================================================================
-   1. FRAMELESS TITLEBAR
-   ========================================================================== */
 
 .topbar {
   position: relative;
@@ -344,10 +333,6 @@ button {
   color: #ffffff;
 }
 
-/* ==========================================================================
-   2. APP SHELL: LEFT SIDEBAR + WORKSPACE
-   ========================================================================== */
-
 .app-shell {
   position: relative;
   z-index: 10;
@@ -357,7 +342,6 @@ button {
   overflow: hidden;
 }
 
-/* Left Navigation Sidebar */
 .sidebar {
   width: 222px;
   min-width: 222px;
@@ -498,7 +482,6 @@ button {
   display: inline-block;
 }
 
-/* Sidebar Bottom Player Account Card */
 .sidebar-footer {
   padding-top: 10px;
   margin-top: 8px;
@@ -596,10 +579,6 @@ button {
   flex-shrink: 0;
 }
 
-/* ==========================================================================
-   3. MAIN WORKSPACE & TAB VIEWS
-   ========================================================================== */
-
 .main-workspace {
   flex: 1;
   min-width: 0;
@@ -642,7 +621,6 @@ button {
   }
 }
 
-/* Reusable View Header */
 .view-header {
   display: flex;
   align-items: flex-start;
@@ -677,10 +655,6 @@ button {
   flex-wrap: wrap;
 }
 
-/* ==========================================================================
-   4. SHARED ELEVATION CARDS, BUTTONS & CUSTOM CONTROLS
-   ========================================================================== */
-
 .obsidian-card {
   background: var(--surface-1);
   background-image: var(--glass-occlusion);
@@ -689,7 +663,6 @@ button {
   box-shadow: var(--specular-top), var(--shadow-sm);
 }
 
-/* Buttons with Tactile Physics */
 .btn-primary,
 .btn-secondary,
 .btn-ghost,
@@ -810,7 +783,6 @@ button:disabled {
   cursor: not-allowed;
 }
 
-/* Segmented Subtabs Control */
 .segmented-control {
   display: inline-flex;
   align-items: center;
@@ -844,7 +816,6 @@ button:disabled {
   box-shadow: var(--specular-top), 0 2px 6px rgba(0, 0, 0, 0.35);
 }
 
-/* Form Inputs & Custom Selects */
 .ui-input {
   height: 36px;
   padding: 0 12px;
@@ -899,7 +870,6 @@ button:disabled {
   color: var(--text-primary);
 }
 
-/* Custom iOS / macOS Toggle Switch (.ui-switch) */
 .ui-switch {
   appearance: none;
   -webkit-appearance: none;
@@ -946,7 +916,6 @@ button:disabled {
   transform: translateX(14px);
 }
 
-/* Custom Range Sliders */
 input[type="range"] {
   -webkit-appearance: none;
   appearance: none;
@@ -975,12 +944,17 @@ input[type="range"]::-webkit-slider-thumb:hover {
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.6), 0 0 0 4px rgba(var(--accent-rgb), 0.24);
 }
 
-/* Search Box Wrapper */
 .search-box {
   position: relative;
   display: flex;
   align-items: center;
   flex: 1;
+  -webkit-app-region: no-drag !important;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  cursor: text;
+  pointer-events: auto !important;
+  z-index: 2;
 }
 
 .search-box .search-icon {
@@ -988,12 +962,20 @@ input[type="range"]::-webkit-slider-thumb:hover {
   left: 11px;
   color: var(--text-muted);
   pointer-events: none;
+  z-index: 3;
 }
 
 .search-box .ui-input {
   width: 100%;
   padding-left: 34px;
   padding-right: 32px;
+  -webkit-app-region: no-drag !important;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  cursor: text !important;
+  pointer-events: auto !important;
+  position: relative;
+  z-index: 1;
 }
 
 .search-clear-btn {
@@ -1015,10 +997,6 @@ input[type="range"]::-webkit-slider-thumb:hover {
   color: var(--text-primary);
 }
 
-/* ==========================================================================
-   5. TAB 1: GRAJ (MAIN HERO DASHBOARD)
-   ========================================================================== */
-
 .play-dashboard-grid {
   flex: 1;
   min-height: 0;
@@ -1034,7 +1012,6 @@ input[type="range"]::-webkit-slider-thumb:hover {
   gap: 12px;
 }
 
-/* Cinematic 3D Hero Viewport Card */
 .hero-stage-card {
   position: relative;
   flex: 1;
@@ -1051,7 +1028,6 @@ input[type="range"]::-webkit-slider-thumb:hover {
   padding: 16px 18px;
 }
 
-/* Subtle Architectural Grid + Vignette */
 .hero-stage-card::before {
   content: '';
   position: absolute;
@@ -1166,7 +1142,6 @@ input[type="range"]::-webkit-slider-thumb:hover {
   transform: scale(0.97);
 }
 
-/* 3D Skin Canvas Container */
 .skin-stage-wrap {
   position: absolute;
   inset: 0;
@@ -1211,7 +1186,6 @@ input[type="range"]::-webkit-slider-thumb:hover {
   gap: 6px;
 }
 
-/* Quick Telemetry Strip (RAM, Mods, Account) */
 .quick-stats-strip {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1294,7 +1268,6 @@ input[type="range"]::-webkit-slider-thumb:hover {
   text-overflow: ellipsis;
 }
 
-/* Launch Command Bar */
 .launch-command-bar {
   position: relative;
   padding: 12px 14px;
@@ -1373,7 +1346,6 @@ input[type="range"]::-webkit-slider-thumb:hover {
   font-variant-numeric: tabular-nums;
 }
 
-/* Version & Profile Quick Menu Popover */
 .version-quick-menu {
   position: absolute;
   left: 0;
@@ -1431,7 +1403,6 @@ input[type="range"]::-webkit-slider-thumb:hover {
   color: var(--text-muted);
 }
 
-/* Massive Hero Launch Button ("URUCHOM GRĘ") */
 .play-btn-group {
   flex: 1;
   display: flex;
@@ -1523,7 +1494,6 @@ input[type="range"]::-webkit-slider-thumb:hover {
   transition: width 0.25s ease;
 }
 
-/* Right Social & Server Column */
 .play-side-rail {
   min-height: 0;
   display: flex;
@@ -1531,7 +1501,6 @@ input[type="range"]::-webkit-slider-thumb:hover {
   gap: 12px;
 }
 
-/* Official Server Card */
 .official-server-card {
   padding: 14px;
   border-radius: var(--radius-lg);
@@ -1662,7 +1631,6 @@ input[type="range"]::-webkit-slider-thumb:hover {
   gap: 4px;
 }
 
-/* Friends Panel Card */
 .friends-panel {
   flex: 1;
   min-height: 0;
@@ -1855,10 +1823,6 @@ input[type="range"]::-webkit-slider-thumb:hover {
   color: var(--text-muted);
 }
 
-/* ==========================================================================
-   6. TAB 2: MODY & WERSJE SILNIKA (#view-instances)
-   ========================================================================== */
-
 .mods-toolbar-bar {
   display: flex;
   align-items: center;
@@ -2047,7 +2011,6 @@ input[type="range"]::-webkit-slider-thumb:hover {
   flex-shrink: 0;
 }
 
-/* Versions Grid */
 .versions-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
@@ -2103,7 +2066,6 @@ input[type="range"]::-webkit-slider-thumb:hover {
   color: #ffffff;
 }
 
-/* Custom Profiles / Instances Grid & Modal */
 .profiles-cards-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
@@ -2296,10 +2258,6 @@ input[type="range"]::-webkit-slider-thumb:hover {
   display: flex;
   gap: 6px;
 }
-
-/* ==========================================================================
-   7. TAB 3: MODRINTH BROWSER (#view-mods)
-   ========================================================================== */
 
 .modrinth-filter-panel {
   padding: 14px;
@@ -2548,10 +2506,6 @@ input[type="range"]::-webkit-slider-thumb:hover {
   margin-top: 16px;
 }
 
-/* ==========================================================================
-   8. TAB 4: PAKIETY ZASOBÓW & SHADERY (#view-packs)
-   ========================================================================== */
-
 .packs-dropzone {
   padding: 20px;
   margin-bottom: 16px;
@@ -2653,10 +2607,6 @@ input[type="range"]::-webkit-slider-thumb:hover {
   gap: 6px;
   margin-top: 2px;
 }
-
-/* ==========================================================================
-   9. TAB 5: MUZYKA / SPOTIFY & LIVE LYRICS STUDIO (#view-music)
-   ========================================================================== */
 
 .music-studio-grid {
   flex: 1;
@@ -2761,7 +2711,6 @@ input[type="range"]::-webkit-slider-thumb:hover {
   text-overflow: ellipsis;
 }
 
-/* Progress Scrubber */
 .music-scrubber-block {
   position: relative;
   z-index: 1;
@@ -2779,7 +2728,6 @@ input[type="range"]::-webkit-slider-thumb:hover {
   font-variant-numeric: tabular-nums;
 }
 
-/* Transport Controls */
 .music-transport-row {
   position: relative;
   z-index: 1;
@@ -2845,7 +2793,6 @@ input[type="range"]::-webkit-slider-thumb:hover {
   color: var(--text-muted);
 }
 
-/* Right Music Column: Subtabs (Lyrics / Library & Spotify) */
 .music-right-col {
   min-height: 0;
   display: flex;
@@ -2853,7 +2800,6 @@ input[type="range"]::-webkit-slider-thumb:hover {
   gap: 12px;
 }
 
-/* Live Synchronized Lyrics Box */
 .lyrics-card {
   flex: 1;
   min-height: 240px;
@@ -2911,7 +2857,6 @@ input[type="range"]::-webkit-slider-thumb:hover {
   line-height: 1.55;
 }
 
-/* Spotify Playlists & Stations Grid */
 .music-library-scroll {
   flex: 1;
   overflow-y: auto;
@@ -3122,10 +3067,6 @@ input[type="range"]::-webkit-slider-thumb:hover {
   border-color: var(--accent-primary);
 }
 
-/* ==========================================================================
-   10. TAB 6 & 7: SERWER LOKALNY & AKTUALNOŚCI
-   ========================================================================== */
-
 .server-ip-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3231,7 +3172,6 @@ input[type="range"]::-webkit-slider-thumb:hover {
   gap: 8px;
 }
 
-/* News / Changelog Cards */
 .news-stack {
   display: flex;
   flex-direction: column;
@@ -3270,10 +3210,6 @@ input[type="range"]::-webkit-slider-thumb:hover {
   background: var(--emerald-soft);
   color: #34D399;
 }
-
-/* ==========================================================================
-   11. TAB 8: USTAWIENIA (#view-settings)
-   ========================================================================== */
 
 .settings-categories-grid {
   display: grid;
@@ -3331,7 +3267,6 @@ input[type="range"]::-webkit-slider-thumb:hover {
   gap: 8px;
 }
 
-/* 1-Click Tuning JVM Presets Grid */
 .jvm-presets-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -3410,7 +3345,6 @@ input[type="range"]::-webkit-slider-thumb:hover {
   line-height: 1.4;
 }
 
-/* RAM Visual Scale & Thresholds */
 .ram-header-line {
   display: flex;
   align-items: center;
@@ -3447,7 +3381,6 @@ input[type="range"]::-webkit-slider-thumb:hover {
   color: #34D399;
 }
 
-/* Theme Swatch Grid */
 .themes-swatch-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -3492,7 +3425,6 @@ input[type="range"]::-webkit-slider-thumb:hover {
   text-overflow: ellipsis;
 }
 
-/* Live Wallpaper Buttons */
 .wallpaper-btn-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -3535,10 +3467,6 @@ input[type="range"]::-webkit-slider-thumb:hover {
 .input-with-btn .ui-input {
   flex: 1;
 }
-
-/* ==========================================================================
-   12. BOTTOM GLASS AUDIO DOCK (#footer-music-player)
-   ========================================================================== */
 
 .footer-music-dock {
   position: relative;
@@ -3740,10 +3668,6 @@ input[type="range"]::-webkit-slider-thumb:hover {
   transform: scale(0.97);
 }
 
-/* ==========================================================================
-   13. MODALS & WARDROBE 3D OVERLAYS
-   ========================================================================== */
-
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -3822,7 +3746,6 @@ input[type="range"]::-webkit-slider-thumb:hover {
   color: var(--text-primary);
 }
 
-/* Wardrobe Tabs & Cards */
 .wardrobe-tabs {
   display: flex;
   gap: 4px;
@@ -3964,7 +3887,6 @@ input[type="range"]::-webkit-slider-thumb:hover {
   color: #ffffff;
 }
 
-/* Profile Stats Row */
 .profile-stats-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -4036,10 +3958,6 @@ input[type="range"]::-webkit-slider-thumb:hover {
   color: var(--text-secondary);
 }
 
-/* ==========================================================================
-   14. TOAST NOTIFICATIONS & EMPTY STATES
-   ========================================================================== */
-
 .toast-container {
   position: fixed;
   right: 18px;
@@ -4102,7 +4020,6 @@ input[type="range"]::-webkit-slider-thumb:hover {
   to { transform: rotate(360deg); }
 }
 
-/* Responsive Breakpoints for Compact Window Sizes */
 @media (max-width: 1060px) {
   .sidebar {
     width: 196px;
@@ -4118,10 +4035,6 @@ input[type="range"]::-webkit-slider-thumb:hover {
     grid-template-columns: 1fr;
   }
 }
-
-/* ==========================================================================
-   VIEW: SCREENSHOT & CLIP GALLERY HUB (#view-screenshots)
-   ========================================================================== */
 
 .screenshots-toolbar {
   display: flex;
@@ -4430,7 +4343,6 @@ input[type="range"]::-webkit-slider-thumb:hover {
   box-shadow: 0 2px 0 rgba(0, 0, 0, 0.4);
 }
 
-/* Lightbox Modal Styles */
 .screenshot-lightbox-overlay {
   position: fixed;
   inset: 0;
@@ -4599,10 +4511,6 @@ input[type="range"]::-webkit-slider-thumb:hover {
   color: var(--text-muted);
   padding: 4px 0;
 }
-
-/* ==========================================================================
-   CRASH & ERROR DIAGNOSTIC MODAL (#crash-doctor-modal)
-   ========================================================================== */
 
 .modal-card-crash {
   max-width: 660px;
@@ -4823,10 +4731,6 @@ input[type="range"]::-webkit-slider-thumb:hover {
   word-break: break-all;
   margin: 0;
 }
-
-/* ==========================================================================
-   VIEW: PC BENCHMARK & HARDWARE AUTO-TUNING (#view-benchmark)
-   ========================================================================== */
 
 .benchmark-profile-box {
   display: flex;
