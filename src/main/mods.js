@@ -392,6 +392,134 @@ async function installFabric(minecraftVersion = '1.20.4') {
 }
 
 /**
+ * Automatyczna instalacja silnika Minecraft Forge dla podanej wersji gry
+ */
+async function installForge(minecraftVersion = '1.20.1', requestedForgeVersion = null, onProgress = null) {
+  const rootDir = config.getConfig().gameDirectory || config.DEFAULT_GAME_DIR;
+  if (!fs.existsSync(rootDir)) {
+    fs.mkdirSync(rootDir, { recursive: true });
+  }
+
+  // Upewniamy się, że launcher_profiles.json istnieje (instalator Forge tego bezwzględnie wymaga)
+  const launcherProfilesPath = path.join(rootDir, 'launcher_profiles.json');
+  if (!fs.existsSync(launcherProfilesPath)) {
+    fs.writeFileSync(launcherProfilesPath, JSON.stringify({ profiles: {} }, null, 2), 'utf8');
+  }
+
+  const defaultForgeMap = {
+    '1.20.1': '47.2.17',
+    '1.20.2': '48.1.0',
+    '1.20.4': '49.0.38',
+    '1.19.2': '43.3.5',
+    '1.18.2': '40.2.14',
+    '1.16.5': '36.2.39'
+  };
+
+  let forgeVer = (requestedForgeVersion && String(requestedForgeVersion).trim()) || null;
+  if (!forgeVer) {
+    try {
+      const promoRes = await fetch('https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json', {
+        headers: { 'User-Agent': 'KasteuszLauncher/1.0.0 (contact@szkolnesmp.com.pl)' }
+      });
+      if (promoRes.ok) {
+        const promoData = await promoRes.json();
+        forgeVer = promoData.promos?.[`${minecraftVersion}-recommended`] || promoData.promos?.[`${minecraftVersion}-latest`];
+      }
+    } catch (_) {}
+  }
+  if (!forgeVer) {
+    forgeVer = defaultForgeMap[minecraftVersion] || '47.2.17';
+  }
+
+  const versionId = `${minecraftVersion}-forge-${forgeVer}`;
+  const versionDir = path.join(rootDir, 'versions', versionId);
+  const versionJsonPath = path.join(versionDir, `${versionId}.json`);
+
+  if (fs.existsSync(versionJsonPath)) {
+    try {
+      const launcher = require('./launcher');
+      if (typeof launcher.ensureVersionJsonArguments === 'function') {
+        launcher.ensureVersionJsonArguments(rootDir, versionId);
+      }
+    } catch (_) {}
+    return versionId;
+  }
+
+  const installerUrl = `https://maven.minecraftforge.net/net/minecraftforge/forge/${minecraftVersion}-${forgeVer}/forge-${minecraftVersion}-${forgeVer}-installer.jar`;
+  const tempDir = path.join(rootDir, 'temp');
+  if (!fs.existsSync(tempDir)) {
+    fs.mkdirSync(tempDir, { recursive: true });
+  }
+  const tempInstallerJar = path.join(tempDir, `forge-${minecraftVersion}-${forgeVer}-installer.jar`);
+
+  if (typeof onProgress === 'function') {
+    onProgress({
+      stage: 'forge_download',
+      percent: 92,
+      message: `Pobieranie instalatora Forge ${minecraftVersion} (${forgeVer})...`
+    });
+  }
+
+  const res = await fetch(installerUrl, {
+    headers: { 'User-Agent': 'KasteuszLauncher/1.0.0 (contact@szkolnesmp.com.pl)' }
+  });
+  if (!res.ok) {
+    throw new Error(`Nie udało się pobrać instalatora Forge (${res.status} ${res.statusText})`);
+  }
+
+  const buf = Buffer.from(await res.arrayBuffer());
+  fs.writeFileSync(tempInstallerJar, buf);
+
+  if (typeof onProgress === 'function') {
+    onProgress({
+      stage: 'forge_install',
+      percent: 95,
+      message: `Instalacja bibliotek silnika Forge dla ${minecraftVersion}... (chwila cierpliwości)`
+    });
+  }
+
+  const launcher = require('./launcher');
+  const javaExec = launcher.resolveJavaExecutable ? launcher.resolveJavaExecutable() : 'java';
+
+  await new Promise((resolve, reject) => {
+    const cp = require('child_process').spawn(javaExec, ['-jar', tempInstallerJar, '--installClient', rootDir], {
+      stdio: ['ignore', 'pipe', 'pipe']
+    });
+    let errLog = '';
+    cp.stdout.on('data', (d) => {
+      const line = d.toString();
+      if (typeof onProgress === 'function' && (line.includes('Task:') || line.includes('Patching'))) {
+        const m = line.match(/(Task:[^\n]+|Patching[^\n]+)/);
+        if (m) {
+          onProgress({ stage: 'forge_install', percent: 97, message: `Forge: ${m[1].trim()}` });
+        }
+      }
+    });
+    cp.stderr.on('data', (d) => { errLog += d.toString(); });
+    cp.on('close', (code) => {
+      try { fs.unlinkSync(tempInstallerJar); } catch (_) {}
+      if (code === 0 && fs.existsSync(versionJsonPath)) {
+        try {
+          const launcher = require('./launcher');
+          if (typeof launcher.ensureVersionJsonArguments === 'function') {
+            launcher.ensureVersionJsonArguments(rootDir, versionId);
+          }
+        } catch (_) {}
+        resolve();
+      } else {
+        reject(new Error(`Instalator Forge zakończył się błędem (kod ${code}): ${errLog.slice(-300)}`));
+      }
+    });
+    cp.on('error', (err) => {
+      try { fs.unlinkSync(tempInstallerJar); } catch (_) {}
+      reject(err);
+    });
+  });
+
+  return versionId;
+}
+
+/**
  * Automatyczna instalacja profilu Quilt Loader dla danej wersji gry
  */
 async function installQuilt(minecraftVersion = '1.21.1') {
@@ -890,20 +1018,36 @@ async function installModrinthModpack({ projectId, slug, versionId, profileName,
 
   // Rozpoznaj loader gry
   let loader = 'fabric';
-  if (index.dependencies?.['quilt-loader']) loader = 'quilt';
-  else if (index.dependencies?.['fabric-loader']) loader = 'fabric';
-  else if (index.dependencies?.['neoforge']) loader = 'custom';
-  else if (index.dependencies?.['forge']) loader = 'custom';
-  else if (targetVersion.loaders?.includes('quilt')) loader = 'quilt';
+  let forgeVersion = null;
+  if (index.dependencies?.['quilt-loader']) {
+    loader = 'quilt';
+  } else if (index.dependencies?.['fabric-loader']) {
+    loader = 'fabric';
+  } else if (index.dependencies?.['forge']) {
+    loader = 'forge';
+    forgeVersion = index.dependencies['forge'];
+  } else if (index.dependencies?.['neoforge']) {
+    loader = 'forge';
+    forgeVersion = index.dependencies['neoforge'];
+  } else if (targetVersion.loaders?.includes('forge')) {
+    loader = 'forge';
+  } else if (targetVersion.loaders?.includes('neoforge')) {
+    loader = 'forge';
+  } else if (targetVersion.loaders?.includes('quilt')) {
+    loader = 'quilt';
+  }
 
   const rawPackTitle = profileName || index.name || targetVersion.name || idOrSlug;
   const finalProfileName = rawPackTitle.startsWith('[Modpack]') ? rawPackTitle : `[Modpack] ${rawPackTitle}`;
+  const customVersionId = loader === 'forge' && forgeVersion ? `${mcVersion}-forge-${forgeVersion}` : null;
 
   // 4. Utwórz profil w KasteuszLauncher
   const profilesResult = profiles.createProfile({
     name: finalProfileName,
     mcVersion,
     loader,
+    customVersionId,
+    forgeVersion,
     icon: 'crown',
     isolated: true
   });
@@ -1082,6 +1226,15 @@ async function installModrinthModpack({ projectId, slug, versionId, profileName,
       await installFabric(mcVersion);
     } else if (loader === 'quilt') {
       await installQuilt(mcVersion);
+    } else if (loader === 'forge') {
+      const forgeVerId = await installForge(mcVersion, forgeVersion, (p) => {
+        if (typeof onProgress === 'function') onProgress(p);
+      });
+      if (forgeVerId && createdProfile) {
+        profiles.updateProfile(createdProfile.id, {
+          customVersionId: forgeVerId
+        });
+      }
     }
   } catch (loaderErr) {
     console.warn('[Modpack] Uwaga podczas instalacji loadera:', loaderErr.message);
@@ -1094,7 +1247,7 @@ async function installModrinthModpack({ projectId, slug, versionId, profileName,
       launcher.ensureKasteuszClientTheme(instanceDir);
     }
     if (typeof launcher.ensureKasteuszClientHudMod === 'function') {
-      launcher.ensureKasteuszClientHudMod(instanceDir);
+      launcher.ensureKasteuszClientHudMod(instanceDir, mcVersion, loader);
     }
   } catch (tErr) {
     console.warn('[Modpack] Uwaga podczas instalacji motywu/HUD:', tErr.message);
@@ -1267,6 +1420,7 @@ module.exports = {
   openModsFolder,
   installFabric,
   installQuilt,
+  installForge,
   installSodium,
   searchModrinth,
   getModrinthProjectVersions,

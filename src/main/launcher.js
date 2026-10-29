@@ -193,18 +193,27 @@ function ensureKasteuszClientTheme(targetDir) {
   }
 }
 
-function ensureKasteuszClientHudMod(targetDir) {
+function ensureKasteuszClientHudMod(targetDir, mcVersion = '1.21.11', loader = 'fabric') {
   try {
+    const isTargetHudCompatible = (mcVersion === '1.21.11' || mcVersion === '1.21.1') && (loader === 'fabric' || loader === 'quilt');
+    const modsDir = path.join(targetDir, 'mods');
+    const dstMod = path.join(modsDir, 'KasteuszClient-HUD-1.21.11.jar');
+
+    if (!isTargetHudCompatible) {
+      if (fs.existsSync(dstMod)) {
+        try { fs.unlinkSync(dstMod); } catch (_) {}
+      }
+      return;
+    }
+
     const srcMod = path.join(__dirname, 'assets', 'mods', 'KasteuszClient-HUD-1.21.11.jar');
     const srcCfg = path.join(__dirname, 'assets', 'configs', 'hudplus.json');
     if (!fs.existsSync(srcMod)) return;
 
-    const modsDir = path.join(targetDir, 'mods');
     if (!fs.existsSync(modsDir)) {
       fs.mkdirSync(modsDir, { recursive: true });
     }
 
-    const dstMod = path.join(modsDir, 'KasteuszClient-HUD-1.21.11.jar');
     let shouldCopy = false;
     if (!fs.existsSync(dstMod)) {
       shouldCopy = true;
@@ -242,8 +251,10 @@ function ensureVersionJsonArguments(rootDir, versionId) {
     if (!fs.existsSync(versionJsonPath)) return;
 
     const versionJson = JSON.parse(fs.readFileSync(versionJsonPath, 'utf8'));
+    const gameArgs = Array.isArray(versionJson.arguments?.game) ? versionJson.arguments.game : [];
+    const hasBasePlayerArg = gameArgs.some(a => typeof a === 'string' && (a === '${auth_player_name}' || a === '--username'));
 
-    if (!versionJson.arguments || !Array.isArray(versionJson.arguments.game) || versionJson.arguments.game.length === 0) {
+    if (gameArgs.length === 0 || !hasBasePlayerArg) {
       let baseVer = versionJson.inheritsFrom;
       if (!baseVer && (versionId.startsWith('fabric-') || versionId.startsWith('quilt-'))) {
         baseVer = versionId.replace(/^(fabric|quilt)-/, '');
@@ -259,7 +270,15 @@ function ensureVersionJsonArguments(rootDir, versionId) {
           const baseJson = JSON.parse(fs.readFileSync(baseJsonPath, 'utf8'));
           if (baseJson.arguments && Array.isArray(baseJson.arguments.game) && baseJson.arguments.game.length > 0) {
             versionJson.arguments = versionJson.arguments || {};
-            versionJson.arguments.game = baseJson.arguments.game;
+            // Jeśli już miał argumenty (np. Forge launchTarget), łączymy je z bazowymi argumentami Minecrafta
+            const existingGameArgs = Array.isArray(versionJson.arguments.game) ? versionJson.arguments.game : [];
+            const mergedGame = [...existingGameArgs];
+            for (const item of baseJson.arguments.game) {
+              if (typeof item === 'string' && mergedGame.includes(item)) continue;
+              mergedGame.push(item);
+            }
+            versionJson.arguments.game = mergedGame;
+
             if (baseJson.arguments.jvm && Array.isArray(baseJson.arguments.jvm)) {
               const existingJvm = Array.isArray(versionJson.arguments.jvm) ? versionJson.arguments.jvm : [];
               versionJson.arguments.jvm = [...baseJson.arguments.jvm, ...existingJvm];
@@ -271,7 +290,7 @@ function ensureVersionJsonArguments(rootDir, versionId) {
               versionJson.assets = baseJson.assets;
             }
             fs.writeFileSync(versionJsonPath, JSON.stringify(versionJson, null, 2), 'utf8');
-            console.log(`[KasteuszLauncher] Naprawiono argumenty gry w pliku JSON dla wersji ${versionId}`);
+            console.log(`[KasteuszLauncher] Zsynchronizowano argumenty gry w pliku JSON dla wersji ${versionId}`);
           }
         }
       }
@@ -347,6 +366,21 @@ async function launchMinecraft(window, versionOverride) {
         await mods.installQuilt(baseMcVer);
       }
       versionToLaunch = quiltVerId;
+    } else if (profileLoader === 'forge' || profileLoader === 'neoforge') {
+      let forgeVerId = activeProfile?.customVersionId;
+      const jsonExists = forgeVerId && fs.existsSync(path.join(rootDir, 'versions', forgeVerId, `${forgeVerId}.json`));
+      if (!jsonExists) {
+        window?.webContents.send('launcher:status', { message: `Przygotowywanie silnika Forge dla Minecraft ${baseMcVer}...` });
+        forgeVerId = await mods.installForge(baseMcVer, activeProfile?.forgeVersion, (status) => {
+          if (status?.message) {
+            window?.webContents.send('launcher:status', { message: status.message });
+          }
+        });
+        if (forgeVerId && activeProfile?.id) {
+          profiles.updateProfile(activeProfile.id, { customVersionId: forgeVerId });
+        }
+      }
+      versionToLaunch = forgeVerId || `${baseMcVer}-forge`;
     } else if (profileLoader === 'custom' && activeProfile?.customVersionId) {
       versionToLaunch = activeProfile.customVersionId;
     } else {
@@ -365,12 +399,14 @@ async function launchMinecraft(window, versionOverride) {
   const isCustomVersion = !isPureReleaseId && (
     versionToLaunch.startsWith('fabric-') ||
     versionToLaunch.startsWith('quilt-') ||
+    versionToLaunch.includes('-forge-') ||
+    versionToLaunch.startsWith('forge-') ||
     fs.existsSync(path.join(rootDir, 'versions', versionToLaunch, `${versionToLaunch}.json`))
   );
 
   const versionObj = {
     number: isCustomVersion ? baseMcVer : versionToLaunch,
-    type: 'Kasteusz Client'
+    type: (profileLoader === 'forge' || profileLoader === 'neoforge') ? 'Forge' : (profileLoader === 'fabric' ? 'Fabric' : 'Kasteusz Client')
   };
   if (isCustomVersion) {
     versionObj.custom = versionToLaunch;
@@ -387,8 +423,8 @@ async function launchMinecraft(window, versionOverride) {
     ensureKasteuszClientTheme(rootDir);
   }
 
-  // Automatyczne wdrożenie oficjalnego modułu Kasteusz Client HUD (pod RShift)
-  ensureKasteuszClientHudMod(instanceDir);
+  // Automatyczne wdrożenie oficjalnego modułu Kasteusz Client HUD (pod RShift, tylko Fabric 1.21.x)
+  ensureKasteuszClientHudMod(instanceDir, baseMcVer, profileLoader);
 
   const profileLabel = activeProfile?.name ? `${activeProfile.name} (${versionToLaunch})` : versionToLaunch;
   window?.webContents.send('launcher:status', { message: `Przygotowywanie profilu: ${profileLabel}...` });
@@ -590,5 +626,6 @@ module.exports = {
   JVM_PRESETS,
   resolveJavaExecutable,
   ensureKasteuszClientTheme,
-  ensureKasteuszClientHudMod
+  ensureKasteuszClientHudMod,
+  ensureVersionJsonArguments
 };

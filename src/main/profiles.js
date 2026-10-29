@@ -154,8 +154,11 @@ function writeRawState(state) {
 
 function formatVersionIdForProfile(profile) {
   if (!profile) return '1.21.11';
-  if (profile.loader === 'custom' && profile.customVersionId) {
+  if ((profile.loader === 'custom' || profile.loader === 'forge' || profile.loader === 'neoforge') && profile.customVersionId) {
     return profile.customVersionId;
+  }
+  if (profile.loader === 'forge') {
+    return profile.customVersionId || `forge-${profile.mcVersion}`;
   }
   if (profile.loader === 'fabric') {
     return `fabric-${profile.mcVersion}`;
@@ -246,11 +249,13 @@ function setActiveProfile(profileId) {
 function createProfile(payload = {}) {
   const state = readRawState();
   const name = String(payload.name || '').trim() || 'Nowy Profil';
-  const loader = ['fabric', 'quilt', 'vanilla', 'custom'].includes(payload.loader)
+  const loader = ['fabric', 'quilt', 'forge', 'neoforge', 'vanilla', 'custom'].includes(payload.loader)
     ? payload.loader
     : 'fabric';
   const mcVersion = String(payload.mcVersion || '1.21.11').trim();
-  const customVersionId = loader === 'custom' ? String(payload.customVersionId || mcVersion).trim() : null;
+  const customVersionId = (loader === 'custom' || loader === 'forge' || loader === 'neoforge') && payload.customVersionId
+    ? String(payload.customVersionId).trim()
+    : (loader === 'custom' ? mcVersion : null);
   const icon = ['bolt', 'cube', 'sword', 'spark', 'compass', 'crown'].includes(payload.icon)
     ? payload.icon
     : (loader === 'vanilla' ? 'cube' : 'bolt');
@@ -268,6 +273,7 @@ function createProfile(payload = {}) {
     mcVersion,
     loader,
     customVersionId,
+    forgeVersion: payload.forgeVersion || null,
     icon,
     isolated,
     folderName: isolated ? folderName : null,
@@ -296,7 +302,7 @@ function updateProfile(profileId, updates = {}) {
   }
 
   const current = state.profiles[idx];
-  const loader = updates.loader && ['fabric', 'quilt', 'vanilla', 'custom'].includes(updates.loader)
+  const loader = updates.loader && ['fabric', 'quilt', 'forge', 'neoforge', 'vanilla', 'custom'].includes(updates.loader)
     ? updates.loader
     : current.loader;
 
@@ -311,9 +317,10 @@ function updateProfile(profileId, updates = {}) {
     name: updates.name !== undefined ? (String(updates.name).trim() || current.name) : current.name,
     mcVersion: updates.mcVersion !== undefined ? String(updates.mcVersion).trim() : current.mcVersion,
     loader,
-    customVersionId: loader === 'custom'
+    customVersionId: (loader === 'custom' || loader === 'forge' || loader === 'neoforge')
       ? String(updates.customVersionId || current.customVersionId || current.mcVersion).trim()
       : null,
+    forgeVersion: updates.forgeVersion !== undefined ? updates.forgeVersion : current.forgeVersion,
     icon: updates.icon && ['bolt', 'cube', 'sword', 'spark', 'compass', 'crown'].includes(updates.icon)
       ? updates.icon
       : current.icon,

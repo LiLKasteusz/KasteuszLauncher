@@ -2008,6 +2008,30 @@ input[type="range"]::-webkit-slider-thumb:hover {
   color: var(--text-muted);
 }
 
+.mod-tag.tag-fabric {
+  background: rgba(6, 182, 212, 0.15);
+  color: #38bdf8;
+  border: 1px solid rgba(6, 182, 212, 0.3);
+}
+
+.mod-tag.tag-forge {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.mod-tag.tag-neoforge {
+  background: rgba(249, 115, 22, 0.15);
+  color: #fb923c;
+  border: 1px solid rgba(249, 115, 22, 0.3);
+}
+
+.mod-tag.tag-quilt {
+  background: rgba(168, 85, 247, 0.15);
+  color: #c084fc;
+  border: 1px solid rgba(168, 85, 247, 0.3);
+}
+
 .mod-row-sub {
   font-size: 11.5px;
   color: var(--text-muted);

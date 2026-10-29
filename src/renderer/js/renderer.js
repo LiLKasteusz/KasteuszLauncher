@@ -1705,6 +1705,13 @@ function renderModBrowseResults(hitsToRender, append = false) {
     const iconUrl = item.icon_url || 'assets/logo.svg';
     const downloadsFmt = formatDownloads(item.downloads);
 
+    const detectedLoaders = (item.categories || item.loaders || []).filter(c => ['fabric', 'quilt', 'forge', 'neoforge'].includes(c.toLowerCase()));
+    const loaderBadgesHtml = detectedLoaders.map(l => {
+      const cls = l.toLowerCase();
+      const label = cls === 'neoforge' ? 'NeoForge' : (cls.charAt(0).toUpperCase() + cls.slice(1));
+      return `<span class="mod-tag tag-${cls}">${label}</span>`;
+    }).join(' ');
+
     const typeBadge = isPack
       ? `<span class="modpack-card-badge"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg> Modpack</span>`
       : `<span class="mod-tag">Mod</span>`;
@@ -1725,8 +1732,9 @@ function renderModBrowseResults(hitsToRender, append = false) {
       <div class="modrinth-card-footer">
         <div class="modrinth-stats tnum">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-          <span>${downloadsFmt} pobrań</span>
-          ${item.versions && item.versions.length > 0 ? `<span class="mod-tag" title="Obsługiwane wersje">${item.versions[item.versions.length - 1]}</span>` : ''}
+          <span>${downloadsFmt}</span>
+          ${loaderBadgesHtml}
+          ${item.versions && item.versions.length > 0 ? `<span class="mod-tag" title="Obsługiwane wersje">MC ${item.versions[item.versions.length - 1]}</span>` : ''}
         </div>
 
         ${isPack ? `
