@@ -1750,10 +1750,12 @@ function renderModBrowseResults(hitsToRender, append = false) {
 
     // Obsługa instalacji moda
     const downloadBtn = card.querySelector('.btn-mod-download');
-    downloadBtn?.addEventListener('click', async () => {
-      const slug = downloadBtn.getAttribute('data-slug');
-      const pid = downloadBtn.getAttribute('data-id');
-      const title = decodeURIComponent(downloadBtn.getAttribute('data-title'));
+    downloadBtn?.addEventListener('click', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const slug = item.slug;
+      const pid = item.project_id || item.id;
+      const title = item.title;
 
       downloadBtn.disabled = true;
       downloadBtn.classList.add('installing');
@@ -1789,15 +1791,26 @@ function renderModBrowseResults(hitsToRender, append = false) {
 
     // Obsługa kliknięcia w instalator Modpacka
     const modpackTrigger = card.querySelector('.btn-modpack-trigger');
-    modpackTrigger?.addEventListener('click', () => {
-      const slug = modpackTrigger.getAttribute('data-slug');
-      const pid = modpackTrigger.getAttribute('data-id');
-      const title = decodeURIComponent(modpackTrigger.getAttribute('data-title'));
-      const author = decodeURIComponent(modpackTrigger.getAttribute('data-author'));
-      const icon = decodeURIComponent(modpackTrigger.getAttribute('data-icon'));
+    const openPackModal = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      openModpackInstallModal({
+        id: item.project_id || item.id,
+        slug: item.slug,
+        title: item.title,
+        author: item.author || '',
+        iconUrl: item.icon_url || 'assets/logo.svg'
+      });
+    };
 
-      openModpackInstallModal({ id: pid, slug, title, author, iconUrl: icon });
-    });
+    modpackTrigger?.addEventListener('click', openPackModal);
+    if (isPack) {
+      card.style.cursor = 'pointer';
+      card.addEventListener('click', (e) => {
+        if (e.target.closest('button')) return;
+        openPackModal(e);
+      });
+    }
 
     resultsContainer.appendChild(card);
   });
@@ -1853,12 +1866,19 @@ function setupModpackModalEvents() {
   const nameInput = document.getElementById('modpack-modal-profile-name');
 
   function closeModal() {
-    if (modal) modal.classList.remove('active');
+    if (modal) {
+      modal.classList.remove('open');
+      modal.classList.remove('active');
+    }
     currentModpackModalData = null;
   }
 
   closeBtn?.addEventListener('click', closeModal);
   cancelBtn?.addEventListener('click', closeModal);
+
+  modal?.addEventListener('click', (e) => {
+    if (e.target === modal) closeModal();
+  });
 
   // Zmiana wersji Minecraft -> przeładowanie wydań modpacka i odświeżenie nazwy profilu
   mcSelect?.addEventListener('change', () => {
@@ -1881,7 +1901,8 @@ function setupModpackModalEvents() {
     }
   });
 
-  confirmBtn?.addEventListener('click', async () => {
+  confirmBtn?.addEventListener('click', async (e) => {
+    e.preventDefault();
     if (!currentModpackModalData) return;
     const selectedVersionId = versionSelect?.value || null;
     const selectedMc = mcSelect?.value || '1.21.1';
@@ -1901,6 +1922,7 @@ function setupModpackModalEvents() {
     if (configSection) configSection.style.display = 'none';
     if (progressSection) progressSection.style.display = 'flex';
     if (closeBtn) closeBtn.style.display = 'none';
+    confirmBtn.disabled = true;
 
     // Reset wartości
     if (progressFill) {
@@ -1965,6 +1987,7 @@ function setupModpackModalEvents() {
       setTimeout(() => {
         if (configSection) configSection.style.display = 'block';
         if (progressSection) progressSection.style.display = 'none';
+        confirmBtn.disabled = false;
       }, 3500);
     }
   });
@@ -2049,7 +2072,10 @@ async function openModpackInstallModal({ id, slug, title, author, iconUrl }) {
     versionSelect.innerHTML = `<option value="">Wczytywanie wydań modpacka...</option>`;
   }
 
-  if (modal) modal.classList.add('active');
+  if (modal) {
+    modal.classList.add('open');
+    modal.classList.add('active');
+  }
 
   try {
     const versions = await window.api.getModrinthProjectVersions(slug || id);
