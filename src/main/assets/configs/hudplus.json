@@ -1,0 +1,156 @@
+{
+  "snapToGrid": true,
+  "gridSize": 8,
+  "theme": "CUSTOM",
+  "customBackground": -871364072,
+  "customText": -658433,
+  "customAccent": -5745161,
+  "globalScale": 1.0,
+  "globalOpacity": 1.0,
+  "elements": {
+    "FPS": {
+      "enabled": true,
+      "x": 8,
+      "y": 8,
+      "scale": 1.0,
+      "opacity": 0.95,
+      "width": 64,
+      "height": 18
+    },
+    "CPS": {
+      "enabled": true,
+      "x": 76,
+      "y": 8,
+      "scale": 1.0,
+      "opacity": 0.95,
+      "width": 64,
+      "height": 18
+    },
+    "PING": {
+      "enabled": true,
+      "x": 144,
+      "y": 8,
+      "scale": 1.0,
+      "opacity": 0.95,
+      "width": 56,
+      "height": 18
+    },
+    "BPS": {
+      "enabled": true,
+      "x": 8,
+      "y": 30,
+      "scale": 1.0,
+      "opacity": 0.9,
+      "width": 72,
+      "height": 18
+    },
+    "COORDINATES": {
+      "enabled": true,
+      "x": 8,
+      "y": 330,
+      "scale": 1.0,
+      "opacity": 0.95,
+      "width": 110,
+      "height": 38
+    },
+    "DIRECTION": {
+      "enabled": true,
+      "x": 8,
+      "y": 310,
+      "scale": 1.0,
+      "opacity": 0.9,
+      "width": 64,
+      "height": 18
+    },
+    "ARMOR": {
+      "enabled": true,
+      "x": 580,
+      "y": 320,
+      "scale": 1.0,
+      "opacity": 0.95,
+      "width": 78,
+      "height": 24
+    },
+    "KEYSTROKES": {
+      "enabled": true,
+      "x": 570,
+      "y": 240,
+      "scale": 1.0,
+      "opacity": 0.95,
+      "width": 84,
+      "height": 62
+    },
+    "POTION_EFFECTS": {
+      "enabled": true,
+      "x": 8,
+      "y": 52,
+      "scale": 1.0,
+      "opacity": 0.95,
+      "width": 120,
+      "height": 22
+    },
+    "BIOME": {
+      "enabled": false,
+      "x": 8,
+      "y": 372,
+      "scale": 1.0,
+      "opacity": 0.9,
+      "width": 90,
+      "height": 18
+    },
+    "CLOCK": {
+      "enabled": false,
+      "x": 8,
+      "y": 394,
+      "scale": 1.0,
+      "opacity": 0.9,
+      "width": 64,
+      "height": 18
+    },
+    "ARMOR_DURABILITY": {
+      "enabled": false,
+      "x": 8,
+      "y": 140,
+      "scale": 1.0,
+      "opacity": 0.9,
+      "width": 64,
+      "height": 18
+    },
+    "ITEM_DURABILITY": {
+      "enabled": true,
+      "x": 580,
+      "y": 348,
+      "scale": 1.0,
+      "opacity": 0.9,
+      "width": 78,
+      "height": 18
+    },
+    "TOTEMS": {
+      "enabled": true,
+      "x": 204,
+      "y": 8,
+      "scale": 1.0,
+      "opacity": 0.95,
+      "width": 52,
+      "height": 18
+    },
+    "ARROWS": {
+      "enabled": false,
+      "x": 260,
+      "y": 8,
+      "scale": 1.0,
+      "opacity": 0.9,
+      "width": 52,
+      "height": 18
+    },
+    "CROSSHAIR": {
+      "enabled": false,
+      "x": 0,
+      "y": 0,
+      "scale": 1.0,
+      "opacity": 1.0,
+      "width": 16,
+      "height": 16
+    }
+  }
+}

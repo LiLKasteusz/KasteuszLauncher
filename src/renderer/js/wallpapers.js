@@ -31,9 +31,9 @@
   function getThemeRgb() {
     try {
       const col = getComputedStyle(document.documentElement).getPropertyValue('--accent-primary').trim();
-      return hexToRgb(col || '#a855f7');
+      return hexToRgb(col || '#6366F1');
     } catch (_) {
-      return { r: 168, g: 85, b: 247 };
+      return { r: 99, g: 102, b: 241 };
     }
   }
 
@@ -241,6 +241,8 @@
     setOpacity(val) {
       opacity = Math.max(0.05, Math.min(1.0, val));
     },
+
+    updateThemeColors() {},
 
     pause(val = true) {
       isPaused = !!val;

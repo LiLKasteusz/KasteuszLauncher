@@ -1,1235 +1,2158 @@
 <!DOCTYPE html>
-<html lang="pl">
+<html lang="pl" data-theme="purple">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>KasteuszLauncher</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
-<body>
-  <!-- LIVE WALLPAPERS CANVAS (Background) -->
-  <canvas id="live-wallpaper-canvas"></canvas>
+<body data-theme="purple">
 
-  <!-- Top App Titlebar / Drag Region -->
+  <!-- Dynamic Live Wallpaper Canvas -->
+  <canvas id="live-wallpaper-canvas"></canvas>
+  <div class="app-backdrop-wash"></div>
+
+  <!-- ======================================================================
+       1. FRAMELESS TOP TITLEBAR
+       ====================================================================== -->
   <header class="topbar">
-    <div class="topbar-left">
-      <div class="brand-logo-wrapper" title="KasteuszLauncher">
-        <svg class="logo-icon" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" style="width: 32px; height: 32px;">
-          <defs>
-            <linearGradient id="logoFacetTop" x1="12" y1="8" x2="88" y2="48" gradientUnits="userSpaceOnUse">
-              <stop offset="0%" stop-color="var(--accent-primary-hover, #c084fc)"/>
-              <stop offset="100%" stop-color="var(--accent-primary, #a855f7)"/>
-            </linearGradient>
-            <linearGradient id="logoFacetLeft" x1="12" y1="28" x2="50" y2="88" gradientUnits="userSpaceOnUse">
-              <stop offset="0%" stop-color="var(--accent-primary, #a855f7)"/>
-              <stop offset="100%" stop-color="var(--accent-primary-dark, #6b21a8)"/>
-            </linearGradient>
-            <linearGradient id="logoFacetRight" x1="50" y1="48" x2="88" y2="88" gradientUnits="userSpaceOnUse">
-              <stop offset="0%" stop-color="var(--accent-primary-dark, #7e22ce)"/>
-              <stop offset="100%" stop-color="#0b0d14"/>
-            </linearGradient>
-            <filter id="logoOuterGlow" x="-20%" y="-20%" width="140%" height="140%">
-              <feGaussianBlur stdDeviation="4" result="blur"/>
-              <feComposite in="SourceGraphic" in2="blur" operator="over"/>
-            </filter>
-          </defs>
-          <!-- Ambient Outer Glow Aura -->
-          <polygon points="50,6 90,27 90,73 50,94 10,73 10,27" fill="var(--accent-primary, #a855f7)" opacity="0.35" filter="url(#logoOuterGlow)"/>
-          <!-- Outer Isometric Obsidian Chassis -->
-          <polygon points="50,7 89,27.5 89,72.5 50,93 11,72.5 11,27.5" fill="#10121a" stroke="var(--accent-primary, #a855f7)" stroke-width="1.8" stroke-linejoin="round"/>
-          <!-- Top Shaded Facet -->
-          <polygon points="50,11 85,29 50,47 15,29" fill="url(#logoFacetTop)" opacity="0.95"/>
-          <!-- Left Shaded Facet -->
-          <polygon points="15,29 50,47 50,87 15,69" fill="url(#logoFacetLeft)" opacity="0.9"/>
-          <!-- Right Shaded Facet -->
-          <polygon points="50,47 85,29 85,69 50,87" fill="url(#logoFacetRight)" opacity="0.85"/>
-          <!-- Specular Highlights -->
-          <polyline points="15,29 50,11 85,29" stroke="#ffffff" stroke-width="1.4" stroke-linecap="round" opacity="0.7"/>
-          <line x1="50" y1="11" x2="50" y2="47" stroke="#ffffff" stroke-width="1.2" stroke-linecap="round" opacity="0.45"/>
-          <!-- High-Tech Stylized K Crest Monogram -->
-          <path d="M34 38 L41 34 L41 72 L34 76 Z" fill="#ffffff" filter="drop-shadow(0 0 4px var(--accent-primary, #a855f7))"/>
-          <polygon points="41,54 61,37 68,41 48,58" fill="#ffffff" filter="drop-shadow(0 0 4px var(--accent-primary, #a855f7))"/>
-          <polygon points="46,56 68,73 61,77 39,60" fill="#ffffff" filter="drop-shadow(0 0 4px var(--accent-primary, #a855f7))"/>
-          <circle cx="50" cy="47" r="2.8" fill="#ffffff" filter="drop-shadow(0 0 4px #ffffff)"/>
-        </svg>
-      </div>
-      <div class="brand-title">KASTEUSZ <span>LAUNCHER</span></div>
+    <div class="topbar-brand">
+      <img src="assets/logo.svg" alt="Kasteusz" class="logo-icon">
+      <span class="topbar-title">KASTEUSZ</span>
+      <span class="topbar-version-tag tnum">v2.4</span>
     </div>
 
-    <!-- Center Navigation Tabs -->
-    <nav class="topbar-center">
-      <button class="nav-pill active" data-tab="play">
-        <svg viewBox="0 0 24 24" fill="currentColor">
-          <polygon points="5 3 19 12 5 21 5 3"/>
-        </svg>
-        <span>Graj</span>
-      </button>
+    <div class="topbar-telemetry">
+      <span class="telemetry-dot"></span>
+      <span id="topbar-status-label">Silnik Fabric gotowy</span>
+    </div>
 
-      <button class="nav-pill" data-tab="instances">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-          <rect x="3" y="3" width="7" height="7" rx="1.5"/>
-          <rect x="14" y="3" width="7" height="7" rx="1.5"/>
-          <rect x="14" y="14" width="7" height="7" rx="1.5"/>
-          <rect x="3" y="14" width="7" height="7" rx="1.5"/>
-        </svg>
-        <span>Instancje</span>
+    <div class="window-controls no-drag">
+      <button class="win-btn window-btn" id="btn-win-minimize" title="Minimalizuj">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
       </button>
-
-      <button class="nav-pill" data-tab="mods">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="11" cy="11" r="8"/>
-          <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-        </svg>
-        <span>Szukaj Modów</span>
+      <button class="win-btn window-btn" id="btn-win-maximize" title="Maksymalizuj">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
       </button>
-
-      <button class="nav-pill" data-tab="server">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/>
-          <rect x="2" y="14" width="20" height="8" rx="2" ry="2"/>
-          <line x1="6" y1="6" x2="6.01" y2="6"/>
-          <line x1="6" y1="18" x2="6.01" y2="18"/>
-        </svg>
-        <span>Hostuj Serwer</span>
+      <button class="win-btn win-close window-btn" id="btn-win-close" title="Zamknij">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
-
-      <button class="nav-pill" data-tab="messages">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-        </svg>
-        <span>Wiadomości</span>
-      </button>
-
-      <button class="nav-pill" data-tab="settings">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-          <circle cx="12" cy="12" r="3"/>
-          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-        </svg>
-        <span>Parametry</span>
-      </button>
-    </nav>
-
-    <!-- Right Profile & Window Controls -->
-    <div class="topbar-right">
-      <button class="user-profile-btn" id="user-profile-btn" title="Konto Minecraft">
-        <span class="user-name-text" id="user-nickname-text">noxiodev</span>
-      </button>
-
-      <div class="window-controls">
-        <button class="win-btn" id="btn-win-minimize" title="Minimalizuj">
-          <svg width="12" height="12" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" fill="none">
-            <line x1="4" y1="12" x2="20" y2="12"></line>
-          </svg>
-        </button>
-        <button class="win-btn" id="btn-win-maximize" title="Maksymalizuj / Przywróć">
-          <svg width="11" height="11" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2" fill="none">
-            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-          </svg>
-        </button>
-        <button class="win-btn close" id="btn-win-close" title="Zamknij">
-          <svg width="12" height="12" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" fill="none">
-            <line x1="18" y1="6" x2="6" y2="18"></line>
-            <line x1="6" y1="6" x2="18" y2="18"></line>
-          </svg>
-        </button>
-      </div>
     </div>
   </header>
 
-  <!-- Main Container -->
-  <main class="main-container">
+  <!-- ======================================================================
+       2. APP SHELL: LEFT SIDEBAR + MAIN WORKSPACE
+       ====================================================================== -->
+  <div class="app-shell">
 
-    <!-- VIEW 1: PLAY (Main Screen matching image) -->
-    <div class="tab-view active" id="view-play">
-      
-      <!-- Big Center/Left Card -->
-      <section class="hero-card">
-        <div class="hero-ambient-glow"></div>
+    <!-- Left Navigation Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-nav-scroll">
 
-        <!-- FEATURE 4 & 5: Hero Top Toolbar (Wardrobe, Rotate, Playtime) -->
-        <div class="hero-top-toolbar">
-          <div class="hero-toolbar-left">
-            <button class="hero-tool-btn" id="btn-open-wardrobe" title="Otwórz garderobę (pelerynki i skórki)">
-              <span class="tool-emoji">👕</span>
-              <span>Garderoba</span>
-            </button>
-            <button class="hero-tool-btn" id="btn-rotate-player" title="Obróć postać o 180° tyłem/przodem">
-              <span class="tool-emoji">🔄</span>
-              <span>Obróć</span>
-            </button>
-          </div>
-          <div class="hero-stats-pill" id="hero-playtime-pill" title="Łączny czas spędzony w grze">
-            <span class="pill-dot"></span>
-            <span id="hero-playtime-text">Czas: 0h 0m</span>
-          </div>
+        <div class="nav-section">
+          <div class="nav-section-label">Rozgrywka</div>
+
+          <button class="nav-pill active" data-tab="play">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="6 3 20 12 6 21 6 3"/>
+            </svg>
+            <span class="nav-pill-label">Graj</span>
+          </button>
+
+          <button class="nav-pill" data-tab="instances">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="7" height="7" rx="1.5"/>
+              <rect x="14" y="3" width="7" height="7" rx="1.5"/>
+              <rect x="14" y="14" width="7" height="7" rx="1.5"/>
+              <rect x="3" y="14" width="7" height="7" rx="1.5"/>
+            </svg>
+            <span class="nav-pill-label">Profile Gry</span>
+            <span class="nav-pill-badge tnum" id="sidebar-profiles-badge">3</span>
+          </button>
+
+          <button class="nav-pill" data-tab="mods">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+              <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+              <line x1="12" y1="22.08" x2="12" y2="12"/>
+            </svg>
+            <span class="nav-pill-label">Mody</span>
+            <span class="nav-pill-badge tnum" id="sidebar-mods-badge">18</span>
+          </button>
+
+          <button class="nav-pill" data-tab="packs">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+              <polyline points="2 17 12 22 22 17"/>
+              <polyline points="2 12 12 17 22 12"/>
+            </svg>
+            <span class="nav-pill-label">Zasoby i Shadery</span>
+          </button>
+
+          <button class="nav-pill" data-tab="benchmark">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+            <span class="nav-pill-label">Test PC &amp; FPS</span>
+            <span class="nav-pill-badge" id="sidebar-benchmark-badge" style="background: var(--emerald-soft); color: var(--emerald); border-color: rgba(16,185,129,0.3);">AI</span>
+          </button>
         </div>
 
-        <!-- 3D Minecraft Skin Viewport -->
-        <div class="skin-viewport-container" id="skin-container">
-          <canvas id="skin-canvas"></canvas>
+        <div class="nav-section">
+          <div class="nav-section-label">Studio i Sieć</div>
+
+          <button class="nav-pill" data-tab="music">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 18V5l12-2v13"/>
+              <circle cx="6" cy="18" r="3"/>
+              <circle cx="18" cy="16" r="3"/>
+            </svg>
+            <span class="nav-pill-label">Muzyka / Spotify</span>
+            <span class="nav-live-dot" id="sidebar-music-dot"></span>
+          </button>
+
+          <button class="nav-pill" data-tab="screenshots">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+              <circle cx="12" cy="13" r="4"/>
+            </svg>
+            <span class="nav-pill-label">Zrzuty Ekranu</span>
+            <span class="nav-pill-badge tnum" id="sidebar-screenshots-badge" style="display: none;">0</span>
+          </button>
+
+          <button class="nav-pill" data-tab="server">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/>
+              <rect x="2" y="14" width="20" height="8" rx="2" ry="2"/>
+              <line x1="6" y1="6" x2="6.01" y2="6"/>
+              <line x1="6" y1="18" x2="6.01" y2="18"/>
+            </svg>
+            <span class="nav-pill-label">Serwer Lokalny</span>
+            <span class="nav-live-dot" id="sidebar-server-dot"></span>
+          </button>
+
+          <button class="nav-pill" data-tab="messages">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/>
+              <path d="M18 14h-8"/>
+              <path d="M15 18h-5"/>
+              <path d="M10 6h8v4h-8V6Z"/>
+            </svg>
+            <span class="nav-pill-label">Aktualności</span>
+          </button>
+
+          <button class="nav-pill" data-tab="settings">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+            <span class="nav-pill-label">Ustawienia</span>
+          </button>
         </div>
 
-        <!-- Bottom overlay: Version and Big Play Button -->
-        <div class="hero-bottom-bar">
-          <div class="version-info">
-            <span class="version-label">WERSJA</span>
-            <span class="version-value" id="current-version-display">1.21.11</span>
-          </div>
-
-          <div class="play-btn-group" id="play-btn-group">
-            <button class="play-main-action" id="btn-play-game">
-              <svg viewBox="0 0 24 24">
-                <polygon points="5 3 19 12 5 21 5 3"/>
-              </svg>
-              <span id="play-btn-text">Graj 1.21.11</span>
-            </button>
-            <div class="play-btn-divider"></div>
-            <button class="play-dropdown-trigger" id="btn-version-dropdown" title="Wybierz inną wersję">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <polyline points="6 9 12 15 18 9"/>
-              </svg>
-            </button>
-
-            <!-- Quick Version Dropdown -->
-            <div class="version-dropdown-menu" id="version-quick-menu">
-              <!-- Dynamically populated -->
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Right Sidebar Card (Friends & Official Server) -->
-      <aside class="sidebar-card">
-        <div class="sidebar-header">
-          <div class="sidebar-title-group">
-            <span class="sidebar-label">ZNAJOMI</span>
-            <span class="sidebar-count" id="friends-count">0 online</span>
-          </div>
-          <div class="sidebar-actions">
-            <button class="sidebar-icon-btn" id="btn-friends-activity" title="Odśwież listę znajomych">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="23 4 23 10 17 10"></polyline>
-                <polyline points="1 20 1 14 7 14"></polyline>
-                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-              </svg>
-            </button>
-            <button class="sidebar-icon-btn" id="btn-add-friend" title="Dodaj znajomego">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <line x1="12" y1="5" x2="12" y2="19"></line>
-                <line x1="5" y1="12" x2="19" y2="12"></line>
-              </svg>
-            </button>
-          </div>
-        </div>
-
-        <div class="sidebar-body" id="friends-list-container">
-          <!-- Dynamically populated friends list -->
-        </div>
-
-        <!-- Official Server Card (Szkolne SMP) -->
-        <div class="sidebar-server-card" id="official-server-card">
-          <div class="server-card-top">
-            <span class="server-badge-official">OFICJALNY SERWER</span>
-            <div class="server-status-pill online" id="server-status-pill">
-              <span class="server-pulse-dot"></span>
-              <span id="server-status-label">Online</span>
-            </div>
-          </div>
-          <div class="server-main-info">
-            <div class="server-title-name">SZKOLNE SMP</div>
-            <button class="server-ip-btn" id="btn-copy-server-ip" title="Kliknij, aby skopiować adres IP">
-              <span class="server-ip-text">szkolnesmp.com.pl</span>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-              </svg>
-            </button>
-          </div>
-          <div class="server-card-footer">
-            <span class="server-players-badge" id="server-players-count">Gracze: sprawdzanie...</span>
-            <span class="server-version-pill">1.21.11</span>
-          </div>
-        </div>
-      </aside>
-
-    </div>
-
-    <!-- VIEW: INSTANCES (Mody & Wersje) -->
-    <div class="tab-view" id="view-instances">
-      <div class="view-panel">
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
-          <div>
-            <h2 class="view-heading">Instancje i Modyfikacje</h2>
-            <div style="display: flex; gap: 8px; margin-top: 10px;">
-              <button class="btn-secondary active" id="subtab-btn-mods" style="font-weight: 700; padding: 6px 14px; background: rgba(255, 255, 255, 0.1);">Zainstalowane (.jar)</button>
-              <button class="btn-secondary" id="subtab-btn-versions" style="font-weight: 600; padding: 6px 14px;">Wersje Silnika</button>
-            </div>
-          </div>
-          <div style="display: flex; gap: 8px;">
-            <button class="btn-secondary" id="btn-open-mods-folder" title="Otwórz folder mods na dysku">
-              📂 Folder mods
-            </button>
-            <button class="btn-secondary" id="btn-install-fabric" style="color: #c084fc; border-color: rgba(192, 132, 252, 0.4);">
-              ⚡ Fabric Loader
-            </button>
-            <button class="btn-secondary" id="btn-install-sodium" style="background: rgba(34, 197, 94, 0.15); color: #4ade80; border-color: rgba(34, 197, 94, 0.4); font-weight: 600;">
-              ⚡ Zainstaluj Sodium
-            </button>
-            <button class="btn-secondary" id="btn-add-mods" style="background: #ffffff; color: #000000; font-weight: 700;">
-              ➕ Dodaj Mody (.jar)
-            </button>
-          </div>
-        </div>
-
-        <div id="subtab-view-mods">
-          <p class="view-subheading" style="margin-bottom: 16px;">Dodawaj, włączaj i wyłączaj mody (.jar). Modyfikacje ładują się automatycznie z grą na Fabric 1.21.11.</p>
-          <div id="mods-list-container">
-            <!-- Dynamically populated -->
-          </div>
-        </div>
-
-        <div id="subtab-view-versions" style="display: none;">
-          <p class="view-subheading" style="margin-bottom: 16px;">Wybierz oficjalne wydanie gry, które chcesz uruchomić jednym kliknięciem.</p>
-          <div class="versions-grid" id="versions-full-grid">
-            <!-- Populated dynamically -->
-          </div>
-        </div>
       </div>
-    </div>
 
-    <!-- VIEW: SEARCH MODS (Przeglądarka Modów Modrinth) -->
-    <div class="tab-view" id="view-mods">
-      <div class="view-panel">
-        <div style="margin-bottom: 20px;">
-          <h2 class="view-heading">Przeglądarka i Wyszukiwarka Modów</h2>
-          <p class="view-subheading" style="margin-bottom: 0;">Przeszukuj oficjalną bazę Modrinth i instaluj mody na Fabric 1.21.11 jednym kliknięciem.</p>
-        </div>
-
-        <div class="mod-browser-container">
-          <!-- Search & Controls Header -->
-          <div class="mod-browser-header">
-            <div class="mod-search-input-wrapper">
-              <svg class="mod-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="11" cy="11" r="8"/>
-                <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-              </svg>
-              <input type="text" id="mod-browse-search-input" class="mod-browse-search-input" placeholder="Szukaj modów (np. Iris, Sodium, VoiceChat, Xaero, AppleSkin, Zoomify)...">
-              <button id="mod-browse-search-clear" class="mod-search-clear-btn" style="display: none;">✕</button>
-            </div>
-
-            <div class="mod-browser-filters-right">
-              <select id="mod-browse-sort-select" class="mod-browse-sort-select">
-                <option value="downloads" selected>🔥 Najpopularniejsze</option>
-                <option value="follows">⭐ Najbardziej obserwowane</option>
-                <option value="newest">🕒 Najnowsze</option>
-                <option value="relevance">🎯 Trafność</option>
-              </select>
-              <label class="mod-version-checkbox-label" title="Filtruj mody tylko pod aktualną wersję Fabric 1.21.11">
-                <input type="checkbox" id="mod-browse-ver-lock" checked>
-                <span>Wersja 1.21.11</span>
-              </label>
-            </div>
+      <!-- Docked Player Profile Footer -->
+      <div class="sidebar-footer">
+        <button class="user-profile-pill" id="user-profile-btn" title="Zarządzaj kontem gracza">
+          <div class="avatar-wrap">
+            <img id="user-avatar-head" src="assets/default-skin.png" alt="Avatar">
+            <span class="status-dot online" id="user-status-dot"></span>
           </div>
-
-          <!-- Categories Chips -->
-          <div class="mod-categories-chips" id="mod-categories-chips">
-            <button class="mod-chip active" data-category="all">✨ Wszystkie</button>
-            <button class="mod-chip" data-category="optimization">⚡ Wydajność & FPS</button>
-            <button class="mod-chip" data-category="decoration">🎨 Grafika & Shaders</button>
-            <button class="mod-chip" data-category="gui">🖥️ Interfejs & HUD</button>
-            <button class="mod-chip" data-category="game-mechanics">🎮 Rozgrywka</button>
-            <button class="mod-chip" data-category="utility">🛠️ Narzędzia</button>
+          <div class="user-profile-meta">
+            <span class="user-nickname" id="user-nickname-text">Gracz</span>
+            <span class="user-substatus" id="user-account-type-label">Gotowy do gry</span>
           </div>
-
-          <!-- Mod Cards Grid -->
-          <div id="mod-browse-results" class="mod-browse-results-grid">
-            <!-- Dynamically populated -->
-          </div>
-
-          <!-- Loading indicator -->
-          <div id="mod-browse-loading" style="display: none; padding: 40px; text-align: center; color: var(--text-dim);">
-            <div class="mod-browse-spinner"></div>
-            <p style="margin-top: 12px; font-size: 13px;">Wyszukiwanie modów w bazie Modrinth...</p>
-          </div>
-        </div>
+          <svg class="user-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="9 18 15 12 9 6"/>
+          </svg>
+        </button>
       </div>
-    </div>
+    </aside>
 
-    <!-- VIEW: SERVER (Hostuj Własny Serwer) -->
-    <div class="tab-view" id="view-server">
-      <div class="view-panel">
-        <div style="margin-bottom: 20px;">
-          <h2 class="view-heading">Hostuj Własny Serwer Minecraft</h2>
-          <p class="view-subheading" style="margin-bottom: 0;">Uruchom dedykowany serwer 1.21.11 bezpośrednio na swoim komputerze i graj ze znajomymi w sieci domowej, Wi-Fi lub przez Radmin VPN.</p>
-        </div>
+    <!-- ====================================================================
+         MAIN WORKSPACE
+         ==================================================================== -->
+    <main class="main-workspace">
 
-        <div class="server-host-panel">
-          <div class="server-host-header">
-            <div>
-              <h3 class="server-host-title">Status Twojego Serwera</h3>
-              <p class="server-host-desc">Zarządzaj serwerem, parametrami i kontroluj konsolę w czasie rzeczywistym.</p>
-            </div>
-            <div class="server-host-actions">
-              <button class="btn-primary" id="btn-toggle-server" style="padding: 10px 22px; font-size: 13.5px; font-weight: 700; border-radius: 10px; background: #22c55e; border: none; color: #ffffff; cursor: pointer; display: flex; align-items: center; gap: 8px;">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
-                  <polygon points="5 3 19 12 5 21 5 3"/>
-                </svg>
-                <span id="server-btn-label">Uruchom Serwer</span>
-              </button>
-            </div>
-          </div>
+      <!-- ==================================================================
+           VIEW 1: GRAJ (MAIN DASHBOARD)
+           ================================================================== -->
+      <section class="tab-view active" id="view-play">
+        <div class="play-dashboard-grid">
 
-          <!-- Server Connection IP Cards -->
-          <div class="server-ip-cards-grid">
-            <div class="ip-info-card">
-              <span class="ip-card-label">Adres IP dla znajomych (Sieć domowa / Wi-Fi / VPN)</span>
-              <div class="ip-card-val-row">
-                <span class="ip-card-val" id="server-local-ip-display">172.20.10.4:25565</span>
-                <button class="btn-copy-small" id="btn-copy-local-ip">Kopiuj</button>
-              </div>
-              <span class="ip-card-hint">Podaj ten adres znajomym w Twojej sieci domowej lub na VPN (np. Radmin VPN)</span>
-            </div>
+          <!-- Left / Main Stage Column -->
+          <div class="play-stage-col">
 
-            <div class="ip-info-card">
-              <span class="ip-card-label">Adres dla Ciebie (Localhost)</span>
-              <div class="ip-card-val-row">
-                <span class="ip-card-val">localhost:25565</span>
-                <button class="btn-copy-small" id="btn-copy-localhost-ip">Kopiuj</button>
-              </div>
-              <span class="ip-card-hint">Wpisz w Minecraftcie w menu Multiplayer, aby wejść na swój własny serwer</span>
-            </div>
-          </div>
+            <!-- Cinematic 3D Viewport Card -->
+            <div class="hero-stage-card">
+              <div class="hero-ambient-glow"></div>
+              <div class="hero-pedestal-ring"></div>
 
-          <!-- Server Settings Row -->
-          <div class="server-settings-grid">
-            <div class="server-setting-item">
-              <label>Pamięć RAM serwera</label>
-              <select id="server-cfg-ram" class="server-select">
-                <option value="2">2 GB RAM (Podstawowy)</option>
-                <option value="4" selected>4 GB RAM (Zalecany)</option>
-                <option value="6">6 GB RAM (Wydajny)</option>
-              </select>
-            </div>
-
-            <div class="server-setting-item">
-              <label>Port serwera</label>
-              <input type="number" id="server-cfg-port" class="server-input" value="25565">
-            </div>
-
-            <div class="server-setting-item">
-              <label>Konta graczy</label>
-              <select id="server-cfg-online-mode" class="server-select">
-                <option value="false" selected>Wszyscy (Premium + Non-Premium)</option>
-                <option value="true">Tylko Premium (Microsoft)</option>
-              </select>
-            </div>
-
-            <div class="server-setting-item">
-              <label>Tryb gry</label>
-              <select id="server-cfg-gamemode" class="server-select">
-                <option value="survival" selected>Survival (Przetrwanie)</option>
-                <option value="creative">Creative (Kreatywny)</option>
-              </select>
-            </div>
-
-            <div class="server-setting-item">
-              <label>Trudność</label>
-              <select id="server-cfg-difficulty" class="server-select">
-                <option value="peaceful">Pokojowy (Peaceful)</option>
-                <option value="easy">Łatwy (Easy)</option>
-                <option value="normal" selected>Normalny (Normal)</option>
-                <option value="hard">Trudny (Hard)</option>
-              </select>
-            </div>
-
-            <div class="server-setting-item">
-              <label>PvP (Walka graczy)</label>
-              <select id="server-cfg-pvp" class="server-select">
-                <option value="true" selected>Włączone</option>
-                <option value="false">Wyłączone</option>
-              </select>
-            </div>
-          </div>
-
-          <!-- Server Console Output & Command Sender -->
-          <div class="server-console-container">
-            <div class="server-console-header">
-              <div style="display: flex; align-items: center; gap: 8px;">
-                <span class="server-console-title">Konsola Serwera na żywo</span>
-                <span class="server-pulse-dot" id="server-console-dot" style="display: none;"></span>
-              </div>
-              <span class="server-console-status" id="server-console-status-text">Status: Wyłączony</span>
-            </div>
-            <div class="server-console-output" id="server-console-log">
-              <div class="server-log-line muted">[KasteuszLauncher] Serwer jest obecnie wyłączony. Kliknij „Uruchom Serwer”, aby go wystartować.</div>
-            </div>
-            <div class="server-console-input-row">
-              <input type="text" id="server-cmd-input" class="server-console-input" placeholder="Wpisz komendę serwera (np. op Mcqueen420_, gamemode creative, time set day)..." disabled>
-              <button class="btn-primary" id="btn-send-server-cmd" style="padding: 8px 18px; border-radius: 8px;" disabled>Wyślij</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- VIEW 3: MESSAGES -->
-    <div class="tab-view" id="view-messages">
-      <div class="view-panel">
-        <h2 class="view-heading">Wiadomości i Aktualności</h2>
-        <p class="view-subheading">Nowości ze świata Minecraft i aktualizacje KasteuszLauncher.</p>
-        
-        <div class="messages-list-container">
-          <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 18px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-              <span style="font-weight: 700; color: var(--accent-primary); font-size: 14px;">Aktualizacja Minecraft 1.21.4</span>
-              <span style="font-size: 11px; color: #64748b;">Najnowsze wydanie</span>
-            </div>
-            <p style="font-size: 13px; color: #cbd5e1; line-height: 1.5;">
-              Wydanie 1.21.4 wprowadza liczne usprawnienia wydajności, poprawki animacji oraz nowe możliwości modowania. KasteuszLauncher zapewnia pełną kompatybilność.
-            </p>
-          </div>
-
-          <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 18px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-              <span style="font-weight: 700; color: #22c55e; font-size: 14px;">Witaj w KasteuszLauncher!</span>
-              <span style="font-size: 11px; color: #64748b;">Wersja 1.0.0</span>
-            </div>
-            <p style="font-size: 13px; color: #cbd5e1; line-height: 1.5;">
-              Oficjalna obsługa logowania kont Microsoft Xbox Live, podgląd skórek 3D w czasie rzeczywistym oraz szybkie pobieranie plików gry.
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- VIEW 4: SETTINGS / PARAMETRY -->
-    <div class="tab-view" id="view-settings">
-      <div class="view-panel">
-        <h2 class="view-heading">Parametry i Ustawienia</h2>
-        <p class="view-subheading">Dostosuj przydział pamięci RAM, ścieżkę do Javy oraz opcje uruchamiania.</p>
-
-        <div class="settings-section">
-          <!-- COLUMN 1: VISUALS, BOOST & PERSONALIZATION -->
-          <div class="settings-col">
-            <!-- FPS BOOST PROMO CARD -->
-            <div style="background: linear-gradient(135deg, rgba(168, 85, 247, 0.14) 0%, rgba(34, 197, 94, 0.1) 100%); border: 1px solid rgba(168, 85, 247, 0.35); border-radius: 14px; padding: 18px 20px; display: flex; justify-content: space-between; align-items: center;">
-              <div style="display: flex; gap: 14px; align-items: center;">
-                <div style="width: 44px; height: 44px; border-radius: 12px; background: rgba(168, 85, 247, 0.25); display: flex; align-items: center; justify-content: center; font-size: 22px;">
-                  ⚡
-                </div>
-                <div style="display: flex; flex-direction: column; gap: 4px;">
-                  <div style="display: flex; align-items: center; gap: 8px;">
-                    <span style="font-size: 15px; font-weight: 700; color: #ffffff;">Tryb FPS Boost (Ultra Wydajność)</span>
-                    <span style="font-size: 10px; font-weight: 700; background: #22c55e; color: #000000; padding: 2px 7px; border-radius: 9999px;">+50% - 150% FPS</span>
+              <div class="hero-top-bar">
+                <div class="hero-badges-left">
+                  <div class="glass-pill">
+                    <span class="pill-dot"></span>
+                    <span>Kasteusz Client</span>
                   </div>
-                  <span style="font-size: 12px; color: #cbd5e1;">Aplikuje zaawansowane flagi Java G1GC Aikar, usuwa mikro-ścinki i optymalizuje procesor CPU.</span>
-                </div>
-              </div>
-              <div style="display: flex; align-items: center;">
-                <input type="checkbox" id="setting-fps-boost" checked style="width: 20px; height: 20px; accent-color: var(--accent-primary); cursor: pointer;">
-              </div>
-            </div>
-
-            <!-- THEME & ACCENT COLOR PERSONALIZATION -->
-            <div class="settings-card-group">
-              <div style="margin-bottom: 14px;">
-                <h3 style="font-size: 15px; font-weight: 700; color: #ffffff; display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
-                  <span>🎨</span>
-                  <span>Personalizacja i Kolor Akcentu</span>
-                </h3>
-                <span style="font-size: 12px; color: var(--text-dim);">Wybierz styl wizualny interfejsu launchera oraz prędkość animacji 3D.</span>
-              </div>
-
-              <div class="theme-palette-grid">
-                <div class="theme-card active" data-theme="purple" title="Fiolet Kasteusza (Domyślny)">
-                  <div class="theme-circle" style="background: linear-gradient(135deg, #c084fc, #7e22ce);"></div>
-                  <div class="theme-card-info">
-                    <span class="theme-title">Kasteusz Purple</span>
-                    <span class="theme-tag">Domyślny</span>
+                  <div class="glass-pill tnum" id="hero-playtime-pill">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    <span id="hero-playtime-text">Czas: 0h 0m</span>
                   </div>
                 </div>
 
-                <div class="theme-card" data-theme="red" title="Czerwień Zygzaka McQueena #95">
-                  <div class="theme-circle" style="background: linear-gradient(135deg, #f87171, #b91c1c);"></div>
-                  <div class="theme-card-info">
-                    <span class="theme-title">McQueen #95 Red</span>
-                    <span class="theme-tag">Wyścigowy</span>
-                  </div>
-                </div>
-
-                <div class="theme-card" data-theme="emerald" title="Szmaragd Szkolne SMP">
-                  <div class="theme-circle" style="background: linear-gradient(135deg, #34d399, #047857);"></div>
-                  <div class="theme-card-info">
-                    <span class="theme-title">Szkolne SMP</span>
-                    <span class="theme-tag">Szmaragd</span>
-                  </div>
-                </div>
-
-                <div class="theme-card" data-theme="cyan" title="Cyber Cyan Neon">
-                  <div class="theme-circle" style="background: linear-gradient(135deg, #22d3ee, #0891b2);"></div>
-                  <div class="theme-card-info">
-                    <span class="theme-title">Cyber Cyan</span>
-                    <span class="theme-tag">Neon</span>
-                  </div>
-                </div>
-
-                <div class="theme-card" data-theme="gold" title="Złoto Kasteusza">
-                  <div class="theme-circle" style="background: linear-gradient(135deg, #fbbf24, #d97706);"></div>
-                  <div class="theme-card-info">
-                    <span class="theme-title">Złoto Kasteusza</span>
-                    <span class="theme-tag">Złoty</span>
-                  </div>
-                </div>
-
-                <div class="theme-card" data-theme="ruby" title="Krwawy Rubin">
-                  <div class="theme-circle" style="background: linear-gradient(135deg, #fb7185, #be123c);"></div>
-                  <div class="theme-card-info">
-                    <span class="theme-title">Krwawy Rubin</span>
-                    <span class="theme-tag">Rubin</span>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Toggles for Ambient glow & animation speed -->
-              <div style="margin-top: 18px; display: flex; flex-direction: column; gap: 14px; border-top: 1px solid rgba(255, 255, 255, 0.06); padding-top: 16px;">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                  <div style="display: flex; flex-direction: column; gap: 2px;">
-                    <span style="font-size: 13px; font-weight: 600; color: #ffffff;">Poświata tła modelu (Ambient Glow)</span>
-                    <span style="font-size: 11px; color: var(--text-dim);">Barwna poświata w tle dopasowująca się do wybranego motywu</span>
-                  </div>
-                  <input type="checkbox" id="setting-ambient-glow" checked style="width: 18px; height: 18px; accent-color: var(--accent-primary); cursor: pointer;">
-                </div>
-
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                  <div style="display: flex; flex-direction: column; gap: 2px;">
-                    <span style="font-size: 13px; font-weight: 600; color: #ffffff;">Prędkość animacji postaci 3D</span>
-                    <span style="font-size: 11px; color: var(--text-dim);">Reguluje ruchy postaci i powiewanie pelerynki w menu</span>
-                  </div>
-                  <div style="display: flex; align-items: center; gap: 10px;">
-                    <input type="range" id="setting-anim-speed" min="0" max="150" step="10" value="60" style="width: 130px; cursor: pointer;">
-                    <span id="setting-anim-val" style="font-size: 12px; font-weight: 700; color: var(--accent-primary); min-width: 32px;">0.6x</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- LIVE WALLPAPERS SETTINGS -->
-            <div class="settings-card-group">
-              <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
-                <div>
-                  <h3 style="font-size: 15px; font-weight: 700; color: #ffffff; display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
-                    <span>🌌</span>
-                    <span>Animowane Tła (Live Wallpapers)</span>
-                  </h3>
-                  <span style="font-size: 12px; color: var(--text-dim);">Dynamiczne tło w stylu sci-fi dopasowujące się do Twojego motywu.</span>
-                </div>
-              </div>
-
-              <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px;">
-                <button class="btn-secondary wallpaper-opt-btn active" data-style="matrix" style="padding: 10px 8px; font-size: 12px; font-weight: 600; text-align: center;">
-                  ✨ Cyber Cząsteczki
-                </button>
-                <button class="btn-secondary wallpaper-opt-btn" data-style="warp" style="padding: 10px 8px; font-size: 12px; font-weight: 600; text-align: center;">
-                  🚀 Tunel Gwiezdny
-                </button>
-                <button class="btn-secondary wallpaper-opt-btn" data-style="aurora" style="padding: 10px 8px; font-size: 12px; font-weight: 600; text-align: center;">
-                  🌊 Kosmiczna Zorza
-                </button>
-                <button class="btn-secondary wallpaper-opt-btn" data-style="none" style="padding: 10px 8px; font-size: 12px; font-weight: 600; text-align: center;">
-                  ⬛ Wyłączone
-                </button>
-              </div>
-
-              <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px;">
-                <div style="display: flex; flex-direction: column; gap: 2px;">
-                  <span style="font-size: 13px; font-weight: 600; color: #ffffff;">Intensywność / Przezroczystość tła</span>
-                  <span style="font-size: 11px; color: var(--text-dim);">Reguluje jasność animowanych efektów za kartami launchera</span>
-                </div>
-                <div style="display: flex; align-items: center; gap: 10px;">
-                  <input type="range" id="setting-wallpaper-opacity" min="10" max="100" step="5" value="60" style="width: 120px; cursor: pointer; accent-color: var(--accent-primary);">
-                  <span id="setting-wallpaper-val" style="font-size: 12px; font-weight: 700; color: var(--accent-primary); min-width: 35px;">60%</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- UI SOUNDS SETTINGS -->
-            <div class="settings-card-group">
-              <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
-                <div>
-                  <h3 style="font-size: 15px; font-weight: 700; color: #ffffff; display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
-                    <span>🔊</span>
-                    <span>Dźwięki Interfejsu (UI Sounds)</span>
-                  </h3>
-                  <span style="font-size: 12px; color: var(--text-dim);">Syntetyzowane dźwięki klikania, najechania myszką i odpalania gry (zero opóźnień na Linuxie).</span>
-                </div>
-                <input type="checkbox" id="setting-ui-sounds" checked style="width: 20px; height: 20px; accent-color: var(--accent-primary); cursor: pointer;">
-              </div>
-
-              <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px;">
-                <div style="display: flex; flex-direction: column; gap: 2px;">
-                  <span style="font-size: 13px; font-weight: 600; color: #ffffff;">Głośność efektów dźwiękowych</span>
-                  <span style="font-size: 11px; color: var(--text-dim);">Dopasuj poziom głośności kliknięć i startu gry</span>
-                </div>
-                <div style="display: flex; align-items: center; gap: 10px;">
-                  <input type="range" id="setting-sounds-volume" min="0" max="100" step="5" value="40" style="width: 120px; cursor: pointer; accent-color: var(--accent-primary);">
-                  <span id="setting-sounds-val" style="font-size: 12px; font-weight: 700; color: var(--accent-primary); min-width: 35px;">40%</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- COLUMN 2: HARDWARE, GAME SETTINGS & CONSOLE -->
-          <div class="settings-col">
-            <!-- RAM Min/Max -->
-            <div class="setting-row">
-              <div class="setting-info">
-                <span class="setting-title">Przydział pamięci RAM (Maksimum)</span>
-                <span class="setting-desc">Zalecane: minimum 4 GB dla płynnej rozgrywki na nowszych wersjach</span>
-              </div>
-              <div class="setting-control ram-slider-wrapper">
-                <input type="range" id="setting-ram-max" min="2" max="16" step="1" value="4">
-                <span class="slider-val" id="setting-ram-val">4 GB</span>
-              </div>
-            </div>
-
-            <!-- Java Path -->
-            <div class="setting-row">
-              <div class="setting-info">
-                <span class="setting-title">Ścieżka środowiska Java</span>
-                <span class="setting-desc" id="setting-java-desc">Domyślnie wykryto Java 21</span>
-              </div>
-              <div class="setting-control">
-                <input type="text" class="form-input" id="setting-java-path" style="width: 180px;" value="/usr/bin/java" readonly>
-                <button class="btn-secondary" id="btn-browse-java">Zmień</button>
-              </div>
-            </div>
-
-            <!-- Game Directory -->
-            <div class="setting-row">
-              <div class="setting-info">
-                <span class="setting-title">Katalog plików Minecraft</span>
-                <span class="setting-desc">Miejsce zapisywania światów, paczek zasobów i modów</span>
-              </div>
-              <div class="setting-control">
-                <input type="text" class="form-input" id="setting-game-dir" style="width: 180px;" value="~/.kasteuszlauncher/minecraft" readonly>
-                <button class="btn-secondary" id="btn-browse-dir">Zmień</button>
-              </div>
-            </div>
-
-            <!-- Optimize options.txt -->
-            <div class="setting-row">
-              <div class="setting-info">
-                <span class="setting-title">Automatyczna optymalizacja wideo gry</span>
-                <span class="setting-desc">Wyłącza zbędne cienie i chmury, wyłącza V-Sync usuwając lag myszki</span>
-              </div>
-              <div class="setting-control">
-                <input type="checkbox" id="setting-optimize-options" checked style="width: 18px; height: 18px; accent-color: var(--accent-primary); cursor: pointer;">
-              </div>
-            </div>
-
-            <!-- Close on launch -->
-            <div class="setting-row">
-              <div class="setting-info">
-                <span class="setting-title">Zamknij launcher po włączeniu gry</span>
-                <span class="setting-desc">Oszczędza zasoby komputera podczas grania</span>
-              </div>
-              <div class="setting-control">
-                <input type="checkbox" id="setting-close-on-launch" style="width: 18px; height: 18px; accent-color: var(--accent-primary); cursor: pointer;">
-              </div>
-            </div>
-
-            <!-- DISCORD RICH PRESENCE SETTINGS -->
-            <div class="settings-card-group">
-              <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
-                <div>
-                  <h3 style="font-size: 15px; font-weight: 700; color: #ffffff; display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
-                    <span>👾</span>
-                    <span>Discord Rich Presence (Status Kasteusz Launcher)</span>
-                  </h3>
-                  <span style="font-size: 12px; color: var(--text-dim);">Wyświetla status launchera i gry na Twoim profilu Discord.</span>
-                </div>
-                <input type="checkbox" id="setting-discord-rpc" checked style="width: 20px; height: 20px; accent-color: var(--accent-primary); cursor: pointer;">
-              </div>
-
-              <div style="display: flex; flex-direction: column; gap: 8px;">
-                <label style="font-size: 12px; color: #cbd5e1; font-weight: 600;">ID Aplikacji Discord (Dedykowany Client ID dla Kasteusz Launcher):</label>
-                <div style="display: flex; gap: 8px;">
-                  <input type="text" class="form-input" id="setting-discord-client-id" placeholder="Wklej Application ID z Discord Developer Portal..." style="flex: 1; font-size: 12px; font-family: monospace;">
-                  <button class="btn-secondary" id="btn-open-discord-dev" style="font-size: 11px; padding: 0 14px; white-space: nowrap;">
-                    <span>🔗</span> Otwórz Portal Discord
+                <div class="hero-tools-right">
+                  <button class="hero-tool-btn" id="btn-open-crash-doctor" title="Diagnoza crashy — sprawdź błędy gry i konflikty modów">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="12" cy="12" r="10"/>
+                      <line x1="12" y1="8" x2="12" y2="12"/>
+                      <line x1="12" y1="16" x2="12.01" y2="16"/>
+                    </svg>
+                    <span>Naprawa Błędów</span>
+                  </button>
+                  <button class="hero-tool-btn" id="btn-open-wardrobe" title="Otwórz Garderobę, Pelerynki i Kosmetyki 3D">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z"/>
+                    </svg>
+                    <span>Garderoba</span>
+                  </button>
+                  <button class="hero-tool-btn" id="btn-rotate-player" title="Obróć postać o 180°">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                      <path d="M3 3v5h5"/>
+                    </svg>
+                    <span>Obróć</span>
                   </button>
                 </div>
-                <span style="font-size: 11px; color: var(--text-dim); line-height: 1.4;">
-                  💡 KasteuszClient to Twoje mody, a KasteuszLauncher to osobny program. Aby Discord pokazywał <b>Playing KasteuszLauncher</b>, utwórz aplikację o tej nazwie na portalu Discorda i wklej jej ID powyżej.
+              </div>
+
+              <!-- 3D Skin Canvas -->
+              <div class="skin-stage-wrap">
+                <div id="skin-container">
+                  <canvas id="skin-canvas"></canvas>
+                </div>
+              </div>
+
+              <div class="hero-bottom-caption">
+                <span class="hero-caption-hint">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M12 2a4 4 0 0 0-4 4v6a4 4 0 0 0 8 0V6a4 4 0 0 0-4-4Z"/><line x1="12" y1="6" x2="12" y2="10"/></svg>
+                  Przeciągnij myszką, aby obrócić model 3D
                 </span>
               </div>
             </div>
 
-            <!-- Console logs -->
-            <div style="display: flex; flex-direction: column; gap: 8px;">
-              <div style="display: flex; justify-content: space-between; align-items: center;">
-                <span class="setting-title">Konsola gry na żywo</span>
-                <button class="btn-secondary" id="btn-clear-logs" style="padding: 4px 10px; font-size: 11px;">Wyczyść</button>
+            <!-- Quick Telemetry Cards (RAM, Mods, Account) -->
+            <div class="quick-stats-strip">
+              <div class="quick-stat-card clickable" id="quick-card-ram" title="Kliknij, aby dostosować przydział RAM">
+                <div class="quick-stat-icon">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/>
+                  </svg>
+                </div>
+                <div class="quick-stat-info">
+                  <span class="quick-stat-label">Pamięć RAM</span>
+                  <span class="quick-stat-value tnum" id="quick-stat-ram">4 GB przydzielone</span>
+                </div>
               </div>
-              <div class="logs-console" id="logs-console">
-                [KasteuszLauncher] Gotowy do działania.<br>
+
+              <div class="quick-stat-card clickable" id="quick-card-mods" title="Kliknij, aby zarządzać modami">
+                <div class="quick-stat-icon cyan">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                  </svg>
+                </div>
+                <div class="quick-stat-info">
+                  <span class="quick-stat-label">Aktywne Mody</span>
+                  <span class="quick-stat-value tnum" id="quick-stat-mods">0 aktywnych</span>
+                </div>
+              </div>
+
+              <div class="quick-stat-card clickable" id="quick-card-account" title="Kliknij, aby otworzyć profil konta">
+                <div class="quick-stat-icon emerald">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/>
+                  </svg>
+                </div>
+                <div class="quick-stat-info">
+                  <span class="quick-stat-label">Status Sesji</span>
+                  <span class="quick-stat-value" id="quick-stat-account">Zweryfikowano</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Hero Launch Command Bar -->
+            <div class="launch-command-bar">
+              <div class="version-selector-wrap">
+                <button class="version-selector-btn" id="btn-version-dropdown" title="Wybierz lub utwórz profil gry (Fabric / Quilt / Vanilla)">
+                  <div class="version-engine-badge" id="active-profile-emblem">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                    </svg>
+                  </div>
+                  <div class="version-meta">
+                    <span class="version-meta-kicker" id="active-profile-kicker">FABRIC • 1.21.11</span>
+                    <span class="version-meta-id tnum" id="current-version-display">Kasteusz Main</span>
+                  </div>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-muted); margin-left: 4px;">
+                    <polyline points="6 9 12 15 18 9"/>
+                  </svg>
+                </button>
+                <div class="version-quick-menu" id="version-quick-menu"></div>
+              </div>
+
+              <div class="play-btn-group" id="play-btn-group">
+                <button class="btn-play-hero" id="btn-play-game">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <polygon points="6 3 20 12 6 21 6 3"/>
+                  </svg>
+                  <span id="play-btn-text">URUCHOM GRĘ</span>
+                  <div class="launch-progress-track">
+                    <div class="launch-progress-fill" id="launch-progress-bar"></div>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Right Social & Official Server Rail -->
+          <div class="play-side-rail">
+
+            <!-- Official Server Status Card -->
+            <div class="official-server-card" id="official-server-card">
+              <div class="server-card-top">
+                <span class="section-kicker">Oficjalny Serwer</span>
+                <div class="server-status-pill" id="server-status-pill">
+                  <span class="server-dot"></span>
+                  <span id="server-status-label">Sprawdzanie...</span>
+                </div>
+              </div>
+
+              <div class="server-card-brand">
+                <div class="server-brand-emblem">SMP</div>
+                <div>
+                  <div class="server-card-title">Szkolne SMP</div>
+                  <div class="server-card-players tnum" id="server-players-count">Łączenie z serwerem...</div>
+                </div>
+              </div>
+
+              <button class="server-ip-btn" id="btn-copy-server-ip" title="Kliknij, aby skopiować adres IP">
+                <span>szkolnesmp.com.pl</span>
+                <span class="server-ip-copy-tag">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                  Kopiuj IP
+                </span>
+              </button>
+            </div>
+
+            <!-- Friends List Card -->
+            <div class="friends-panel">
+              <div class="friends-header">
+                <div class="friends-header-title">
+                  <span>Znajomi</span>
+                  <span class="friends-count-pill tnum" id="friends-count">0</span>
+                </div>
+                <div class="friends-header-actions">
+                  <button class="btn-icon-only" id="btn-friends-activity" title="Odśwież listę znajomych">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                  </button>
+                  <button class="btn-icon-only" id="btn-add-friend" title="Dodaj znajomego">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  </button>
+                </div>
+              </div>
+              <div class="friends-body" id="friends-list-container"></div>
+            </div>
+
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ==================================================================
+           VIEW 2: PROFILE I SILNIKI (#view-instances)
+           ================================================================== -->
+      <section class="tab-view" id="view-instances">
+        <div class="view-header">
+          <div class="view-title-group">
+            <span class="section-kicker">Zarządzanie Instancjami</span>
+            <h1 class="view-title">Profile Gry i Wersje</h1>
+            <p class="view-subtitle">Twórz własne profile Fabric, Quilt oraz Vanilla z osobnymi folderami, pamięcią RAM i wersjami.</p>
+          </div>
+
+          <div class="segmented-control">
+            <button class="seg-btn active" id="subtab-btn-profiles">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/></svg>
+              <span>Twoje Profile</span>
+            </button>
+            <button class="seg-btn" id="subtab-btn-versions">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+              <span>Katalog Wersji</span>
+            </button>
+            <button class="seg-btn" id="subtab-btn-mods" style="display: none;"></button>
+          </div>
+        </div>
+
+        <!-- Subtab 0: Custom Profiles / Instances -->
+        <div id="subtab-view-profiles">
+          <div class="mods-toolbar-bar">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span class="mod-tag tnum" id="profiles-count-badge">2 profile</span>
+              <span style="font-size: 12px; color: var(--text-secondary);">Każdy profil może mieć własny silnik (Fabric / Quilt / Vanilla), wersję gry, RAM i osobne mody.</span>
+            </div>
+            <div class="view-actions">
+              <button class="btn-primary" id="btn-open-create-profile">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                <span>Utwórz Własny Profil</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="profiles-cards-grid" id="profiles-cards-grid"></div>
+        </div>
+
+        <!-- Subtab 1: Game Versions -->
+        <div id="subtab-view-versions" style="display: none;">
+          <div class="versions-grid" id="versions-full-grid"></div>
+        </div>
+      </section>
+
+      <!-- ==================================================================
+           VIEW 3: MODS MANAGER & MODRINTH BROWSER (#view-mods)
+           ================================================================== -->
+      <section class="tab-view" id="view-mods">
+        <div class="view-header">
+          <div class="view-title-group">
+            <span class="section-kicker">Menedżer Rozszerzeń</span>
+            <h1 class="view-title">Modyfikacje Gry (Mody)</h1>
+            <p class="view-subtitle">Zarządzaj zainstalowanymi modami aktywnego profilu oraz pobieraj nowe z bazy Modrinth.</p>
+          </div>
+
+          <div class="segmented-control">
+            <button class="seg-btn active" id="mods-subtab-btn-installed">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+              <span>Zainstalowane Mody</span>
+              <span class="nav-pill-badge tnum" id="mods-subtab-badge" style="margin-left: 6px; font-size: 10px; padding: 1px 6px;">18</span>
+            </button>
+            <button class="seg-btn" id="mods-subtab-btn-modrinth">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+              <span>Pobierz z Modrinth</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Subtab A: Zainstalowane Mody -->
+        <div id="mods-subtab-view-installed">
+          <div class="mods-toolbar-bar">
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <div class="search-box" style="width: 240px;">
+                <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" class="ui-input" id="mods-local-search" placeholder="Filtruj mody w tym profilu...">
+                <button class="search-clear-btn" id="mods-local-search-clear" title="Wyczyść">✕</button>
+              </div>
+              <span class="mod-tag" id="mods-active-profile-pill">Profil: Kasteusz Main</span>
+            </div>
+
+            <div class="view-actions">
+              <button class="btn-secondary" id="btn-open-mods-folder">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                <span>Folder mods</span>
+              </button>
+              <button class="btn-secondary" id="btn-install-fabric">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                <span>Zainstaluj Fabric</span>
+              </button>
+              <button class="btn-emerald" id="btn-install-sodium">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                <span>Sodium FPS+</span>
+              </button>
+              <button class="btn-primary" id="btn-add-mods">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                <span>Dodaj .jar</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="dropzone-banner" id="mods-dropzone-banner">
+            <div class="dropzone-left">
+              <div class="dropzone-icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              </div>
+              <div>
+                <div class="setting-title">Szybki import Drag &amp; Drop</div>
+                <div class="setting-desc">Przeciągnij pliki .jar bezpośrednio na okno launchera, aby zainstalować je automatycznie.</div>
+              </div>
+            </div>
+            <span class="mod-tag tnum" id="mods-summary-counter">0 modów</span>
+          </div>
+
+          <div class="mods-list-stack" id="mods-list-container"></div>
+        </div>
+
+        <!-- Subtab B: Katalog Modrinth -->
+        <div id="mods-subtab-view-modrinth" style="display: none;">
+          <div class="modrinth-filter-panel">
+            <div class="modrinth-top-controls-row" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; flex-wrap: wrap;">
+              <!-- Segmented Type Switcher: Mody vs Modpacki -->
+              <div class="segmented-control" id="modrinth-type-switch">
+                <button class="seg-btn active" id="modrinth-type-mod" data-type="mod">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                  <span>Mody (77k+)</span>
+                </button>
+                <button class="seg-btn" id="modrinth-type-modpack" data-type="modpack">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+                  <span>Paczki Modów (Modpacki)</span>
+                </button>
+              </div>
+
+              <!-- Status / Hit count -->
+              <div class="mod-browse-stats" style="font-size: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 8px;">
+                <span id="mod-browse-hits-count" class="tnum" style="font-weight: 600; color: #fff;">Wczytywanie bazy...</span>
+              </div>
+            </div>
+
+            <div class="modrinth-search-row">
+              <div class="search-box">
+                <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" class="ui-input" id="mod-browse-search-input" placeholder="Szukaj modów na Modrinth (np. Sodium, Iris, Zoomify, Fabulously Optimized)...">
+                <button class="search-clear-btn" id="mod-browse-search-clear" title="Wyczyść">✕</button>
+              </div>
+
+              <select class="ui-select" id="mod-browse-loader-select" title="Filtruj wg silnika">
+                <option value="all">Wszystkie loadery</option>
+                <option value="fabric">Fabric</option>
+                <option value="quilt">Quilt</option>
+                <option value="neoforge">NeoForge</option>
+                <option value="forge">Forge</option>
+              </select>
+
+              <select class="ui-select" id="mod-browse-sort-select">
+                <option value="downloads">Najpopularniejsze</option>
+                <option value="relevance">Najtrafniejsze</option>
+                <option value="updated">Ostatnio aktualizowane</option>
+                <option value="newest">Najnowsze</option>
+              </select>
+
+              <label class="ver-lock-pill" title="Ogranicz wyniki do kompatybilnych z profilem">
+                <input type="checkbox" class="ui-switch" id="mod-browse-ver-lock">
+                <span>Tylko wersja profilu</span>
+              </label>
+            </div>
+
+            <div class="mod-chips-row" id="mod-categories-chips">
+              <button class="mod-chip active" data-category="all">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                <span>Wszystkie</span>
+              </button>
+              <button class="mod-chip" data-category="optimization">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                <span>Optymalizacja</span>
+              </button>
+              <button class="mod-chip" data-category="utility">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+                <span>Narzędzia</span>
+              </button>
+              <button class="mod-chip" data-category="worldgen">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                <span>Świat i Biomy</span>
+              </button>
+              <button class="mod-chip" data-category="decoration">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/></svg>
+                <span>Dekoracje</span>
+              </button>
+              <button class="mod-chip" data-category="adventure">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+                <span>Przygoda</span>
+              </button>
+            </div>
+          </div>
+
+          <div id="mod-browse-loading" style="display: none; padding: 36px; align-items: center; justify-content: center; gap: 10px; color: var(--text-secondary);">
+            <div class="spinner-ring"></div>
+            <span>Przeszukiwanie katalogu Modrinth...</span>
+          </div>
+
+          <div class="modrinth-results-grid" id="mod-browse-results"></div>
+
+          <div class="mod-browse-pagination-wrap" id="mod-browse-pagination-wrap" style="display: none; justify-content: center; padding: 24px 0 16px 0;">
+            <button class="btn-secondary" id="btn-mod-browse-load-more" style="min-width: 220px; padding: 10px 24px; font-weight: 600;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+              <span>Załaduj więcej (+30)</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================================================================
+           VIEW 4: PAKIETY ZASOBÓW I SHADERY (#view-packs)
+           ================================================================== -->
+      <section class="tab-view" id="view-packs">
+        <div class="view-header">
+          <div class="view-title-group">
+            <span class="section-kicker">Oprawa Wizualna</span>
+            <h1 class="view-title">Pakiety Zasobów i Shadery</h1>
+            <p class="view-subtitle">Zarządzaj teksturami oraz paczkami shaderów Iris z automatycznym podglądem ikon .png.</p>
+          </div>
+
+          <div class="segmented-control">
+            <button class="seg-btn active" id="packs-subtab-resourcepacks" data-pack-type="resourcepacks">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+              <span>Pakiety Zasobów</span>
+            </button>
+            <button class="seg-btn" id="packs-subtab-shaderpacks" data-pack-type="shaderpacks">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/></svg>
+              <span>Shadery (Iris)</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="packs-dropzone" id="packs-dropzone">
+          <div class="dropzone-left">
+            <div class="dropzone-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            </div>
+            <div>
+              <div class="setting-title" id="packs-dropzone-title">Przeciągnij i upuść pakiety zasobów (.zip)</div>
+              <div class="setting-desc">Launcher automatycznie odczyta miniaturkę pack.png oraz opis z pliku pack.mcmeta.</div>
+            </div>
+          </div>
+          <div class="view-actions">
+            <button class="btn-secondary" id="btn-open-packs-folder">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+              <span>Otwórz folder</span>
+            </button>
+            <button class="btn-primary" id="btn-add-packs">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              <span>Dodaj paczkę .zip</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="packs-grid" id="packs-list-container"></div>
+      </section>
+
+      <!-- ==================================================================
+           VIEW: TEST KOMPUTERA & AUTO-TUNING (#view-benchmark)
+           ================================================================== -->
+      <section class="tab-view" id="view-benchmark">
+        <div class="view-header">
+          <div class="view-title-group">
+            <span class="section-kicker">Wydajność &amp; Diagnostyka Sprzętu</span>
+            <h1 class="view-title">Test Komputera &amp; Auto-Tuning FPS</h1>
+            <p class="view-subtitle">Sprawdź moc obliczeniową podzespołów Twojego PC i jednym kliknięciem dostosuj Minecrafta, Sodium oraz maszynę JVM pod maksymalną liczbę klatek na sekundę.</p>
+          </div>
+          <div class="view-actions">
+            <div class="benchmark-profile-box">
+              <label for="select-benchmark-profile" class="benchmark-profile-label">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                <span>Profil docelowy:</span>
+              </label>
+              <div class="select-wrapper">
+                <select id="select-benchmark-profile" class="select-styled benchmark-profile-select">
+                  <option value="active" selected>Aktywny profil</option>
+                </select>
+              </div>
+            </div>
+            <button class="btn-primary" id="btn-run-benchmark-hero">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              <span>Uruchom Test Wydajności</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Hardware & Benchmark Grid -->
+        <div class="benchmark-dashboard-grid">
+
+          <!-- Left Card: Live Score & Hardware Spec -->
+          <div class="benchmark-hero-card">
+            <div class="benchmark-score-zone">
+              <div class="score-radial-wrap">
+                <svg class="score-radial-svg" viewBox="0 0 120 120">
+                  <circle class="score-circle-bg" cx="60" cy="60" r="50"/>
+                  <circle class="score-circle-bar" id="score-circle-bar" cx="60" cy="60" r="50"/>
+                </svg>
+                <div class="score-radial-content">
+                  <span class="score-number tnum" id="benchmark-score-text">----</span>
+                  <span class="score-label">PUNKTÓW</span>
+                </div>
+              </div>
+              <div class="score-meta-zone">
+                <div class="benchmark-tier-pill" id="benchmark-tier-pill">
+                  <span class="pulse-dot"></span>
+                  <span id="benchmark-tier-label">OCZEKIWANIE NA TEST</span>
+                </div>
+                <h3 class="benchmark-hero-title" id="benchmark-hero-title">Gotowy do przetestowania maszyny</h3>
+                <p class="benchmark-hero-subtitle" id="benchmark-hero-subtitle">Naciśnij przycisk poniżej, aby uruchomić test wielowątkowości CPU, przepustowości RAM i karty graficznej.</p>
+                <button class="btn-emerald btn-lg" id="btn-run-benchmark-main">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                  <span>Rozpocznij Test PC &amp; Optymalizację</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Testing Progress Indicator (hidden by default) -->
+            <div class="benchmark-progress-zone" id="benchmark-progress-zone" style="display: none;">
+              <div class="benchmark-progress-header">
+                <span class="benchmark-stage-text" id="benchmark-stage-text">1/4 Testowanie wydajności jednowątkowej CPU...</span>
+                <span class="benchmark-pct tnum" id="benchmark-pct">0%</span>
+              </div>
+              <div class="benchmark-progress-track">
+                <div class="benchmark-progress-fill" id="benchmark-progress-fill" style="width: 0%;"></div>
+              </div>
+            </div>
+
+            <!-- Detected Hardware Cards Grid -->
+            <div class="benchmark-specs-grid">
+              <div class="spec-card">
+                <div class="spec-card-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg>
+                </div>
+                <div class="spec-card-meta">
+                  <span class="spec-label">Procesor (CPU)</span>
+                  <span class="spec-val" id="spec-cpu-name">Wykrywanie...</span>
+                  <span class="spec-sub" id="spec-cpu-threads">0 rdzeni / 0 wątków</span>
+                </div>
+              </div>
+
+              <div class="spec-card">
+                <div class="spec-card-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 19v-3"/><path d="M10 19v-3"/><path d="M14 19v-3"/><path d="M18 19v-3"/><rect x="2" y="6" width="20" height="9" rx="1"/></svg>
+                </div>
+                <div class="spec-card-meta">
+                  <span class="spec-label">Karta Graficzna (GPU)</span>
+                  <span class="spec-val" id="spec-gpu-name">Wykrywanie...</span>
+                  <span class="spec-sub" id="spec-gpu-type">Dedykowana / OpenGL</span>
+                </div>
+              </div>
+
+              <div class="spec-card">
+                <div class="spec-card-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+                </div>
+                <div class="spec-card-meta">
+                  <span class="spec-label">Pamięć RAM</span>
+                  <span class="spec-val" id="spec-ram-total">0 GB</span>
+                  <span class="spec-sub" id="spec-ram-free">Dostępne: 0 GB</span>
+                </div>
+              </div>
+
+              <div class="spec-card">
+                <div class="spec-card-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+                </div>
+                <div class="spec-card-meta">
+                  <span class="spec-label">Środowisko Java</span>
+                  <span class="spec-val" id="spec-java-ver">Wykrywanie...</span>
+                  <span class="spec-sub" id="spec-os-info">Linux x86_64</span>
+                </div>
               </div>
             </div>
           </div>
+
+          <!-- Right Card: Recommended Optimal Profile & 1-Click Tuning -->
+          <div class="benchmark-recom-card">
+            <div class="recom-card-header">
+              <div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span class="section-kicker" style="color: var(--emerald); margin-bottom: 0;">Kasteusz Auto-Tuning Engine</span>
+                  <span class="recom-profile-badge" id="recom-target-profile-badge">Profil: Aktywny</span>
+                </div>
+                <h2 class="recom-card-title">Zalecana Konfiguracja Gry</h2>
+              </div>
+              <button class="btn-emerald btn-sm" id="btn-apply-optimal-settings">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                <span>Zastosuj (1-Click)</span>
+              </button>
+            </div>
+
+            <!-- Tuning Comparison Rows -->
+            <div class="tuning-rows-list">
+              <div class="tuning-row">
+                <div class="tuning-row-meta">
+                  <div class="tuning-row-title">Przydział Pamięci RAM dla Minecrafta</div>
+                  <div class="tuning-row-desc">Optymalny balans między shaderami a brakiem mikroprzycięć GC</div>
+                </div>
+                <div class="tuning-diff-chip">
+                  <span class="diff-before" id="diff-ram-before">4 GB</span>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+                  <span class="diff-after" id="diff-ram-after">6 GB</span>
+                </div>
+              </div>
+
+              <div class="tuning-row">
+                <div class="tuning-row-meta">
+                  <div class="tuning-row-title">Silnik JVM i Garbage Collector</div>
+                  <div class="tuning-row-desc">Zaawansowany alokator pamięci dla Java 21 LTS</div>
+                </div>
+                <div class="tuning-diff-chip">
+                  <span class="diff-before" id="diff-jvm-before">G1GC</span>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+                  <span class="diff-after" id="diff-jvm-after">Ultra FPS (ZGC)</span>
+                </div>
+              </div>
+
+              <div class="tuning-row">
+                <div class="tuning-row-meta">
+                  <div class="tuning-row-title">Zasięg Renderowania Świata</div>
+                  <div class="tuning-row-desc">Płynne ładowanie terenu (options.txt)</div>
+                </div>
+                <div class="tuning-diff-chip">
+                  <span class="diff-before" id="diff-render-before">8 chunków</span>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+                  <span class="diff-after" id="diff-render-after">14 chunków</span>
+                </div>
+              </div>
+
+              <div class="tuning-row">
+                <div class="tuning-row-meta">
+                  <div class="tuning-row-title">Optymalizacje Silnika Graficznego Sodium</div>
+                  <div class="tuning-row-desc">Entity Culling, Texture Culling, Block Occlusion (+30% FPS)</div>
+                </div>
+                <div class="tuning-status-badge">
+                  <span class="badge-active">Zalecane 4 optymalizacje</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Features Checklist -->
+            <div class="sodium-features-box">
+              <div class="sodium-features-title">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                <span>Automatycznie włączane ulepszenia wydajności:</span>
+              </div>
+              <ul class="sodium-features-list">
+                <li><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> <span><strong>Entity Culling</strong> — pomijanie renderowania niewidocznych mobów i graczy za ścianami (+25% FPS w bazach)</span></li>
+                <li><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> <span><strong>Texture Animation Culling</strong> — animowanie wyłącznie widocznych tekstur (+15% FPS)</span></li>
+                <li><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> <span><strong>Fog &amp; Block Occlusion</strong> — ukrywanie bloków we mgle i zasłoniętych ścian</span></li>
+                <li><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> <span><strong>Wielowątkowy Chunk Builder</strong> — optymalna liczba wątków CPU dla ładowania terenu</span></li>
+              </ul>
+            </div>
+
+            <!-- Apply Button Big Footer -->
+            <div class="recom-footer-btn-wrap">
+              <button class="btn-emerald btn-lg" id="btn-apply-optimal-settings-big" style="width: 100%;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                <span>Zastosuj Optymalne Ustawienia w 1 Kliknięcie</span>
+              </button>
+            </div>
+          </div>
+
         </div>
+      </section>
+
+      <!-- ==================================================================
+           VIEW 5: MUZYKA / SPOTIFY & LIVE LYRICS (#view-music)
+           ================================================================== -->
+      <section class="tab-view" id="view-music">
+        <div class="view-header">
+          <div class="view-title-group">
+            <span class="section-kicker">Audio Engine &amp; In-Game [M] Overlay</span>
+            <h1 class="view-title">Studio Muzyczne i Spotify</h1>
+            <p class="view-subtitle">Odtwarzaj playlisty Spotify bez otwartej aplikacji, radia gamingowe oraz tekst piosenki na żywo.</p>
+          </div>
+
+          <div class="segmented-control">
+            <button class="seg-btn active" id="music-subtab-lyrics">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+              <span>Live Lyrics (Tekst)</span>
+            </button>
+            <button class="seg-btn" id="music-subtab-library">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+              <span>Playlisty, Wyszukiwarka i Radio</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="music-studio-grid">
+
+          <!-- Left Deck: Now Playing, Ambient Glow & Transport -->
+          <div class="music-player-deck">
+            <div class="music-ambient-glow" id="music-ambient-glow"></div>
+
+            <div class="music-cover-stage">
+              <div class="music-cover-frame">
+                <img id="spotify-now-playing-art" src="assets/icon-256.png" alt="Okładka">
+              </div>
+
+              <div class="music-track-meta">
+                <span class="music-source-pill" id="spotify-playback-badge-text">Odtwarzacz gotowy</span>
+                <div class="music-now-title" id="spotify-now-playing-title">Wybierz utwór lub stację</div>
+                <div class="music-now-artist" id="spotify-now-playing-artist">Kasteusz Audio Engine</div>
+              </div>
+            </div>
+
+            <div class="music-scrubber-block">
+              <input type="range" id="music-tab-seek" min="0" max="1000" value="0">
+              <div class="music-time-row tnum">
+                <span id="music-tab-time-cur">0:00</span>
+                <span id="music-tab-time-dur">0:00</span>
+              </div>
+            </div>
+
+            <div class="music-transport-row">
+              <button class="transport-btn" id="btn-music-tab-shuffle" title="Losowe odtwarzanie (Shuffle)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
+              </button>
+              <button class="transport-btn" id="btn-spotify-modal-prev" title="Poprzedni utwór">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5" stroke="currentColor" stroke-width="2.2"/></svg>
+              </button>
+              <button class="transport-btn-play" id="btn-spotify-modal-play" title="Odtwarzaj / Pauza">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+              </button>
+              <button class="transport-btn" id="btn-spotify-modal-next" title="Następny utwór">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19" stroke="currentColor" stroke-width="2.2"/></svg>
+              </button>
+              <button class="transport-btn" id="btn-music-tab-loop" title="Zapętlenie utworu (Loop)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+              </button>
+            </div>
+
+            <div class="music-volume-row">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+              <input type="range" id="music-tab-volume" min="0" max="100" value="35">
+              <span class="tnum" id="music-tab-vol-label" style="font-size: 11px; min-width: 32px; text-align: right;">35%</span>
+            </div>
+          </div>
+
+          <!-- Right Column: Live Lyrics OR Library -->
+          <div class="music-right-col">
+
+            <!-- Panel A: Live Synchronized Lyrics -->
+            <div class="lyrics-card" id="music-panel-lyrics">
+              <div style="display: flex; align-items: center; justify-content: space-between; padding-bottom: 10px; border-bottom: 1px solid var(--border-subtle);">
+                <span class="section-kicker">Synchronizowany Tekst (LRCLIB Live)</span>
+                <span class="mod-tag" id="lyrics-sync-badge">Auto-Sync</span>
+              </div>
+              <div class="lyrics-scroll-viewport" id="lyrics-scroll-container">
+                <div class="lyrics-placeholder">
+                  Włącz dowolną piosenkę z playlisty Spotify lub wyszukiwarki, aby wyświetlić synchronizowany tekst na żywo.
+                </div>
+              </div>
+            </div>
+
+            <!-- Panel B: Library, Search, Spotify & Radio Stations -->
+            <div class="music-library-scroll" id="music-panel-library" style="display: none;">
+
+              <!-- Direct Song Search -->
+              <div class="obsidian-card" style="padding: 14px; display: flex; flex-direction: column; gap: 10px;">
+                <span class="section-kicker">Wyszukiwarka Utworów (Bez aplikacji Spotify)</span>
+                <div class="input-with-btn">
+                  <input type="text" class="ui-input" id="music-track-search-input" placeholder="Wpisz tytuł lub wykonawcę (np. Travis Scott, Taco Hemingway, Playboi Carti)...">
+                  <button class="btn-primary" id="btn-music-track-search">Szukaj</button>
+                </div>
+                <div class="music-search-results" id="music-track-search-results"></div>
+              </div>
+
+              <!-- Spotify Account + Client ID API + URL Loader -->
+              <div class="obsidian-card" style="padding: 14px; display: flex; flex-direction: column; gap: 10px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;">
+                  <span class="section-kicker">Konto Spotify i Import Playlist</span>
+                  <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                    <button class="btn-ghost" id="btn-toggle-spotify-api" title="Własny klucz Spotify Client ID (eliminuje globalne limity API 429)" style="height: 26px; padding: 0 9px; font-size: 11px;">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg>
+                      <span id="spotify-api-key-badge">Klucz API</span>
+                    </button>
+                    <div id="spotify-card-disconnected" style="display: flex; align-items: center; gap: 8px;">
+                      <button class="btn-spotify-pill" id="btn-spotify-login">Połącz konto Spotify</button>
+                    </div>
+                    <div id="spotify-card-connected" style="display: none; align-items: center; gap: 8px;">
+                      <img id="spotify-user-avatar" src="assets/icon-256.png" alt="" style="width: 22px; height: 22px; border-radius: 50%; object-fit: cover;">
+                      <span id="spotify-user-name" style="font-size: 11.5px; font-weight: 600;">Spotify</span>
+                      <span id="spotify-user-plan" class="mod-tag">Połączono</span>
+                      <button class="btn-ghost" id="btn-spotify-logout" style="height: 24px; padding: 0 8px; font-size: 11px;">Rozłącz</button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Collapsible Personal Spotify Client ID Configurator -->
+                <div class="spotify-api-setup-box" id="spotify-api-setup-box" style="display: none;">
+                  <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
+                    <span style="font-size: 11.5px; font-weight: 600; color: var(--text-primary);">Własny Spotify Client ID (brak limitów 429 i pełna synchronizacja konta)</span>
+                    <button class="btn-secondary" id="btn-open-spotify-dev" style="height: 24px; padding: 0 9px; font-size: 11px;">
+                      <span>Otwórz Spotify Dev</span>
+                    </button>
+                  </div>
+                  <div style="font-size: 11px; color: var(--text-secondary); line-height: 1.45; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                    <span>1. Utwórz darmową aplikację w panelu Spotify Dev i dodaj Redirect URI:</span>
+                    <button type="button" class="spotify-redirect-chip" id="btn-copy-spotify-redirect" title="Kliknij, aby skopiować adres Redirect URI">
+                      <span>http://127.0.0.1:8989/login</span>
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                    </button>
+                  </div>
+                  <div class="input-with-btn">
+                    <input type="text" class="ui-input" id="spotify-client-id-input" placeholder="2. Wklej tutaj swój Client ID (32 znaki, np. a1b2c3d4...)">
+                    <button class="btn-primary" id="btn-spotify-save-client-id">Zapisz i Połącz</button>
+                  </div>
+                </div>
+
+                <div class="input-with-btn">
+                  <input type="text" class="ui-input" id="spotify-playlist-url-input" placeholder="Lub wklej link do playlisty Spotify, aby zapisać ją na stałe (https://open.spotify.com/playlist/...)">
+                  <button class="btn-emerald" id="btn-load-spotify-url">Dodaj i Graj</button>
+                </div>
+              </div>
+
+              <!-- User's Spotify Playlists -->
+              <div class="obsidian-card" style="padding: 14px; display: flex; flex-direction: column; gap: 10px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+                  <span class="section-kicker" id="spotify-playlists-title-label">Twoje Playlisty Spotify</span>
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <span class="mod-tag tnum" id="spotify-playlists-count-label">0 playlist</span>
+                    <button class="btn-ghost" id="btn-quick-add-playlist-link" title="Wklej link do playlisty ze Spotify" style="height: 26px; padding: 0 9px; font-size: 11px;">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                      <span>Wklej link</span>
+                    </button>
+                    <button class="btn-icon-only" id="btn-spotify-refresh-playlists" title="Odśwież playlisty z konta Spotify" style="width: 26px; height: 26px;">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                    </button>
+                  </div>
+                </div>
+                <div class="spotify-playlists-grid" id="spotify-playlists-grid"></div>
+              </div>
+
+              <!-- Featured Spotify Playlists -->
+              <div class="obsidian-card" style="padding: 14px; display: flex; flex-direction: column; gap: 10px;">
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                  <span class="section-kicker">Polecane Playlisty Spotify (Top Hity & Rap)</span>
+                  <span class="mod-tag">4 playlisty</span>
+                </div>
+                <div class="spotify-playlists-grid" id="spotify-featured-playlists-grid"></div>
+              </div>
+
+              <!-- Built-in Gaming Radio Stations -->
+              <div class="obsidian-card" style="padding: 14px; display: flex; flex-direction: column; gap: 10px;">
+                <span class="section-kicker">Stacje Radiowe 24/7</span>
+                <div class="stations-grid">
+                  <button class="station-card" id="btn-station-lofi">
+                    <div class="station-icon-box">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
+                    </div>
+                    <div>
+                      <div class="setting-title">Lofi Chill</div>
+                      <div class="setting-desc">Beats to relax</div>
+                    </div>
+                  </button>
+                  <button class="station-card" id="btn-station-synthwave">
+                    <div class="station-icon-box">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                    </div>
+                    <div>
+                      <div class="setting-title">Synthwave</div>
+                      <div class="setting-desc">Cyberpunk Electro</div>
+                    </div>
+                  </button>
+                  <button class="station-card" id="btn-station-ambient">
+                    <div class="station-icon-box">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+                    </div>
+                    <div>
+                      <div class="setting-title">Ambient OST</div>
+                      <div class="setting-desc">Calm &amp; Chill</div>
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ==================================================================
+           VIEW: GALERIA ZRZUTÓW EKRANU & KLIPÓW (#view-screenshots)
+           ================================================================== -->
+      <section class="tab-view" id="view-screenshots">
+        <div class="view-header">
+          <div class="view-title-group">
+            <span class="section-kicker">Galeria & Media Hub</span>
+            <h1 class="view-title">Zrzuty Ekranu & Klipy (F2)</h1>
+            <p class="view-subtitle">Przeglądaj zrzuty z gry, kopiuj je jednym kliknięciem bezpośrednio do schowka (Discord Ctrl+V) i zarządzaj mediami.</p>
+          </div>
+          <div class="view-actions">
+            <button class="btn-secondary" id="btn-screenshots-refresh" title="Odśwież galerię">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+              <span>Odśwież</span>
+            </button>
+            <button class="btn-primary" id="btn-screenshots-open-folder" title="Otwórz folder ze zrzutami">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+              <span>Otwórz Folder</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Filter & Search Toolbar -->
+        <div class="screenshots-toolbar">
+          <div class="screenshots-search-box">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" id="input-screenshots-search" placeholder="Szukaj po nazwie lub dacie..." />
+          </div>
+
+          <div class="screenshots-filters">
+            <div class="select-wrapper">
+              <select id="select-screenshots-profile" class="select-styled">
+                <option value="all">Wszystkie profile</option>
+                <option value="active" selected>Aktywny profil</option>
+              </select>
+            </div>
+
+            <div class="select-wrapper">
+              <select id="select-screenshots-sort" class="select-styled">
+                <option value="newest" selected>Najnowsze</option>
+                <option value="oldest">Najstarsze</option>
+                <option value="size">Największe</option>
+              </select>
+            </div>
+
+            <div class="screenshots-summary-badge" id="screenshots-summary-badge">
+              <span id="screenshots-count-label">0 zrzutów</span>
+              <span class="dot-separator">•</span>
+              <span id="screenshots-size-label">0 MB</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Screenshots Grid Container -->
+        <div class="screenshots-grid-container">
+          <div class="screenshots-grid" id="screenshots-grid">
+            <!-- Wypełniane dynamicznie przez renderer.js -->
+          </div>
+
+          <!-- Empty State -->
+          <div class="screenshots-empty" id="screenshots-empty" style="display: none;">
+            <div class="empty-state-icon">
+              <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                <circle cx="12" cy="13" r="4"/>
+              </svg>
+            </div>
+            <h3 class="empty-state-title">Brak zrzutów ekranu</h3>
+            <p class="empty-state-desc">Wciśnij <kbd class="kbd-badge">F2</kbd> podczas rozgrywki w Minecraft, aby zapisać zrzut. Pojawi się w tym miejscu natychmiast!</p>
+            <button class="btn-secondary" id="btn-screenshots-empty-folder">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+              <span>Otwórz Folder Zrzutów</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================================================================
+           VIEW 6: HOSTOWANIE SERWERA LOKALNEGO (#view-server)
+           ================================================================== -->
+      <section class="tab-view" id="view-server">
+        <div class="view-header">
+          <div class="view-title-group">
+            <span class="section-kicker">Dedykowany Host PC</span>
+            <h1 class="view-title">Lokalny Serwer Minecraft 1.21.11</h1>
+            <p class="view-subtitle">Postaw prywatny serwer bezpośrednio na swoim komputerze z podglądem konsoli na żywo.</p>
+          </div>
+          <div class="view-actions">
+            <button class="btn-emerald" id="btn-toggle-server">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              <span id="server-btn-label">Uruchom Serwer</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="server-ip-grid">
+          <div class="server-ip-card">
+            <div>
+              <div class="section-kicker">Adres LAN / VPN dla znajomych</div>
+              <div class="server-ip-mono tnum" id="server-local-ip-display">127.0.0.1:25565</div>
+            </div>
+            <button class="btn-secondary" id="btn-copy-local-ip">Kopiuj IP</button>
+          </div>
+
+          <div class="server-ip-card">
+            <div>
+              <div class="section-kicker">Połączenie lokalne (Ten PC)</div>
+              <div class="server-ip-mono tnum">localhost:25565</div>
+            </div>
+            <button class="btn-secondary" id="btn-copy-localhost-ip">Kopiuj adres</button>
+          </div>
+        </div>
+
+        <div class="server-cfg-grid">
+          <div class="cfg-field">
+            <label class="cfg-label">Pamięć RAM (GB)</label>
+            <select class="ui-select tnum" id="server-cfg-ram">
+              <option value="2">2 GB RAM</option>
+              <option value="4" selected>4 GB RAM</option>
+              <option value="6">6 GB RAM</option>
+              <option value="8">8 GB RAM</option>
+            </select>
+          </div>
+          <div class="cfg-field">
+            <label class="cfg-label">Port TCP/UDP</label>
+            <input type="number" class="ui-input tnum" id="server-cfg-port" value="25565">
+          </div>
+          <div class="cfg-field">
+            <label class="cfg-label">Weryfikacja Kont (Online Mode)</label>
+            <select class="ui-select" id="server-cfg-online-mode">
+              <option value="false" selected>Wyłączona (Premium + Non-Premium)</option>
+              <option value="true">Tylko Premium (Microsoft)</option>
+            </select>
+          </div>
+          <div class="cfg-field">
+            <label class="cfg-label">Tryb Rozgrywki</label>
+            <select class="ui-select" id="server-cfg-gamemode">
+              <option value="survival" selected>Survival (Przetrwanie)</option>
+              <option value="creative">Creative (Kreatywny)</option>
+              <option value="adventure">Adventure (Przygoda)</option>
+            </select>
+          </div>
+          <div class="cfg-field">
+            <label class="cfg-label">Poziom Trudności</label>
+            <select class="ui-select" id="server-cfg-difficulty">
+              <option value="peaceful">Pokojowy</option>
+              <option value="easy">Łatwy</option>
+              <option value="normal" selected>Normalny</option>
+              <option value="hard">Trudny</option>
+            </select>
+          </div>
+          <div class="cfg-field">
+            <label class="cfg-label">Walka Graczy (PvP)</label>
+            <select class="ui-select" id="server-cfg-pvp">
+              <option value="true" selected>Włączone</option>
+              <option value="false">Wyłączone</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="terminal-card">
+          <div class="terminal-header">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span id="server-console-dot" style="display: none; width: 7px; height: 7px; border-radius: 50%; background: var(--emerald);"></span>
+              <span id="server-console-status-text">Status: Wyłączony</span>
+            </div>
+            <span class="mod-tag">STDOUT / RCON</span>
+          </div>
+          <div class="terminal-log-body" id="server-console-log">
+            <div class="server-log-line" style="color: var(--text-muted);">[SYSTEM] Konsola serwera gotowa. Kliknij „Uruchom Serwer”, aby rozpocząć.</div>
+          </div>
+          <div class="terminal-cmd-bar">
+            <input type="text" class="ui-input" id="server-cmd-input" placeholder="Wpisz komendę serwera (np. op Nick, time set day, whitelist add)..." disabled style="flex: 1; font-family: var(--font-mono);">
+            <button class="btn-primary" id="btn-send-server-cmd" disabled>Wyślij</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================================================================
+           VIEW 7: AKTUALNOŚCI I CHANGELOG (#view-messages)
+           ================================================================== -->
+      <section class="tab-view" id="view-messages">
+        <div class="view-header">
+          <div class="view-title-group">
+            <span class="section-kicker">Komunikaty Systemowe</span>
+            <h1 class="view-title">Aktualności i Dziennik Zmian</h1>
+            <p class="view-subtitle">Najnowsze aktualizacje ekosystemu KasteuszLauncher, KasteuszVisuals 2 oraz Szkolne SMP.</p>
+          </div>
+        </div>
+
+        <div class="news-stack">
+          <article class="news-card">
+            <div class="news-card-meta">
+              <span class="news-badge">Aktualizacja v2.4 — Obsidian UI</span>
+              <span class="setting-desc tnum">Październik 2026</span>
+            </div>
+            <h3 style="font-size: 15px;">Kompletny Redesign Interfejsu + Live Lyrics &amp; Menedżer Zasobów</h3>
+            <p class="setting-desc" style="font-size: 12.5px; color: var(--text-secondary);">
+              Wprowadziliśmy nową architekturę Dark Obsidian Glass: boczny panel nawigacji, bezpośredni odczyt ikon i wersji z plików .jar oraz paczek .zip (Resource Packs i Shaders), a także wbudowane Studio Muzyczne z synchronizowanym tekstem piosenek (LRCLIB Live).
+            </p>
+          </article>
+
+          <article class="news-card">
+            <div class="news-card-meta">
+              <span class="news-badge emerald">KasteuszVisuals 2 • Minecraft 1.21.11</span>
+              <span class="setting-desc tnum">Mod Klienta</span>
+            </div>
+            <h3 style="font-size: 15px;">Kosy CS2 3D, Inspect [F] oraz Menu Muzyki pod klawiszem [M]</h3>
+            <p class="setting-desc" style="font-size: 12.5px; color: var(--text-secondary);">
+              W grze dostępne jest pełne sterowanie muzyką pod klawiszem [M], dynamiczny HUD z tekstem piosenki oraz 8 modeli kos 3D (Butterfly, M9 Bayonet, Karambit, Skeleton, Stiletto, Kunai, Xenohunter, Katana) z płynnymi animacjami pod przytrzymaniem [F].
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <!-- ==================================================================
+           VIEW 8: USTAWIENIA (#view-settings)
+           ================================================================== -->
+      <section class="tab-view" id="view-settings">
+        <div class="view-header">
+          <div class="view-title-group">
+            <span class="section-kicker">Konfiguracja Systemowa</span>
+            <h1 class="view-title">Ustawienia Launchera</h1>
+            <p class="view-subtitle">Dostosuj alokację pamięci JVM, grafikę interfejsu, integrację Discord RPC oraz ścieżki plików.</p>
+          </div>
+        </div>
+
+        <div class="settings-categories-grid">
+
+          <!-- Category 1: Wydajność (RAM / Java) -->
+          <div class="settings-card">
+            <div class="settings-card-header">
+              <div class="settings-card-icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/></svg>
+              </div>
+              <div>
+                <div class="setting-title">Wydajność (RAM i Java)</div>
+                <div class="setting-desc">Parametry maszyny wirtualnej JVM oraz flagi optymalizacyjne</div>
+              </div>
+            </div>
+
+            <div class="setting-row-col">
+              <div class="ram-header-line">
+                <span class="setting-title">Maksymalny przydział pamięci RAM</span>
+                <span class="ram-value-pill tnum" id="setting-ram-val">4 GB</span>
+              </div>
+              <input type="range" id="setting-ram-max" min="2" max="16" step="1" value="4">
+              <div class="ram-ticks tnum">
+                <span>2 GB</span>
+                <span>4 GB</span>
+                <span>6 GB</span>
+                <span>8 GB</span>
+                <span>12 GB</span>
+                <span>16 GB</span>
+              </div>
+              <div class="ram-recommendation" id="ram-recommendation-hint">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="20 6 9 17 4 12"/></svg>
+                <span>Optymalny zakres dla Minecraft z modami Fabric (4 – 8 GB)</span>
+              </div>
+            </div>
+
+            <div class="setting-row-col">
+              <span class="setting-title">Środowisko uruchomieniowe Java</span>
+              <div class="input-with-btn">
+                <input type="text" class="ui-input" id="setting-java-path" placeholder="Automatyczne wykrywanie (Java 21)">
+                <button class="btn-secondary" id="btn-browse-java">Wybierz</button>
+              </div>
+              <span class="setting-desc" id="setting-java-desc">Automatycznie dobiera odpowiednią wersję Javy dla wybranego silnika.</span>
+            </div>
+
+            <div class="setting-row">
+              <div>
+                <div class="setting-title">Tryb FPS Boost (Optymalizator JVM)</div>
+                <div class="setting-desc">Aktywuje wybrane flagi optymalizacyjne JVM redukujące mikro-przycięcia</div>
+              </div>
+              <input type="checkbox" class="ui-switch" id="setting-fps-boost" checked>
+            </div>
+
+            <!-- 1-Click Tuning Optymalizator Flag JVM -->
+            <div class="setting-row-col" style="margin-top: 4px; gap: 8px;">
+              <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+                <div>
+                  <span class="setting-title">Optymalizator Flag JVM (1-Click Tuning)</span>
+                  <div class="setting-desc" style="font-size: 11.5px;">Gotowe profile wirtualnej maszyny Java 21 dla maksymalnych FPS</div>
+                </div>
+                <button type="button" class="btn-emerald" id="btn-1click-auto-tune" style="height: 28px; padding: 0 11px; font-size: 11.5px;" title="Wykrywa pamięć RAM i automatycznie konfiguruje najlepszy profil">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                  <span>1-Click Auto-Tuning</span>
+                </button>
+              </div>
+
+              <!-- Presets Grid -->
+              <div class="jvm-presets-grid" id="jvm-presets-grid">
+                <div class="jvm-preset-card active" data-preset="ultra" id="jvm-card-ultra">
+                  <div class="jvm-preset-top">
+                    <span class="jvm-preset-title">Ultra FPS (ZGC)</span>
+                    <span class="mod-tag emerald">Java 21</span>
+                  </div>
+                  <div class="jvm-preset-desc">Generational ZGC. Pauzy GC &lt; 1ms, ultra wysokie FPS, zero mikro-przycięć.</div>
+                  <div class="jvm-preset-meta">Rekomendowane: 8 GB RAM</div>
+                </div>
+
+                <div class="jvm-preset-card" data-preset="g1gc" id="jvm-card-g1gc">
+                  <div class="jvm-preset-top">
+                    <span class="jvm-preset-title">Stabilny (G1GC)</span>
+                    <span class="mod-tag">Zbalansowany</span>
+                  </div>
+                  <div class="jvm-preset-desc">Tuned G1GC Aikar. Stabilne klatki, brak lag-spikes przy wielu modach.</div>
+                  <div class="jvm-preset-meta">Rekomendowane: 6 GB RAM</div>
+                </div>
+
+                <div class="jvm-preset-card" data-preset="lowend" id="jvm-card-lowend">
+                  <div class="jvm-preset-top">
+                    <span class="jvm-preset-title">Low-End PC</span>
+                    <span class="mod-tag amber">Oszczędny</span>
+                  </div>
+                  <div class="jvm-preset-desc">Parallel GC. Zmniejsza zużycie procesora i pamięci na słabszych laptopach.</div>
+                  <div class="jvm-preset-meta">Rekomendowane: 4 GB RAM</div>
+                </div>
+              </div>
+
+              <!-- Dodatkowe flagi JVM -->
+              <div style="margin-top: 4px;">
+                <span class="setting-title" style="font-size: 11.5px; display: block; margin-bottom: 4px;">Dodatkowe parametry JVM (opcjonalne)</span>
+                <input type="text" class="ui-input" id="setting-custom-jvm-args" placeholder="-XX:+UseStringDeduplication ...">
+              </div>
+            </div>
+
+            <div class="setting-row">
+              <div>
+                <div class="setting-title">Optymalizacja pliku options.txt</div>
+                <div class="setting-desc">Automatycznie wyłącza V-Sync i ustawia płynny limit klatek przy starcie</div>
+              </div>
+              <input type="checkbox" class="ui-switch" id="setting-optimize-options">
+            </div>
+          </div>
+
+          <!-- Category 2: Grafika, Personalizacja & Okno -->
+          <div class="settings-card">
+            <div class="settings-card-header">
+              <div class="settings-card-icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>
+              </div>
+              <div>
+                <div class="setting-title">Grafika i Personalizacja</div>
+                <div class="setting-desc">Motyw akcentu, animowane tło Canvas 60 FPS oraz dźwięki UI</div>
+              </div>
+            </div>
+
+            <div class="setting-row-col">
+              <span class="setting-title">Motyw kolorystyczny</span>
+              <div class="themes-swatch-grid">
+                <div class="theme-card active" data-theme="purple">
+                  <span class="theme-swatch" style="background: #6366F1;"></span>
+                  <span class="theme-name">Indigo</span>
+                </div>
+                <div class="theme-card" data-theme="emerald">
+                  <span class="theme-swatch" style="background: #10B981;"></span>
+                  <span class="theme-name">Emerald</span>
+                </div>
+                <div class="theme-card" data-theme="cyan">
+                  <span class="theme-swatch" style="background: #06B6D4;"></span>
+                  <span class="theme-name">Cyber Cyan</span>
+                </div>
+                <div class="theme-card" data-theme="red">
+                  <span class="theme-swatch" style="background: #EF4444;"></span>
+                  <span class="theme-name">Crimson #95</span>
+                </div>
+                <div class="theme-card" data-theme="gold">
+                  <span class="theme-swatch" style="background: #F59E0B;"></span>
+                  <span class="theme-name">Amber Gold</span>
+                </div>
+                <div class="theme-card" data-theme="ruby">
+                  <span class="theme-swatch" style="background: #EC4899;"></span>
+                  <span class="theme-name">Obsidian Rose</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="setting-row-col">
+              <div class="ram-header-line">
+                <span class="setting-title">Animowana tapeta tła</span>
+                <span class="setting-desc tnum" id="setting-wallpaper-val">55%</span>
+              </div>
+              <div class="wallpaper-btn-grid">
+                <button class="wallpaper-opt-btn active" data-style="matrix">Konstelacje</button>
+                <button class="wallpaper-opt-btn" data-style="warp">Nadprzestrzeń</button>
+                <button class="wallpaper-opt-btn" data-style="aurora">Zorza</button>
+                <button class="wallpaper-opt-btn" data-style="none">Statyczna</button>
+              </div>
+              <input type="range" id="setting-wallpaper-opacity" min="10" max="100" value="55">
+            </div>
+
+            <div class="setting-row">
+              <div>
+                <div class="setting-title">Poświata sceny 3D (Ambient Glow)</div>
+                <div class="setting-desc">Subtelne oświetlenie za modelem postaci w zakładce Graj</div>
+              </div>
+              <input type="checkbox" class="ui-switch" id="setting-ambient-glow" checked>
+            </div>
+
+            <div class="setting-row-col">
+              <div class="ram-header-line">
+                <span class="setting-title">Prędkość animacji modelu 3D</span>
+                <span class="setting-desc tnum" id="setting-anim-val">1.0x</span>
+              </div>
+              <input type="range" id="setting-anim-speed" min="0" max="250" step="10" value="100">
+            </div>
+
+            <div class="setting-row">
+              <div>
+                <div class="setting-title">Syntezator dźwięków UI</div>
+                <div class="setting-desc">Mikrodźwięki przycisków Web Audio (<span class="tnum" id="setting-sounds-val">40%</span>)</div>
+              </div>
+              <input type="checkbox" class="ui-switch" id="setting-ui-sounds" checked>
+            </div>
+            <input type="range" id="setting-sounds-volume" min="5" max="100" value="40">
+          </div>
+
+          <!-- Category 3: Integracje (Discord RPC) -->
+          <div class="settings-card">
+            <div class="settings-card-header">
+              <div class="settings-card-icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+              </div>
+              <div>
+                <div class="setting-title">Integracje (Discord Rich Presence)</div>
+                <div class="setting-desc">Wyświetlaj aktualną wersję gry i serwer na profilu Discord</div>
+              </div>
+            </div>
+
+            <div class="setting-row">
+              <div>
+                <div class="setting-title">Status aktywności Discord RPC</div>
+                <div class="setting-desc">Pokazuje znajomym na Discordzie w co aktualnie grasz</div>
+              </div>
+              <input type="checkbox" class="ui-switch" id="setting-discord-rpc" checked>
+            </div>
+
+            <div class="setting-row-col">
+              <span class="setting-title">Własne Discord Application Client ID (opcjonalne)</span>
+              <div class="input-with-btn">
+                <input type="text" class="ui-input tnum" id="setting-discord-client-id" placeholder="Domyślny identyfikator KasteuszLauncher">
+                <button class="btn-secondary" id="btn-open-discord-dev">Portal Dev</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Category 4: Launcher -->
+          <div class="settings-card">
+            <div class="settings-card-header">
+              <div class="settings-card-icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+              </div>
+              <div>
+                <div class="setting-title">Pliki i Zachowanie Launchera</div>
+                <div class="setting-desc">Główny katalog danych Minecraft oraz opcje okna</div>
+              </div>
+            </div>
+
+            <div class="setting-row-col">
+              <span class="setting-title">Katalog instalacji gry</span>
+              <div class="input-with-btn">
+                <input type="text" class="ui-input" id="setting-game-dir" readonly>
+                <button class="btn-secondary" id="btn-browse-dir">Zmień</button>
+              </div>
+            </div>
+
+            <div class="setting-row">
+              <div>
+                <div class="setting-title">Minimalizuj launcher po uruchomieniu gry</div>
+                <div class="setting-desc">Zwalnia zasoby pulpitu podczas sesji w Minecraft</div>
+              </div>
+              <input type="checkbox" class="ui-switch" id="setting-close-on-launch">
+            </div>
+          </div>
+
+          <!-- Category 5: Diagnostic Logs Console -->
+          <div class="settings-card full-span">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <div>
+                <div class="setting-title">Konsola Diagnostyczna Procesu Gry</div>
+                <div class="setting-desc">Strumień logów JVM oraz silnika MCLC na żywo</div>
+              </div>
+              <button class="btn-secondary" id="btn-clear-logs">Wyczyść logi</button>
+            </div>
+            <div class="terminal-card" style="min-height: 160px;">
+              <div class="terminal-log-body" id="logs-console">
+                <div class="log-line">[SYSTEM] KasteuszLauncher gotowy do pracy.</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- ======================================================================
+       3. DOCKED GLASS AUDIO BAR (#footer-music-player)
+       ====================================================================== -->
+  <footer class="footer-music-dock" id="footer-music-player">
+    <div class="dock-track-left" id="music-info-click" title="Otwórz Studio Muzyczne i Tekst Piosenki">
+      <div class="dock-art-wrap">
+        <img id="footer-cover-art" src="assets/icon-256.png" alt="Cover">
       </div>
-    </div>
-
-  </main>
-
-  <!-- Bottom Footer Bar -->
-  <footer class="footer-bar">
-    <div class="footer-copyright">© 2026 KASTEUSZ STUDIO</div>
-
-    <!-- Central Docked Mini Music Player -->
-    <div class="footer-music-player" id="footer-music-player">
       <div class="music-visualizer" id="music-visualizer">
         <span class="bar"></span>
         <span class="bar"></span>
         <span class="bar"></span>
       </div>
-      <div class="music-info-text" id="music-info-click" style="cursor: pointer;" title="Kliknij, aby otworzyć Spotify i wybór playlist">
-        <span class="music-station-title" id="music-title">Lofi Chill Beats</span>
-        <span class="music-station-genre" id="music-genre">Lofi Hip-Hop</span>
+      <div class="dock-track-info">
+        <span class="music-title" id="music-title">Lofi Chill Beats</span>
+        <span class="music-genre" id="music-genre">Gotowy do odtwarzania</span>
       </div>
-      <div class="music-controls">
-        <button class="music-ctrl-btn" id="btn-music-prev" title="Poprzednia stacja / utwór">⏮</button>
-        <button class="music-ctrl-btn play-btn" id="btn-music-toggle" title="Odtwarzaj / Pauza">▶</button>
-        <button class="music-ctrl-btn" id="btn-music-next" title="Następna stacja / utwór">⏭</button>
-      </div>
-      <div class="music-vol-wrapper">
-        <span class="vol-icon">🔊</span>
-        <input type="range" class="music-vol-slider" id="music-volume-slider" min="0" max="100" value="35">
-      </div>
-      <button class="music-ctrl-btn" id="btn-open-spotify-hub" title="Spotify & Playlists Hub" style="color: #1db954; font-size: 13px; font-weight: 700; margin-left: 2px;">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.498 17.306c-.215.353-.676.466-1.028.25-2.817-1.722-6.363-2.112-10.539-1.157-.402.093-.804-.158-.896-.56-.093-.403.157-.805.56-.897 4.571-1.045 8.492-.596 11.653 1.336.352.216.465.676.25 1.028zm1.467-3.262c-.27.441-.848.58-1.288.31-3.225-1.982-8.14-2.556-11.954-1.398-.496.151-1.025-.133-1.176-.63-.151-.497.133-1.026.63-1.177 4.363-1.325 9.789-.684 13.478 1.587.44.27.58.848.31 1.288zm.126-3.398c-3.868-2.296-10.25-2.508-13.934-1.39-.593.18-1.222-.162-1.402-.755-.18-.593.162-1.222.755-1.402 4.24-1.287 11.286-1.038 15.736 1.604.533.316.708 1.01.392 1.543-.316.533-1.01.708-1.547.4z"/>
-        </svg>
-      </button>
     </div>
 
-    <div class="footer-version">4.0.1</div>
+    <div class="dock-center-controls">
+      <div class="dock-buttons-row">
+        <button class="music-btn" id="btn-music-prev" title="Poprzedni">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5" stroke="currentColor" stroke-width="2.2"/></svg>
+        </button>
+        <button class="music-btn play-toggle" id="btn-music-toggle" title="Odtwarzaj / Pauza">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+        </button>
+        <button class="music-btn" id="btn-music-next" title="Następny">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19" stroke="currentColor" stroke-width="2.2"/></svg>
+        </button>
+      </div>
+
+      <div class="dock-timeline-row">
+        <span class="dock-time tnum" id="footer-time-cur">0:00</span>
+        <input type="range" class="dock-seek-slider" id="footer-seek-slider" min="0" max="1000" value="0">
+        <span class="dock-time tnum" id="footer-time-dur">0:00</span>
+      </div>
+    </div>
+
+    <div class="dock-right-controls">
+      <div class="dock-vol-wrap">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+        <input type="range" id="music-volume-slider" min="0" max="100" value="35">
+      </div>
+      <button class="btn-spotify-pill" id="btn-open-spotify-hub" title="Przejdź do Studia Spotify i Live Lyrics">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/><path d="M8 11.5c2.5-1 5.5-.8 8 .5M8.5 14.5c2-.7 4.5-.5 6.5.5" stroke="#08090C" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg>
+        <span>Studio Audio</span>
+      </button>
+    </div>
   </footer>
 
-  <!-- LOGIN MODAL (Microsoft Premium) -->
+  <!-- ======================================================================
+       4. MODALS (LOGIN, PROFILE, ADD FRIEND, WARDROBE 3D, MUSIC MODAL COMPAT)
+       ====================================================================== -->
+
+  <!-- Login Modal -->
   <div class="modal-overlay" id="login-modal">
     <div class="modal-card">
-      <button class="modal-close-btn" id="btn-close-login-modal">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-          <line x1="18" y1="6" x2="6" y2="18"></line>
-          <line x1="6" y1="6" x2="18" y2="18"></line>
-        </svg>
-      </button>
-
-      <div class="modal-icon-badge">
-        <img src="assets/logo.svg" width="36" height="36" alt="Kasteusz Icon">
-      </div>
-
-      <h3 class="modal-title">Konto Minecraft Premium</h3>
-      <p class="modal-desc">
-        Aby pobierać oficjalne pliki gry i grać na serwerach multiplayer, zaloguj się oficjalnym kontem Microsoft / Xbox.
-      </p>
-
-      <button class="btn-microsoft-login" id="btn-ms-login-submit">
-        <div class="ms-logo-icon">
-          <div class="ms-box ms-red"></div>
-          <div class="ms-box ms-green"></div>
-          <div class="ms-box ms-blue"></div>
-          <div class="ms-box ms-yellow"></div>
+      <div class="modal-header">
+        <div>
+          <span class="section-kicker">Autoryzacja Gracza</span>
+          <h2 class="modal-title">Zaloguj się do Launchera</h2>
         </div>
-        <span>Zaloguj się kontem Microsoft</span>
+        <button class="modal-close" id="btn-close-login-modal">✕</button>
+      </div>
+
+      <button class="btn-primary" id="btn-ms-login-submit" style="height: 42px; width: 100%;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="2" width="9" height="9"/><rect x="13" y="2" width="9" height="9"/><rect x="2" y="13" width="9" height="9"/><rect x="13" y="13" width="9" height="9"/></svg>
+        <span>Zaloguj kontem Microsoft (Premium)</span>
       </button>
 
-      <div class="modal-status-text" id="login-status-text"></div>
-
-      <div class="modal-divider">
-        <span>LUB ZALOGUJ NICKIEM</span>
+      <div style="display: flex; align-items: center; gap: 10px; color: var(--text-muted); font-size: 11px;">
+        <div style="flex: 1; height: 1px; background: var(--border-subtle);"></div>
+        <span>LUB KONTO OFFLINE</span>
+        <div style="flex: 1; height: 1px; background: var(--border-subtle);"></div>
       </div>
 
-      <div style="display: flex; gap: 8px; width: 100%;">
-        <input type="text" class="form-input" id="offline-username-input" placeholder="Wpisz swój nick gracza..." style="flex: 1;">
-        <button class="btn-secondary" id="btn-offline-submit" style="font-weight: 700; padding: 0 16px;">Zaloguj</button>
+      <div class="input-with-btn">
+        <input type="text" class="ui-input" id="offline-username-input" placeholder="Wpisz swój nick w grze..." maxlength="16">
+        <button class="btn-secondary" id="btn-offline-submit">Kontynuuj</button>
       </div>
-      <span style="font-size: 11px; color: var(--text-dim); margin-top: 8px;">Automatycznie pobiera Twój skin i pozwala grać od razu.</span>
+
+      <div id="login-status-text" style="font-size: 11.5px; color: var(--text-secondary); min-height: 16px;"></div>
     </div>
   </div>
 
-  <!-- PROFILE / ACCOUNT MANAGEMENT MODAL -->
+  <!-- Profile Modal -->
   <div class="modal-overlay" id="profile-modal">
     <div class="modal-card">
-      <button class="modal-close-btn" id="btn-close-profile-modal">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-          <line x1="18" y1="6" x2="6" y2="18"></line>
-          <line x1="6" y1="6" x2="18" y2="18"></line>
-        </svg>
-      </button>
-
-      <h3 class="modal-title" style="margin-bottom: 20px;">Zarządzanie Kontem</h3>
-
-      <div class="account-card-info">
-        <img src="assets/default-skin.png" class="account-avatar-large" id="modal-account-avatar" alt="Head">
-        <div class="account-details">
-          <div class="account-name-lg" id="modal-account-name">Kasteusz</div>
-          <div class="account-badge-premium" id="modal-account-badge">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-            </svg>
-            <span>Konto Premium (Microsoft)</span>
-          </div>
-          <div style="font-size: 11px; color: var(--text-dim); margin-top: 4px;" id="modal-account-uuid">UUID: ...</div>
-        </div>
-      </div>
-
-      <!-- Player Statistics in Modal -->
-      <div class="profile-stats-grid">
-        <div class="p-stat-box">
-          <span class="p-stat-val" id="profile-stat-playtime">0h 0m</span>
-          <span class="p-stat-lbl">Czas w grze</span>
-        </div>
-        <div class="p-stat-box">
-          <span class="p-stat-val" id="profile-stat-launches">0</span>
-          <span class="p-stat-lbl">Uruchomienia</span>
-        </div>
-        <div class="p-stat-box">
-          <span class="p-stat-val" id="profile-stat-rank" style="color: var(--accent-primary);">Nowicjusz</span>
-          <span class="p-stat-lbl">Ranga gracza</span>
-        </div>
-      </div>
-
-      <!-- Change Nick & Skin Section -->
-      <div style="width: 100%; display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; text-align: left;">
-        <label style="font-size: 12px; font-weight: 600; color: #cbd5e1;">Zmień nick i pobierz skórkę z Minecraft:</label>
-        <div style="display: flex; gap: 8px;">
-          <input type="text" class="form-input" id="profile-new-username-input" placeholder="Wpisz nowy nick gracza..." style="flex: 1;">
-          <button class="btn-secondary" id="btn-profile-change-nick" style="padding: 8px 14px; font-weight: 600;">Wczytaj</button>
-        </div>
-        
-        <div style="display: flex; gap: 8px; margin-top: 4px;">
-          <button class="btn-secondary" id="btn-upload-skin-file" style="flex: 1; font-size: 11.5px; padding: 7px;">
-            📁 Wgraj plik .png
-          </button>
-          <button class="btn-secondary" id="btn-reset-default-skin" style="flex: 1; font-size: 11.5px; padding: 7px; color: #94a3b8;">
-            ↺ Resetuj skin
-          </button>
-        </div>
-      </div>
-
-      <div style="display: flex; gap: 10px; width: 100%;">
-        <button class="btn-secondary" id="btn-modal-switch-ms" style="flex: 1; padding: 10px;">Zmień konto</button>
-        <button class="btn-secondary" id="btn-modal-logout" style="flex: 1; padding: 10px; color: #f87171; border-color: rgba(239,68,68,0.3);">Wyloguj</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ADD FRIEND MODAL -->
-  <div class="modal-overlay" id="add-friend-modal">
-    <div class="modal-card" style="max-width: 420px; text-align: center;">
-      <button class="modal-close" id="btn-close-friend-modal">&times;</button>
-      
-      <div class="modal-header-icon" style="background: rgba(168, 85, 247, 0.15); color: #c084fc; width: 48px; height: 48px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 14px;">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-          <circle cx="8.5" cy="7" r="4"></circle>
-          <line x1="20" y1="8" x2="20" y2="14"></line>
-          <line x1="23" y1="11" x2="17" y2="11"></line>
-        </svg>
-      </div>
-
-      <h3 style="font-size: 18px; font-weight: 700; color: #ffffff; margin-bottom: 6px;">Dodaj Znajomego</h3>
-      <p style="font-size: 13px; color: var(--text-dim); margin-bottom: 20px;">Wpisz nick gracza Minecraft. Jego główka i status zostaną automatycznie pobrane.</p>
-
-      <div style="display: flex; gap: 8px; margin-bottom: 12px;">
-        <input type="text" class="form-input" id="friend-input-nick" placeholder="Wpisz nick znajomego (np. Zlovuss)..." style="flex: 1;" maxlength="16">
-        <button class="btn-primary" id="btn-submit-add-friend" style="padding: 10px 18px; font-weight: 700; white-space: nowrap; border-radius: 8px; background: #a855f7; border: none; color: #ffffff; cursor: pointer;">Dodaj</button>
-      </div>
-      <div id="friend-modal-error" style="font-size: 12px; color: #f87171; min-height: 18px; text-align: left;"></div>
-    </div>
-  </div>
-
-  <!-- WARDROBE & CAPES MODAL -->
-  <div class="modal-overlay" id="wardrobe-modal">
-    <div class="modal-card wardrobe-modal-card">
-      <button class="modal-close-btn" id="btn-close-wardrobe-modal">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-          <line x1="18" y1="6" x2="6" y2="18"></line>
-          <line x1="6" y1="6" x2="18" y2="18"></line>
-        </svg>
-      </button>
-
-      <div class="wardrobe-header">
-        <div class="wardrobe-icon-box">👕</div>
+      <div class="modal-header">
         <div>
-          <h3 class="modal-title" style="margin: 0; text-align: left;">Garderoba i Kosmetyki</h3>
-          <p class="modal-desc" style="margin: 2px 0 0 0; text-align: left;">Wybierz pelerynkę lub skórkę dla swojej postaci 3D.</p>
+          <span class="section-kicker">Profil Gracza</span>
+          <h2 class="modal-title">Zarządzanie Kontem</h2>
+        </div>
+        <button class="modal-close" id="btn-close-profile-modal">✕</button>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: var(--radius-md); background: var(--surface-2); border: 1px solid var(--border-subtle);">
+        <img id="modal-account-avatar" src="assets/default-skin.png" alt="Avatar" style="width: 46px; height: 46px; border-radius: 8px; image-rendering: pixelated;">
+        <div style="min-width: 0; flex: 1;">
+          <div id="modal-account-name" style="font-size: 15px; font-weight: 700;">Gracz</div>
+          <div id="modal-account-badge" style="font-size: 11.5px; display: inline-flex; align-items: center; gap: 5px;">Konto aktywne</div>
+          <div id="modal-account-uuid" class="tnum" style="font-family: var(--font-mono); font-size: 10px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">UUID</div>
         </div>
       </div>
 
-      <!-- Wardrobe tabs -->
+      <div class="profile-stats-grid">
+        <div class="profile-stat-box">
+          <span class="section-kicker" style="font-size: 9.5px;">Czas Gry</span>
+          <span class="profile-stat-val tnum" id="profile-stat-playtime">0h 0m</span>
+        </div>
+        <div class="profile-stat-box">
+          <span class="section-kicker" style="font-size: 9.5px;">Sesje</span>
+          <span class="profile-stat-val tnum" id="profile-stat-launches">0</span>
+        </div>
+        <div class="profile-stat-box">
+          <span class="section-kicker" style="font-size: 9.5px;">Ranga</span>
+          <span class="profile-stat-val" id="profile-stat-rank" style="font-size: 12px;">Gracz</span>
+        </div>
+      </div>
+
+      <div class="setting-row-col">
+        <span class="setting-title">Zmień nick i pobierz skórkę</span>
+        <div class="input-with-btn">
+          <input type="text" class="ui-input" id="profile-new-username-input" placeholder="Nowy nick Minecraft..." maxlength="16">
+          <button class="btn-primary" id="btn-profile-change-nick">Zapisz</button>
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 8px;">
+        <button class="btn-secondary" id="btn-upload-skin-file" style="flex: 1;">Wgraj skin .png</button>
+        <button class="btn-secondary" id="btn-reset-default-skin" style="flex: 1;">Domyślny skin</button>
+      </div>
+
+      <div class="accounts-list" id="accounts-list-container"></div>
+
+      <div style="display: flex; justify-content: space-between; gap: 8px; padding-top: 8px; border-top: 1px solid var(--border-subtle);">
+        <button class="btn-secondary" id="btn-modal-switch-ms">Dodaj konto</button>
+        <button class="btn-danger-ghost" id="btn-modal-logout">Wyloguj się</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add Friend Modal -->
+  <div class="modal-overlay" id="add-friend-modal">
+    <div class="modal-card" style="max-width: 390px;">
+      <div class="modal-header">
+        <div>
+          <span class="section-kicker">Społeczność</span>
+          <h2 class="modal-title">Dodaj Znajomego</h2>
+        </div>
+        <button class="modal-close" id="btn-close-friend-modal">✕</button>
+      </div>
+
+      <div class="input-with-btn">
+        <input type="text" class="ui-input" id="friend-input-nick" placeholder="Wpisz nick gracza Minecraft..." maxlength="16">
+        <button class="btn-primary" id="btn-submit-add-friend">Dodaj</button>
+      </div>
+      <div id="friend-modal-error" style="font-size: 11.5px; color: var(--text-secondary); min-height: 16px;"></div>
+    </div>
+  </div>
+
+  <!-- Wardrobe & 3D Cosmetics Modal -->
+  <div class="modal-overlay" id="wardrobe-modal">
+    <div class="modal-card wide">
+      <div class="modal-header">
+        <div>
+          <span class="section-kicker">Personalizacja Postaci 3D</span>
+          <h2 class="modal-title">Garderoba, Pelerynki i Kosmetyki</h2>
+        </div>
+        <button class="modal-close" id="btn-close-wardrobe-modal">✕</button>
+      </div>
+
       <div class="wardrobe-tabs">
-        <button class="wardrobe-tab active" id="tab-btn-capes">Pelerynki (Capes)</button>
-        <button class="wardrobe-tab" id="tab-btn-skins">Skórki (Skins)</button>
+        <button class="wardrobe-tab active" id="tab-btn-capes">Pelerynki</button>
+        <button class="wardrobe-tab" id="tab-btn-skins">Skórki Gracza</button>
         <button class="wardrobe-tab" id="tab-btn-cosmetics">Kosmetyki 3D</button>
       </div>
 
-      <!-- Capes section -->
-      <div class="wardrobe-content active" id="wardrobe-content-capes">
-        <div class="wardrobe-section-label">PELERYNKI AUTORSKIE KASTEUSZ LAUNCHER</div>
+      <!-- Capes Tab -->
+      <div class="wardrobe-tab-content active" id="wardrobe-content-capes">
+        <span class="section-kicker">Kolekcja Kasteusz Studio</span>
         <div class="capes-grid" id="capes-grid">
           <div class="cape-item-card active" data-cape-id="kasteusz">
-            <div class="cape-preview-wrapper" id="cape-preview-kasteusz"></div>
+            <div class="cape-preview-wrapper"></div>
             <div class="cape-item-info">
               <span class="cape-item-title">Kasteusz Studio</span>
-              <span class="cape-item-badge purple">Oficjalna</span>
-            </div>
-          </div>
-          <div class="cape-item-card" data-cape-id="mcqueen95">
-            <div class="cape-preview-wrapper" id="cape-preview-mcqueen95"></div>
-            <div class="cape-item-info">
-              <span class="cape-item-title">Zygzak McQueen #95</span>
-              <span class="cape-item-badge red">Wyścigowa</span>
+              <span class="cape-item-badge">Domyślna</span>
             </div>
           </div>
           <div class="cape-item-card" data-cape-id="szkolnesmp">
-            <div class="cape-preview-wrapper" id="cape-preview-szkolnesmp"></div>
+            <div class="cape-preview-wrapper"></div>
             <div class="cape-item-info">
               <span class="cape-item-title">Szkolne SMP</span>
-              <span class="cape-item-badge emerald">Serwerowa</span>
+              <span class="cape-item-badge">Serwerowa</span>
+            </div>
+          </div>
+          <div class="cape-item-card" data-cape-id="mcqueen95">
+            <div class="cape-preview-wrapper"></div>
+            <div class="cape-item-info">
+              <span class="cape-item-title">McQueen #95</span>
+              <span class="cape-item-badge">Edycja #95</span>
             </div>
           </div>
           <div class="cape-item-card" data-cape-id="fire_dragon">
-            <div class="cape-preview-wrapper" id="cape-preview-fire_dragon"></div>
+            <div class="cape-preview-wrapper"></div>
             <div class="cape-item-info">
               <span class="cape-item-title">Ognisty Płomień</span>
-              <span class="cape-item-badge gold">Ognista</span>
+              <span class="cape-item-badge">Specjalna</span>
             </div>
           </div>
         </div>
 
-        <div class="wardrobe-section-label" style="margin-top: 14px;">PELERYNKI KONTA MOJANG / MICROSOFT</div>
-        <div class="capes-grid" id="account-capes-container">
-          <!-- Dynamically populated or empty -->
-        </div>
+        <span class="section-kicker">Pelerynki Konta Mojang / Microsoft</span>
+        <div class="capes-grid" id="account-capes-container"></div>
 
-        <div style="margin-top: 16px; display: flex; gap: 10px;">
-          <button class="btn-secondary" id="btn-custom-cape-file" style="flex: 1; padding: 10px; font-size: 12px; display: flex; align-items: center; justify-content: center; gap: 6px;">
-            <span>📁</span>
-            <span>Wgraj własną pelerynkę (.png)</span>
-          </button>
-          <button class="btn-secondary" id="btn-remove-cape" style="padding: 10px 14px; font-size: 12px; color: var(--text-dim);" title="Zdejmij pelerynkę">
-            Zdejmij
-          </button>
-        </div>
-      </div>
-
-      <!-- Skins section -->
-      <div class="wardrobe-content" id="wardrobe-content-skins">
-        <div class="wardrobe-section-label">SZYBKIE SKÓRKI PRESETOWE</div>
-        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
-          <button class="skin-preset-btn" id="btn-preset-mcqueen">
-            <span style="font-size: 20px;">🏎️</span>
-            <span style="font-weight: 600; font-size: 12px;">Zygzak McQueen</span>
-          </button>
-          <button class="skin-preset-btn" id="btn-preset-steve">
-            <span style="font-size: 20px;">⛏️</span>
-            <span style="font-weight: 600; font-size: 12px;">Klasyczny Steve</span>
-          </button>
-          <button class="skin-preset-btn" id="btn-preset-alex">
-            <span style="font-size: 20px;">🏹</span>
-            <span style="font-weight: 600; font-size: 12px;">Klasyczna Alex</span>
-          </button>
-        </div>
-
-        <div class="wardrobe-section-label" style="margin-top: 16px;">POBIERZ PO NICKU Z MOJANG</div>
         <div style="display: flex; gap: 8px;">
-          <input type="text" class="form-input" id="wardrobe-nick-input" placeholder="Wpisz nick gracza Minecraft..." style="flex: 1;">
-          <button class="btn-primary" id="btn-wardrobe-fetch-nick" style="padding: 0 16px; font-size: 12px;">Pobierz</button>
-        </div>
-
-        <div style="margin-top: 14px;">
-          <button class="btn-secondary" id="btn-wardrobe-upload-skin" style="width: 100%; padding: 10px; font-size: 12px;">
-            Wybierz plik skórki (.png) z dysku
-          </button>
+          <button class="btn-secondary" id="btn-custom-cape-file" style="flex: 1;">Wgraj własną pelerynkę (.png)</button>
+          <button class="btn-danger-ghost" id="btn-remove-cape">Zdejmij pelerynkę</button>
         </div>
       </div>
 
-      <!-- 3D Cosmetics section -->
-      <div class="wardrobe-content" id="wardrobe-content-cosmetics">
-        <div class="wardrobe-section-label">WYPOSAŻENIE PLECÓW (PELERYNKA CZY SKRZYDŁA ELYTRA)</div>
+      <!-- Skins Tab -->
+      <div class="wardrobe-tab-content" id="wardrobe-content-skins">
+        <span class="section-kicker">Pobierz skórkę dowolnego gracza Premium</span>
+        <div class="input-with-btn">
+          <input type="text" class="ui-input" id="wardrobe-nick-input" placeholder="Wpisz nick gracza (np. Technoblade)...">
+          <button class="btn-primary" id="btn-wardrobe-fetch-nick">Załóż skin</button>
+        </div>
+
+        <span class="section-kicker">Szybkie Presety</span>
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
+          <button class="btn-secondary skin-preset-btn" id="btn-preset-mcqueen">Domyślny Kasteusz</button>
+          <button class="btn-secondary skin-preset-btn" id="btn-preset-steve">Klasyczny Steve</button>
+          <button class="btn-secondary skin-preset-btn" id="btn-preset-alex">Klasyczna Alex</button>
+        </div>
+
+        <button class="btn-secondary" id="btn-wardrobe-upload-skin">Wybierz własny plik skórki (.png) z dysku</button>
+      </div>
+
+      <!-- 3D Cosmetics Tab -->
+      <div class="wardrobe-tab-content" id="wardrobe-content-cosmetics">
         <div class="cosmetics-grid">
-          <div class="cosmetic-card active" id="cosmetic-back-cape" data-back="cape">
-            <div class="cosmetic-icon">🦸‍♂️</div>
-            <div class="cosmetic-info">
-              <span class="cosmetic-name">Klasyczna Pelerynka</span>
-              <span class="cosmetic-desc">Powiewająca peleryna na plecach</span>
+          <div class="cosmetic-card active" id="cosmetic-back-cape">
+            <div>
+              <div class="setting-title">Klasyczna Pelerynka</div>
+              <div class="setting-desc">Standardowy materiał na plecach</div>
             </div>
             <span class="cosmetic-status-pill">Aktywna</span>
           </div>
-
-          <div class="cosmetic-card" id="cosmetic-back-elytra" data-back="elytra">
-            <div class="cosmetic-icon">🪽</div>
-            <div class="cosmetic-info">
-              <span class="cosmetic-name">Skrzydła Elytra (Wings)</span>
-              <span class="cosmetic-desc">Rozłożone 3D skrzydła z teksturą Twojej pelerynki</span>
+          <div class="cosmetic-card" id="cosmetic-back-elytra">
+            <div>
+              <div class="setting-title">Skrzydła Elytra 3D</div>
+              <div class="setting-desc">Nakłada wzór pelerynki na Elytrę</div>
             </div>
             <span class="cosmetic-status-pill">Wybierz</span>
           </div>
-        </div>
-
-        <div class="wardrobe-section-label" style="margin-top: 16px;">DODATKI NA GŁOWĘ</div>
-        <div class="cosmetics-grid">
           <div class="cosmetic-card" id="cosmetic-ears-card">
-            <div class="cosmetic-icon">🐭</div>
-            <div class="cosmetic-info">
-              <span class="cosmetic-name">Uszy Deadmau5</span>
-              <span class="cosmetic-desc">Kultowe duże uszy na głowie gracza</span>
+            <div>
+              <div class="setting-title">Uszy Deadmau5</div>
+              <div class="setting-desc">Dodatkowa geometria 3D głowy</div>
             </div>
             <span class="cosmetic-status-pill" id="pill-ears-status">Wyłączone</span>
           </div>
-
           <div class="cosmetic-card" id="cosmetic-halo-card">
-            <div class="cosmetic-icon">😇</div>
-            <div class="cosmetic-info">
-              <span class="cosmetic-name">Aureola Światła (Halo)</span>
-              <span class="cosmetic-desc">Lewitujący złoty pierścień nad głową postaci</span>
+            <div>
+              <div class="setting-title">Złota Aureola</div>
+              <div class="setting-desc">Lewitujący pierścień nad postacią</div>
             </div>
             <span class="cosmetic-status-pill" id="pill-halo-status">Wyłączone</span>
           </div>
         </div>
       </div>
+
     </div>
   </div>
 
-  <!-- SPOTIFY & MUSIC HUB MODAL -->
-  <div class="modal-overlay" id="music-modal">
-    <div class="modal-card music-modal-card">
-      <button class="modal-close-btn" id="btn-close-music-modal">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-          <line x1="18" y1="6" x2="6" y2="18"></line>
-          <line x1="6" y1="6" x2="18" y2="18"></line>
-        </svg>
-      </button>
-
-      <div class="music-hub-header">
-        <div class="music-hub-icon-box">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.498 17.306c-.215.353-.676.466-1.028.25-2.817-1.722-6.363-2.112-10.539-1.157-.402.093-.804-.158-.896-.56-.093-.403.157-.805.56-.897 4.571-1.045 8.492-.596 11.653 1.336.352.216.465.676.25 1.028zm1.467-3.262c-.27.441-.848.58-1.288.31-3.225-1.982-8.14-2.556-11.954-1.398-.496.151-1.025-.133-1.176-.63-.151-.497.133-1.026.63-1.177 4.363-1.325 9.789-.684 13.478 1.587.44.27.58.848.31 1.288zm.126-3.398c-3.868-2.296-10.25-2.508-13.934-1.39-.593.18-1.222-.162-1.402-.755-.18-.593.162-1.222.755-1.402 4.24-1.287 11.286-1.038 15.736 1.604.533.316.708 1.01.392 1.543-.316.533-1.01.708-1.547.4z"/>
-          </svg>
-        </div>
+  <!-- ======================================================================
+       MODAL 5: PROFILE CREATOR / EDITOR (#profile-editor-modal)
+       ====================================================================== -->
+  <div class="modal-overlay" id="profile-editor-modal">
+    <div class="modal-card modal-lg">
+      <div class="modal-header">
         <div>
-          <h3 class="modal-title" style="margin: 0; text-align: left;">Spotify i Muzyka w Grze</h3>
-          <p class="modal-desc" style="margin: 2px 0 0 0; text-align: left;">Słuchaj swoich playlist ze Spotify w launcherze i podczas grania w Minecrafta.</p>
+          <span class="section-kicker">Kreator Instancji</span>
+          <h2 class="modal-title" id="profile-editor-title">Nowy Profil Gry</h2>
+        </div>
+        <button class="modal-close" id="btn-close-profile-editor">✕</button>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 14px;">
+        <div>
+          <span class="section-kicker" style="display: block; margin-bottom: 6px;">Nazwa Profilu</span>
+          <input type="text" class="ui-input" id="prof-input-name" placeholder="np. PvP 1.21.11 Fabric, Survival z Shaderami, Modpack 1.20.1...">
+        </div>
+
+        <div>
+          <span class="section-kicker" style="display: block; margin-bottom: 6px;">Ikona Profilu</span>
+          <div class="icon-picker-row" id="prof-icon-picker">
+            <button type="button" class="icon-option-btn active" data-icon="bolt" title="Błyskawica / FPS">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            </button>
+            <button type="button" class="icon-option-btn" data-icon="sword" title="Miecz / PvP">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="14.5 17.5 3 6 3 3 6 3 17.5 14.5"/><line x1="13" y1="19" x2="19" y2="13"/><line x1="16" y1="16" x2="20" y2="20"/><line x1="19" y1="21" x2="21" y2="19"/></svg>
+            </button>
+            <button type="button" class="icon-option-btn" data-icon="cube" title="Blok / Klasyczny">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+            </button>
+            <button type="button" class="icon-option-btn" data-icon="spark" title="Shadery / Wizualia">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg>
+            </button>
+            <button type="button" class="icon-option-btn" data-icon="compass" title="Survival / Eksploracja">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>
+            </button>
+            <button type="button" class="icon-option-btn" data-icon="crown" title="Główny / Serwerowy">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m2 4 3 12h14l3-12-6 7-4-7-4 7-6-7zm3 16h14"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <span class="section-kicker" style="display: block; margin-bottom: 6px;">Silnik (Mod Loader)</span>
+          <div class="loader-picker-grid" id="prof-loader-picker">
+            <button type="button" class="loader-option-card active" data-loader="fabric">
+              <div style="display: flex; align-items: center; justify-content: space-between;">
+                <span class="setting-title">Fabric Loader</span>
+                <span class="loader-pill fabric">Zalecany</span>
+              </div>
+              <span class="setting-desc">Pełna obsługa modów .jar, Sodium, Iris, Modrinth i KasteuszVisuals.</span>
+            </button>
+            <button type="button" class="loader-option-card" data-loader="quilt">
+              <div style="display: flex; align-items: center; justify-content: space-between;">
+                <span class="setting-title">Quilt Loader</span>
+                <span class="loader-pill quilt">Mody</span>
+              </div>
+              <span class="setting-desc">Nowoczesny silnik kompatybilny z większością modów Fabric oraz Quilt.</span>
+            </button>
+            <button type="button" class="loader-option-card" data-loader="vanilla">
+              <div style="display: flex; align-items: center; justify-content: space-between;">
+                <span class="setting-title">Vanilla (Oficjalny)</span>
+                <span class="loader-pill vanilla">Czysty</span>
+              </div>
+              <span class="setting-desc">Czysty klient Mojang uruchamiany bez ładowania żadnych modów.</span>
+            </button>
+            <button type="button" class="loader-option-card" data-loader="custom">
+              <div style="display: flex; align-items: center; justify-content: space-between;">
+                <span class="setting-title">Własny z versions/</span>
+                <span class="loader-pill custom">Forge / Inny</span>
+              </div>
+              <span class="setting-desc">Wybierz ręcznie zainstalowany silnik (np. Forge, NeoForge, OptiFine).</span>
+            </button>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+          <div>
+            <span class="section-kicker" style="display: block; margin-bottom: 6px;">Wersja Minecraft</span>
+            <select class="ui-select" id="prof-select-mcversion" style="width: 100%;"></select>
+          </div>
+
+          <div>
+            <span class="section-kicker" style="display: block; margin-bottom: 6px;">Przydział Pamięci RAM</span>
+            <select class="ui-select" id="prof-select-ram" style="width: 100%;">
+              <option value="">Domyślny z ustawień launchera</option>
+              <option value="2">2 GB RAM</option>
+              <option value="4">4 GB RAM (Zalecane)</option>
+              <option value="6">6 GB RAM (Paczki modów)</option>
+              <option value="8">8 GB RAM (Duże paczki + Shadery)</option>
+              <option value="10">10 GB RAM</option>
+              <option value="12">12 GB RAM</option>
+              <option value="16">16 GB RAM</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+          <div>
+            <span class="section-kicker" style="display: block; margin-bottom: 6px;">Optymalizator JVM</span>
+            <select class="ui-select" id="prof-select-jvm-preset" style="width: 100%;">
+              <option value="">Domyślny z launchera</option>
+              <option value="ultra">Ultra FPS (ZGC Java 21)</option>
+              <option value="g1gc">Stabilny (G1GC Aikar)</option>
+              <option value="lowend">Low-End PC (Oszczędny)</option>
+              <option value="custom">Własne parametry JVM</option>
+            </select>
+          </div>
+          <div>
+            <span class="section-kicker" style="display: block; margin-bottom: 6px;">Własne Flagi JVM (opcjonalne)</span>
+            <input type="text" class="ui-input" id="prof-input-jvm-args" placeholder="-XX:+UseStringDeduplication" style="width: 100%;">
+          </div>
+        </div>
+
+        <div id="prof-custom-engine-wrap" style="display: none;">
+          <span class="section-kicker" style="display: block; margin-bottom: 6px;">Zainstalowany silnik w katalogu versions/</span>
+          <select class="ui-select" id="prof-select-custom-engine" style="width: 100%;"></select>
+        </div>
+
+        <div class="setting-row-item" style="padding: 10px 12px; border-radius: var(--radius-md); background: var(--surface-1); border: 1px solid var(--border-subtle);">
+          <div class="setting-row-info">
+            <span class="setting-title">Osobny folder modów i ustawień (Izolowana instancja)</span>
+            <span class="setting-desc">Tworzy osobny katalog mods/ dla tego profilu, zapobiegając konfliktom między różnymi wersjami gry (zasoby gry są współdzielone).</span>
+          </div>
+          <input type="checkbox" class="ui-switch" id="prof-toggle-isolated" checked>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 8px; padding-top: 4px;">
+          <button type="button" class="btn-secondary" id="btn-cancel-profile-editor">Anuluj</button>
+          <button type="button" class="btn-primary" id="btn-save-profile-modal">Utwórz Profil</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Legacy Music Modal Container (kept hidden for 100% API compatibility; buttons open View 5) -->
+  <div class="modal-overlay" id="music-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 class="modal-title">Odtwarzacz Muzyki</h2>
+        <button class="modal-close" id="btn-close-music-modal">✕</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Lightbox Modal for Screenshots (#screenshot-lightbox-modal) -->
+  <div class="modal-overlay screenshot-lightbox-overlay" id="screenshot-lightbox-modal">
+    <div class="lightbox-container">
+      <!-- Top Bar -->
+      <div class="lightbox-topbar">
+        <div class="lightbox-info">
+          <div class="lightbox-counter" id="lightbox-counter">1 z 1</div>
+          <div class="lightbox-filename" id="lightbox-filename">screenshot.png</div>
+          <div class="lightbox-meta-pill" id="lightbox-meta">1920x1080 • 2.4 MB</div>
+        </div>
+        <div class="lightbox-actions">
+          <button class="btn-secondary btn-sm" id="btn-lightbox-copy" title="Skopiuj obraz do schowka (Ctrl+C / Discord Ctrl+V)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            <span id="btn-lightbox-copy-label">Kopiuj do schowka</span>
+          </button>
+          <button class="btn-secondary btn-sm" id="btn-lightbox-open-file" title="Otwórz plik w systemie">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+            <span>Otwórz</span>
+          </button>
+          <button class="btn-danger-subtle btn-sm" id="btn-lightbox-delete" title="Usuń zrzut ekranu">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            <span>Usuń</span>
+          </button>
+          <button class="modal-close" id="btn-close-lightbox" title="Zamknij (Esc)">✕</button>
         </div>
       </div>
 
-      <!-- In-Game Keyboard Shortcuts Banner -->
-      <div class="in-game-shortcuts-box">
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <span style="font-size: 14px;">🎮</span>
-          <span style="font-size: 12px; font-weight: 700; color: #ffffff;">Sterowanie muzyką w trakcie gry Minecraft:</span>
-        </div>
-        <div class="in-game-shortcut-chips">
-          <span class="shortcut-chip">Ctrl + Alt + Spacja <span style="opacity: 0.6;">(Pauza/Wznów)</span></span>
-          <span class="shortcut-chip">Ctrl + Alt + Prawo <span style="opacity: 0.6;">(Następny)</span></span>
-          <span class="shortcut-chip">Ctrl + Alt + Lewo <span style="opacity: 0.6;">(Poprzedni)</span></span>
-          <span class="shortcut-chip">Klawisze Media (Play/Next/Prev)</span>
-        </div>
-      </div>
+      <!-- Main Stage -->
+      <div class="lightbox-stage">
+        <button class="lightbox-nav-btn prev" id="btn-lightbox-prev" title="Poprzedni (Strzałka w lewo)">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
 
-      <!-- Spotify Connection Status Card -->
-      <div class="spotify-connect-card" id="spotify-card-disconnected">
-        <div style="display: flex; flex-direction: column; gap: 3px;">
-          <span style="font-size: 13.5px; font-weight: 700; color: #ffffff;">Połącz swoje konto Spotify</span>
-          <span style="font-size: 12px; color: var(--text-dim);">Zaloguj się, aby wyświetlić i puszczać Twoje własne playlisty w launcherze i grze.</span>
+        <div class="lightbox-media-wrapper" id="lightbox-media-wrapper">
+          <img id="lightbox-img" class="lightbox-image" src="" alt="Screenshot" />
+          <video id="lightbox-video" class="lightbox-video" controls style="display: none;"></video>
+          <div class="lightbox-spinner" id="lightbox-spinner" style="display: none;">
+            <div class="spinner"></div>
+          </div>
         </div>
-        <button class="btn-spotify" id="btn-spotify-login">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.498 17.306c-.215.353-.676.466-1.028.25-2.817-1.722-6.363-2.112-10.539-1.157-.402.093-.804-.158-.896-.56-.093-.403.157-.805.56-.897 4.571-1.045 8.492-.596 11.653 1.336.352.216.465.676.25 1.028zm1.467-3.262c-.27.441-.848.58-1.288.31-3.225-1.982-8.14-2.556-11.954-1.398-.496.151-1.025-.133-1.176-.63-.151-.497.133-1.026.63-1.177 4.363-1.325 9.789-.684 13.478 1.587.44.27.58.848.31 1.288zm.126-3.398c-3.868-2.296-10.25-2.508-13.934-1.39-.593.18-1.222-.162-1.402-.755-.18-.593.162-1.222.755-1.402 4.24-1.287 11.286-1.038 15.736 1.604.533.316.708 1.01.392 1.543-.316.533-1.01.708-1.547.4z"/>
-          </svg>
-          <span>Połącz ze Spotify</span>
+
+        <button class="lightbox-nav-btn next" id="btn-lightbox-next" title="Następny (Strzałka w prawo)">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
         </button>
       </div>
 
-      <div class="spotify-connect-card" id="spotify-card-connected" style="display: none;">
-        <div class="spotify-user-badge">
-          <img src="assets/icon-256.png" class="spotify-avatar" id="spotify-user-avatar" alt="Spotify Avatar">
-          <div class="spotify-user-info">
-            <span class="spotify-username" id="spotify-user-name">Użytkownik Spotify</span>
-            <span class="spotify-status-tag">
-              <span>●</span>
-              <span id="spotify-user-plan">Konto połączone (Spotify)</span>
-            </span>
+      <!-- Bottom Bar Hint -->
+      <div class="lightbox-footer-hint">
+        <span>Użyj <kbd class="kbd-badge">←</kbd> <kbd class="kbd-badge">→</kbd> do nawigacji, <kbd class="kbd-badge">Ctrl+C</kbd> do skopiowania do schowka, <kbd class="kbd-badge">Esc</kbd> aby zamknąć</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Raport i Naprawa Błędów Modal (#crash-doctor-modal) -->
+  <div class="modal-overlay crash-doctor-overlay" id="crash-doctor-modal">
+    <div class="modal-card modal-card-crash">
+      <!-- Modal Header -->
+      <div class="crash-doctor-header">
+        <div class="crash-doctor-title-wrap">
+          <div class="crash-doctor-badge" id="crash-doctor-badge">
+            <span class="pulse-dot"></span>
+            <span id="crash-badge-text">WYKRYTO BŁĄD GRY</span>
+          </div>
+          <h2 class="crash-modal-title" id="crash-modal-title">Raport i Naprawa Błędów</h2>
+          <div class="crash-meta-line" id="crash-meta-line">Raport: 28 paź 2026, 00:07 • Kod wyjścia: 1</div>
+        </div>
+        <button class="modal-close" id="btn-close-crash-modal" title="Zamknij">✕</button>
+      </div>
+
+      <!-- Problem & Diagnosis Box -->
+      <div class="crash-box-problem">
+        <div class="crash-box-icon" id="crash-box-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        </div>
+        <div class="crash-box-content">
+          <div class="crash-box-title" id="crash-box-title">Analizowanie błędu gry...</div>
+          <p class="crash-box-desc" id="crash-box-desc">Ładowanie opisu błędu...</p>
+          <div class="crash-culprit-pill" id="crash-culprit-pill" style="display: none;">
+            <span class="culprit-label">Plik powodujący problem:</span>
+            <span class="culprit-val" id="crash-culprit-name">mod.jar</span>
           </div>
         </div>
-        <div style="display: flex; gap: 8px;">
-          <button class="btn-spotify" id="btn-spotify-refresh-playlists" title="Odśwież playlisty" style="padding: 7px 14px; font-size: 12px;">
-            <span>🔄 Odśwież</span>
-          </button>
-          <button class="btn-spotify-secondary" id="btn-spotify-logout" title="Wyloguj ze Spotify">
-            Odłącz
-          </button>
+      </div>
+
+      <!-- Solution Box -->
+      <div class="crash-box-solution">
+        <div class="crash-solution-header">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          <span>Zalecane rozwiązanie:</span>
         </div>
+        <p class="crash-solution-text" id="crash-solution-text">Rozwiązanie...</p>
       </div>
 
-      <!-- Quick Playlist URL loader -->
-      <div style="display: flex; gap: 8px; margin-bottom: 12px;">
-        <input type="text" id="spotify-playlist-url-input" class="form-input" placeholder="Wklej link do dowolnej playlisty Spotify (np. https://open.spotify.com/playlist/...)" style="flex: 1; font-size: 12px;">
-        <button class="btn-primary" id="btn-load-spotify-url" style="padding: 0 16px; font-size: 12px; white-space: nowrap;">Załaduj Playlistę</button>
+      <!-- 1-Click Fix Actions Container -->
+      <div class="crash-actions-container" id="crash-actions-container">
+        <!-- Generowane dynamicznie przez renderer.js -->
       </div>
 
-      <!-- User's Spotify Playlists -->
-      <div style="margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
-        <span style="font-size: 12px; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: 0.5px;">Twoje Playlisty Spotify</span>
-        <span id="spotify-playlists-count-label" style="font-size: 11px; color: var(--text-dim);"></span>
-      </div>
-
-      <div class="spotify-playlists-grid" id="spotify-playlists-grid">
-        <div style="padding: 20px; text-align: center; color: var(--text-dim); font-size: 12px; grid-column: 1 / -1;">
-          Połącz konto Spotify lub wklej link do playlisty, aby odtwarzać swoje utwory.
+      <!-- Collapsible Stacktrace Accordion -->
+      <details class="crash-details-accordion" id="crash-details-accordion">
+        <summary class="crash-details-summary">
+          <span>Pokaż pełny raport błędu (Stacktrace / Log)</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </summary>
+        <div class="crash-raw-wrap">
+          <pre class="crash-raw-code" id="crash-raw-code"></pre>
         </div>
+      </details>
+    </div>
+  </div>
+
+  <!-- ======================================================================
+       MODAL: INSTALACJA MODPACKA (#modpack-install-modal)
+       ====================================================================== -->
+  <div class="modal-overlay" id="modpack-install-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div>
+          <span class="section-kicker">Instalator Paczek Modów</span>
+          <h2 class="modal-title" id="modpack-install-modal-title">Instalacja Modpacka</h2>
+        </div>
+        <button class="modal-close" id="btn-close-modpack-modal">✕</button>
       </div>
 
-      <!-- Active Spotify Native Track Card (Full Audio • In-Game) -->
-      <div class="spotify-now-playing-card" id="spotify-now-playing-card">
-        <img src="assets/icon-256.png" class="spotify-now-playing-art" id="spotify-now-playing-art" alt="Album Art">
-        <div class="spotify-now-playing-info">
-          <div class="spotify-playing-badge">
-            <span class="server-pulse-dot" style="background: #1db954; box-shadow: 0 0 8px #1db954;"></span>
-            <span id="spotify-playback-badge-text">Spotify Desktop (Pełne Utwory • W tle w Minecraft)</span>
+      <!-- Modpack Card Preview -->
+      <div style="display: flex; gap: 14px; align-items: center; padding: 14px; border-radius: var(--radius-md); background: var(--surface-2); border: 1px solid var(--border-subtle); margin-bottom: 14px;">
+        <img id="modpack-modal-icon" src="assets/logo.svg" alt="Modpack" style="width: 52px; height: 52px; border-radius: 12px; object-fit: cover; flex-shrink: 0;">
+        <div style="min-width: 0; flex: 1;">
+          <div id="modpack-modal-name" style="font-size: 15px; font-weight: 700; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Modpack Name</div>
+          <div id="modpack-modal-author" style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">Autor: ModpackAuthor</div>
+          <div id="modpack-modal-details" style="font-size: 11.5px; color: var(--accent); margin-top: 4px; display: flex; align-items: center; gap: 6px;">
+            <span>Minecraft 1.21.1</span> • <span>Fabric Loader</span>
           </div>
-          <div class="spotify-now-playing-title" id="spotify-now-playing-title">Wybierz playlistę lub wklej link powyżej</div>
-          <div class="spotify-now-playing-artist" id="spotify-now-playing-artist">Odtwarzanie pełnych utworów bez limitów</div>
-        </div>
-        <div class="spotify-now-playing-actions">
-          <button class="btn-spotify-ctrl" id="btn-spotify-modal-prev" title="Poprzedni utwór">⏮</button>
-          <button class="btn-spotify-ctrl-play" id="btn-spotify-modal-play" title="Odtwarzaj / Pauza">▶</button>
-          <button class="btn-spotify-ctrl" id="btn-spotify-modal-next" title="Następny utwór">⏭</button>
         </div>
       </div>
 
-      <!-- Built-in Stations Tab / Row -->
-      <div style="margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.06);">
-        <span style="font-size: 11px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 8px;">Stacje Radiowe Kasteusz Launcher</span>
-        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
-          <button class="btn-secondary" id="btn-station-lofi" style="padding: 8px; font-size: 11.5px; text-align: left;">
-            <div style="font-weight: 700; color: #ffffff;">☕ Lofi Chill Beats</div>
-            <div style="font-size: 10px; color: var(--text-dim);">Lofi Hip-Hop</div>
-          </button>
-          <button class="btn-secondary" id="btn-station-synthwave" style="padding: 8px; font-size: 11.5px; text-align: left;">
-            <div style="font-weight: 700; color: #ffffff;">⚡ Synthwave & Cyberpunk</div>
-            <div style="font-size: 10px; color: var(--text-dim);">Retro Electro</div>
-          </button>
-          <button class="btn-secondary" id="btn-station-ambient" style="padding: 8px; font-size: 11.5px; text-align: left;">
-            <div style="font-weight: 700; color: #ffffff;">🌲 Minecraft Ambient</div>
-            <div style="font-size: 10px; color: var(--text-dim);">Ambient OST</div>
+      <!-- Step 1: Config Section -->
+      <div id="modpack-install-config-section">
+        <div style="margin-bottom: 12px;">
+          <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 6px; color: var(--text-secondary);">Wersja modpacka</label>
+          <select class="ui-select" id="modpack-modal-version-select" style="width: 100%;">
+            <option value="">Wczytywanie wersji...</option>
+          </select>
+        </div>
+
+        <div style="margin-bottom: 16px;">
+          <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 6px; color: var(--text-secondary);">Nazwa profilu gry</label>
+          <input type="text" class="ui-input" id="modpack-modal-profile-name" style="width: 100%;" placeholder="[Modpack] Nazwa Modpacka">
+          <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Paczka modów zostanie zainstalowana w czystym, odizolowanym profilu.</div>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 8px;">
+          <button type="button" class="btn-secondary" id="btn-cancel-modpack-install">Anuluj</button>
+          <button type="button" class="btn-primary" id="btn-confirm-modpack-install">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <span>Pobierz i Zainstaluj</span>
           </button>
         </div>
       </div>
 
+      <!-- Step 2: Live Progress Section -->
+      <div id="modpack-install-progress-section" style="display: none; flex-direction: column; gap: 12px; padding: 10px 0;">
+        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13px;">
+          <span id="modpack-progress-status" style="font-weight: 600; color: #fff;">Pobieranie plików modpacka...</span>
+          <span id="modpack-progress-pct" class="tnum" style="font-weight: 700; color: var(--accent);">0%</span>
+        </div>
+        <div style="width: 100%; height: 8px; border-radius: 4px; background: rgba(255,255,255,0.08); overflow: hidden;">
+          <div id="modpack-progress-fill" style="width: 0%; height: 100%; background: linear-gradient(90deg, #A855F7, #EC4899); border-radius: 4px; transition: width 0.15s ease;"></div>
+        </div>
+        <div id="modpack-progress-file" class="tnum" style="font-size: 11px; color: var(--text-muted); font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Inicjalizacja...</div>
+      </div>
     </div>
   </div>
 

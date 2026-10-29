@@ -117,8 +117,12 @@ async function getValidToken() {
  * Rozpoczyna logowanie do konta Spotify (obsługuje Google login, Apple, login e-mail przez PKCE)
  */
 async function loginWithSpotify(customClientId) {
+  const trimmedCustom = typeof customClientId === 'string' ? customClientId.trim() : '';
+  if (trimmedCustom) {
+    config.saveConfig({ spotifyClientId: trimmedCustom });
+  }
   const cfg = config.getConfig();
-  const clientId = customClientId || cfg?.spotifyClientId || DEFAULT_SPOTIFY_CLIENT_ID;
+  const clientId = trimmedCustom || cfg?.spotifyClientId || DEFAULT_SPOTIFY_CLIENT_ID;
 
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = generateCodeChallenge(codeVerifier);
@@ -165,6 +169,7 @@ async function loginWithSpotify(customClientId) {
           user: profile
         };
         config.saveConfig({ spotifyAuth: spotifyData });
+        getUserPlaylists(tokenData.accessToken).catch(() => {});
         cleanup();
         resolve(spotifyData);
       } catch (err) {
@@ -273,12 +278,30 @@ async function fetchUserProfile(token) {
   };
 }
 
+let pendingPlaylistRetryTimer = null;
+
+function mergePlaylists(accountPlaylists = [], savedPlaylists = []) {
+  const seen = new Set();
+  const out = [];
+  for (const pl of accountPlaylists) {
+    if (!pl || !pl.id || seen.has(pl.id)) continue;
+    seen.add(pl.id);
+    out.push(pl);
+  }
+  for (const pl of savedPlaylists) {
+    if (!pl || !pl.id || seen.has(pl.id)) continue;
+    seen.add(pl.id);
+    out.push({ ...pl, isManual: true });
+  }
+  return out;
+}
+
 /**
- * Pobiera listę playlist użytkownika
+ * Pobiera listę playlist użytkownika z konta Spotify (Web API) i zapisuje w pamięci podręcznej
  */
 async function getUserPlaylists(tokenOverride) {
   const token = tokenOverride || await getValidToken();
-  if (!token) throw new Error('Brak połączonego konta Spotify. Kliknij „Połącz ze Spotify”.');
+  if (!token) throw new Error('Brak połączonego konta Spotify. Kliknij „Połącz konto Spotify”.');
 
   const res = await fetch('https://api.spotify.com/v1/me/playlists?limit=50', {
     headers: { 'Authorization': `Bearer ${token}` }
@@ -286,32 +309,204 @@ async function getUserPlaylists(tokenOverride) {
 
   if (!res.ok) {
     if (res.status === 401) {
-      throw new Error('Token sesji Spotify wygasł. Kliknij „Połącz ze Spotify”, aby odświeżyć.');
+      const err = new Error('Token sesji Spotify wygasł. Kliknij „Połącz konto Spotify”, aby odświeżyć.');
+      err.status = 401;
+      throw err;
     }
-    throw new Error(`Błąd pobierania playlist (${res.status})`);
+    if (res.status === 429) {
+      const retryAfter = Math.max(1, parseInt(res.headers.get('retry-after') || '30', 10));
+      const err = new Error(`Limit zapytań Spotify API (429). Ponowna próba za ${retryAfter}s.`);
+      err.status = 429;
+      err.retryAfter = retryAfter;
+      throw err;
+    }
+    const err = new Error(`Błąd pobierania playlist (${res.status})`);
+    err.status = res.status;
+    throw err;
   }
 
   const data = await res.json();
-  return (data.items || []).map(p => ({
+  let rawItems = Array.isArray(data.items) ? [...data.items] : [];
+
+  // Pobierz kolejną stronę jeśli użytkownik ma >50 playlist
+  if (data.next) {
+    try {
+      const res2 = await fetch('https://api.spotify.com/v1/me/playlists?limit=50&offset=50', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res2.ok) {
+        const data2 = await res2.json();
+        if (Array.isArray(data2.items)) rawItems = rawItems.concat(data2.items);
+      }
+    } catch (_) {}
+  }
+
+  const playlists = rawItems.filter(Boolean).map(p => ({
     id: p.id,
-    name: p.name,
+    name: p.name || 'Playlista Spotify',
     description: p.description || '',
     image: p.images?.[0]?.url || null,
-    tracksCount: p.tracks?.total || 0,
+    tracksCount: p.tracks?.total ?? 0,
     uri: p.uri,
     externalUrl: p.external_urls?.spotify || `https://open.spotify.com/playlist/${p.id}`,
     owner: p.owner?.display_name || ''
   }));
+
+  // Sprawdź również „Polubione utwory” (Liked Songs) z biblioteki konta
+  try {
+    const likedRes = await fetch('https://api.spotify.com/v1/me/tracks?limit=1', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (likedRes.ok) {
+      const likedData = await likedRes.json();
+      const likedTotal = Number(likedData?.total) || 0;
+      if (likedTotal > 0) {
+        playlists.unshift({
+          id: 'liked-songs',
+          name: 'Polubione utwory',
+          description: 'Twoja biblioteka polubionych utworów na Spotify',
+          image: null,
+          isLikedSongs: true,
+          tracksCount: likedTotal,
+          uri: 'spotify:collection:tracks',
+          externalUrl: 'https://open.spotify.com/collection/tracks',
+          owner: 'Twoje konto'
+        });
+      }
+    }
+  } catch (_) {}
+
+  // Odśwież profil jeśli wcześniej nie pobrało nicku/avatara
+  const cfg = config.getConfig();
+  if (!cfg?.spotifyAuth?.user?.id) {
+    fetchUserProfile(token).then(profile => {
+      const latestCfg = config.getConfig();
+      if (latestCfg?.spotifyAuth) {
+        config.saveConfig({ spotifyAuth: { ...latestCfg.spotifyAuth, user: profile } });
+      }
+    }).catch(() => {});
+  }
+
+  config.saveConfig({ spotifyCachedPlaylists: playlists });
+  return playlists;
 }
 
 /**
- * Pobiera utwory z wybranej playlisty
+ * Zwraca pełny pakiet playlist z konta + zapisanych ręcznie wraz z obsługą cache i auto-retry 429
+ */
+async function getAccountPlaylistsBundle(onRetrySuccess) {
+  const cfg = config.getConfig();
+  const isLoggedIn = !!(cfg?.spotifyAuth && cfg.spotifyAuth.accessToken);
+  const usingCustomClientId = !!(cfg?.spotifyClientId && cfg.spotifyClientId.trim());
+  const cached = Array.isArray(cfg?.spotifyCachedPlaylists) ? cfg.spotifyCachedPlaylists : [];
+  const saved = Array.isArray(cfg?.savedSpotifyPlaylists) ? cfg.savedSpotifyPlaylists : [];
+
+  if (!isLoggedIn) {
+    return {
+      playlists: saved.map(p => ({ ...p, isManual: true })),
+      isLoggedIn: false,
+      fromCache: false,
+      rateLimited: false,
+      retryAfter: 0,
+      usingCustomClientId,
+      clientId: cfg?.spotifyClientId || ''
+    };
+  }
+
+  try {
+    const fresh = await getUserPlaylists();
+    return {
+      playlists: mergePlaylists(fresh, saved),
+      isLoggedIn: true,
+      fromCache: false,
+      rateLimited: false,
+      retryAfter: 0,
+      usingCustomClientId,
+      clientId: cfg?.spotifyClientId || ''
+    };
+  } catch (err) {
+    if (err.status === 429) {
+      const retrySec = err.retryAfter || 30;
+      if (!pendingPlaylistRetryTimer) {
+        pendingPlaylistRetryTimer = setTimeout(async () => {
+          pendingPlaylistRetryTimer = null;
+          try {
+            await getUserPlaylists();
+            if (typeof onRetrySuccess === 'function') onRetrySuccess();
+          } catch (_) {}
+        }, retrySec * 1000 + 60);
+        if (pendingPlaylistRetryTimer.unref) pendingPlaylistRetryTimer.unref();
+      }
+      return {
+        playlists: mergePlaylists(cached, saved),
+        isLoggedIn: true,
+        fromCache: cached.length > 0,
+        rateLimited: true,
+        retryAfter: retrySec,
+        usingCustomClientId,
+        clientId: cfg?.spotifyClientId || '',
+        error: err.message
+      };
+    }
+
+    return {
+      playlists: mergePlaylists(cached, saved),
+      isLoggedIn: true,
+      fromCache: cached.length > 0,
+      rateLimited: false,
+      retryAfter: 0,
+      usingCustomClientId,
+      clientId: cfg?.spotifyClientId || '',
+      error: err.message
+    };
+  }
+}
+
+function saveImportedPlaylist(playlistInfo) {
+  if (!playlistInfo || !playlistInfo.id) return [];
+  const cfg = config.getConfig();
+  const saved = Array.isArray(cfg?.savedSpotifyPlaylists) ? [...cfg.savedSpotifyPlaylists] : [];
+  const entry = {
+    id: playlistInfo.id,
+    name: playlistInfo.name || 'Playlista Spotify',
+    image: playlistInfo.coverUrl || playlistInfo.image || null,
+    tracksCount: Array.isArray(playlistInfo.tracks) ? playlistInfo.tracks.length : (playlistInfo.tracksCount || 0),
+    uri: `spotify:${playlistInfo.type || 'playlist'}:${playlistInfo.id}`,
+    externalUrl: `https://open.spotify.com/${playlistInfo.type || 'playlist'}/${playlistInfo.id}`,
+    isManual: true
+  };
+  const filtered = saved.filter(p => p.id !== entry.id);
+  filtered.unshift(entry);
+  config.saveConfig({ savedSpotifyPlaylists: filtered });
+  return filtered;
+}
+
+function removeImportedPlaylist(playlistId) {
+  const cfg = config.getConfig();
+  const saved = Array.isArray(cfg?.savedSpotifyPlaylists) ? cfg.savedSpotifyPlaylists : [];
+  const filtered = saved.filter(p => p.id !== playlistId);
+  config.saveConfig({ savedSpotifyPlaylists: filtered });
+  return filtered;
+}
+
+function setSpotifyClientId(clientId) {
+  const cleaned = typeof clientId === 'string' ? clientId.trim() : '';
+  config.saveConfig({ spotifyClientId: cleaned });
+  return { success: true, clientId: cleaned };
+}
+
+/**
+ * Pobiera utwory z wybranej playlisty lub „Polubionych utworów”
  */
 async function getPlaylistTracks(playlistId, tokenOverride) {
   const token = tokenOverride || await getValidToken();
   if (!token) throw new Error('Brak połączonego konta Spotify.');
 
-  const res = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=50`, {
+  const endpoint = playlistId === 'liked-songs'
+    ? 'https://api.spotify.com/v1/me/tracks?limit=50'
+    : `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=50`;
+
+  const res = await fetch(endpoint, {
     headers: { 'Authorization': `Bearer ${token}` }
   });
 
@@ -514,7 +709,7 @@ async function controlSpotifyWeb(action, uri = null) {
  * Odłączenie konta Spotify
  */
 function logoutSpotify() {
-  config.saveConfig({ spotifyAuth: null });
+  config.saveConfig({ spotifyAuth: null, spotifyCachedPlaylists: [] });
   return { success: true };
 }
 
@@ -538,6 +733,34 @@ function getAudioResolvers() {
 
 const audioCache = new Map();
 
+function cleanSearchQuery(title, artist = '') {
+  const cleanTitle = (title || '')
+    .replace(/\s*[\(\[](feat\.|ft\.|with|remastered|version|deluxe|radio edit|live).*?[\)\]]/gi, '')
+    .replace(/\s*-\s*(remastered|live|radio edit|deluxe|version|\d{4}\s*remaster).*$/gi, '')
+    .replace(/["']/g, '')
+    .trim();
+  const cleanArtist = (artist || '').split(',')[0].trim();
+  return (cleanArtist ? `${cleanArtist} - ` : '') + (cleanTitle || title);
+}
+
+async function searchYouTubeVideoIds(query) {
+  try {
+    const url = 'https://www.youtube.com/results?search_query=' + encodeURIComponent(query);
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept-Language': 'pl-PL,pl;q=0.9,en-US;q=0.8,en;q=0.7'
+      }
+    });
+    if (!res.ok) return [];
+    const html = await res.text();
+    const videoIdMatches = [...html.matchAll(/\"videoId\":\"([a-zA-Z0-9_-]{11})\"/g)].map(m => m[1]);
+    return [...new Set(videoIdMatches)].slice(0, 4);
+  } catch (_) {
+    return [];
+  }
+}
+
 /**
  * Rozwiązuje strumień audio dla podanego utworu (Spotube Standalone engine)
  * Odtwarza pełny utwór w tle bez potrzeby uruchamiania Spotify na komputerze!
@@ -552,32 +775,69 @@ async function resolveTrackAudio(title, artist = '') {
   }
 
   const { playDl: p, distubeYtdl: y } = getAudioResolvers();
-  if (!p || !y) throw new Error('Brak bibliotek strumieniowania audio.');
+  const query = cleanSearchQuery(title, artist);
 
-  const query = (artist ? `${artist} - ` : '') + title;
-  const searchResults = await p.search(query, { limit: 1 });
-  if (!searchResults || !searchResults.length) {
+  // 1. Zdobądź listę kandydatów wideo (Direct Scrape + play-dl fallback)
+  let candidateUrls = [];
+  const scrapedIds = await searchYouTubeVideoIds(query);
+  if (scrapedIds.length > 0) {
+    candidateUrls = scrapedIds.map(id => `https://www.youtube.com/watch?v=${id}`);
+  }
+
+  if (candidateUrls.length === 0 && p) {
+    try {
+      const pResults = await p.search(query, { limit: 3 });
+      if (pResults && pResults.length > 0) {
+        candidateUrls = pResults.map(v => v.url);
+      }
+    } catch (_) {}
+  }
+
+  if (candidateUrls.length === 0) {
     throw new Error(`Nie znaleziono utworu dla: ${query}`);
   }
 
-  const video = searchResults[0];
-  const info = await y.getInfo(video.url);
-  const audioFormats = info.formats.filter(f => f.hasAudio && !f.hasVideo);
-  const bestAudio = audioFormats.find(f => f.container === 'mp4') || audioFormats[0];
+  // 2. Przetestuj kandydatów aż do uzyskania działającego bezpośredniego strumienia audio
+  let lastError = null;
+  for (const videoUrl of candidateUrls.slice(0, 3)) {
+    try {
+      if (y) {
+        const info = await y.getInfo(videoUrl);
+        const audioFormats = info.formats.filter(f => f.hasAudio && !f.hasVideo);
+        const bestAudio = audioFormats.find(f => f.container === 'mp4') || audioFormats[0];
 
-  if (!bestAudio || !bestAudio.url) {
-    throw new Error('Nie udało się wyodrębnić bezpośredniego strumienia audio.');
+        if (bestAudio && bestAudio.url) {
+          const result = {
+            streamUrl: bestAudio.url,
+            title: info.videoDetails?.title || title,
+            duration: parseInt(info.videoDetails?.lengthSeconds, 10) || 0,
+            videoUrl
+          };
+          audioCache.set(cacheKey, { timestamp: Date.now(), data: result });
+          return result;
+        }
+      }
+
+      // Alternatywna próba przez play-dl stream
+      if (p) {
+        const streamData = await p.stream(videoUrl);
+        if (streamData && streamData.url) {
+          const result = {
+            streamUrl: streamData.url,
+            title: title,
+            duration: 0,
+            videoUrl
+          };
+          audioCache.set(cacheKey, { timestamp: Date.now(), data: result });
+          return result;
+        }
+      }
+    } catch (err) {
+      lastError = err;
+    }
   }
 
-  const result = {
-    streamUrl: bestAudio.url,
-    title: video.title || title,
-    duration: video.durationInSec || 0,
-    videoUrl: video.url
-  };
-
-  audioCache.set(cacheKey, { timestamp: Date.now(), data: result });
-  return result;
+  throw new Error(lastError ? lastError.message : `Brak dostępnego strumienia audio dla: ${title}`);
 }
 
 /**
@@ -610,19 +870,71 @@ async function getPublicSpotifyPlaylist(urlOrId) {
 
   const coverUrl = entity.visualIdentity?.image?.[0]?.url || entity.images?.[0]?.url || null;
 
-  return {
+  const result = {
     id: entity.id || id,
     name: entity.name || entity.title || 'Playlista Spotify',
     type: entity.type || type,
     coverUrl,
     tracks
   };
+
+  if (typeof urlOrId === 'string' && (urlOrId.includes('spotify.com/') || urlOrId.startsWith('spotify:playlist:') || /^[a-zA-Z0-9]{20,25}$/.test(urlOrId.trim()))) {
+    saveImportedPlaylist(result);
+  }
+
+  return result;
+}
+
+/**
+ * Wyszukuje utwory bezpośrednio bez konieczności otwartej aplikacji Spotify
+ */
+async function searchTracks(query) {
+  if (!query || !query.trim()) return [];
+  const { playDl: p } = getAudioResolvers();
+  try {
+    if (p) {
+      const results = await p.search(query.trim(), { limit: 8 });
+      if (results && results.length > 0) {
+        return results.map(v => {
+          const rawTitle = v.title || 'Utwór';
+          const parts = rawTitle.includes(' - ') ? rawTitle.split(' - ') : [v.channel?.name || '', rawTitle];
+          const artist = parts.length > 1 ? parts[0].trim() : (v.channel?.name || '');
+          const title = parts.length > 1 ? parts.slice(1).join(' - ').trim() : rawTitle;
+          return {
+            id: v.id || rawTitle,
+            title,
+            artist,
+            durationMs: (v.durationInSec || 0) * 1000,
+            coverUrl: v.thumbnails?.[0]?.url || null
+          };
+        });
+      }
+    }
+  } catch (_) {}
+
+  // Fallback direct scraping
+  try {
+    const ids = await searchYouTubeVideoIds(query);
+    return ids.map(id => ({
+      id,
+      title: query,
+      artist: '',
+      durationMs: 180000,
+      coverUrl: `https://i.ytimg.com/vi/${id}/mqdefault.jpg`
+    }));
+  } catch (_) {
+    return [];
+  }
 }
 
 module.exports = {
   loginWithSpotify,
   logoutSpotify,
   getUserPlaylists,
+  getAccountPlaylistsBundle,
+  saveImportedPlaylist,
+  removeImportedPlaylist,
+  setSpotifyClientId,
   getPlaylistTracks,
   controlSpotifyWeb,
   fetchUserProfile,
@@ -631,5 +943,6 @@ module.exports = {
   launchSpotifyApp,
   formatSpotifyUri,
   resolveTrackAudio,
-  getPublicSpotifyPlaylist
+  getPublicSpotifyPlaylist,
+  searchTracks
 };

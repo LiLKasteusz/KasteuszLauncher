@@ -6,25 +6,27 @@ const auth = require('./auth');
 const launcher = require('./launcher');
 const mojang = require('./mojang');
 const mods = require('./mods');
+const profiles = require('./profiles');
 const friends = require('./friends');
 const serverHost = require('./server');
 const discord = require('./discord');
 const stats = require('./stats');
 const spotify = require('./spotify');
+const screenshots = require('./screenshots');
 
 let mainWindow = null;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1040,
-    height: 630,
-    minWidth: 920,
-    minHeight: 580,
+    width: 1180,
+    height: 740,
+    minWidth: 980,
+    minHeight: 620,
     frame: false,
     resizable: true,
     show: false,
     icon: path.join(__dirname, '../renderer/assets/icon-256.png'),
-    backgroundColor: '#090a0f',
+    backgroundColor: '#08090c',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
@@ -252,9 +254,41 @@ ipcMain.handle('wardrobe:select-cape', async () => {
   return null;
 });
 
-// IPC: Minecraft i wersje
+// IPC: Minecraft, Profile i Wersje
 ipcMain.handle('game:get-versions', async () => {
   return await mojang.getAvailableVersions();
+});
+
+ipcMain.handle('profiles:get-state', async () => {
+  return profiles.getProfilesState();
+});
+
+ipcMain.handle('profiles:select', async (_e, profileId) => {
+  return profiles.setActiveProfile(profileId);
+});
+
+ipcMain.handle('profiles:create', async (_e, payload) => {
+  return profiles.createProfile(payload);
+});
+
+ipcMain.handle('profiles:update', async (_e, profileId, updates) => {
+  return profiles.updateProfile(profileId, updates);
+});
+
+ipcMain.handle('profiles:duplicate', async (_e, profileId) => {
+  return profiles.duplicateProfile(profileId);
+});
+
+ipcMain.handle('profiles:delete', async (_e, profileId) => {
+  return profiles.deleteProfile(profileId);
+});
+
+ipcMain.handle('profiles:open-folder', async (_e, profileId) => {
+  return profiles.openProfileFolder(profileId);
+});
+
+ipcMain.handle('mods:install-quilt', async (_e, version) => {
+  return await mods.installQuilt(version);
 });
 
 ipcMain.handle('game:launch', async (_e, version) => {
@@ -263,6 +297,22 @@ ipcMain.handle('game:launch', async (_e, version) => {
 
 ipcMain.handle('game:is-launching', async () => {
   return launcher.getIsLaunching();
+});
+
+ipcMain.handle('game:get-jvm-presets', () => {
+  return launcher.JVM_PRESETS;
+});
+
+ipcMain.handle('system:get-specs', () => {
+  const os = require('os');
+  const totalRamGb = Math.round(os.totalmem() / (1024 * 1024 * 1024));
+  const freeRamGb = Math.round(os.freemem() / (1024 * 1024 * 1024));
+  const cpus = os.cpus() ? os.cpus().length : 4;
+  return {
+    totalRamGb,
+    freeRamGb,
+    cpus
+  };
 });
 
 // IPC: Menedżer Modów
@@ -302,8 +352,93 @@ ipcMain.handle('mods:search-modrinth', async (_e, params) => {
   return await mods.searchModrinth(params);
 });
 
+ipcMain.handle('mods:get-modrinth-versions', async (_e, idOrSlug) => {
+  return await mods.getModrinthProjectVersions(idOrSlug);
+});
+
 ipcMain.handle('mods:install-modrinth', async (_e, params) => {
   return await mods.installModrinthMod(params);
+});
+
+ipcMain.handle('mods:install-modpack', async (event, params) => {
+  return await mods.installModrinthModpack({
+    ...params,
+    onProgress: (prog) => {
+      try {
+        event.sender.send('mods:modpack-progress', prog);
+      } catch (_) {}
+    }
+  });
+});
+
+// IPC: Pakiety Zasobów & Shadery
+ipcMain.handle('packs:get-list', async (_e, type) => {
+  return mods.getPacksList(type);
+});
+
+ipcMain.handle('packs:add-files', async (_e, type) => {
+  return await mods.selectAndAddPacks(mainWindow, type);
+});
+
+ipcMain.handle('packs:copy-files', async (_e, type, paths) => {
+  return mods.copyPackPaths(type, paths);
+});
+
+ipcMain.handle('packs:toggle', async (_e, type, filename) => {
+  return mods.togglePack(type, filename);
+});
+
+ipcMain.handle('packs:delete', async (_e, type, filename) => {
+  return mods.deletePack(type, filename);
+});
+
+ipcMain.handle('packs:open-folder', async (_e, type) => {
+  return mods.openPacksFolder(type);
+});
+
+// IPC: Live Lyrics (LRCLIB)
+ipcMain.handle('music:get-lyrics', async (_e, title, artist) => {
+  if (!title) return null;
+  const cleanTitle = String(title).replace(/\s*\((feat|ft|official|video|audio|lyrics).*?\)/gi, '').trim();
+  const cleanArtist = String(artist || '').split(',')[0].replace(/^🟢\s*Spotify\s*•\s*/i, '').trim();
+  const headers = { 'User-Agent': 'KasteuszLauncher/2.4.0 (https://szkolnesmp.com.pl)' };
+
+  try {
+    if (cleanArtist && !/radio|stream|lofi|synthwave|ambient/i.test(cleanArtist)) {
+      const getUrl = `https://lrclib.net/api/get?track_name=${encodeURIComponent(cleanTitle)}&artist_name=${encodeURIComponent(cleanArtist)}`;
+      const res = await fetch(getUrl, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && (data.syncedLyrics || data.plainLyrics)) {
+          return {
+            syncedLyrics: data.syncedLyrics || null,
+            plainLyrics: data.plainLyrics || null,
+            trackName: data.trackName || cleanTitle,
+            artistName: data.artistName || cleanArtist
+          };
+        }
+      }
+    }
+
+    const q = `${cleanTitle} ${cleanArtist}`.trim();
+    const searchUrl = `https://lrclib.net/api/search?q=${encodeURIComponent(q)}`;
+    const sRes = await fetch(searchUrl, { headers });
+    if (sRes.ok) {
+      const arr = await sRes.json();
+      if (Array.isArray(arr) && arr.length > 0) {
+        const best = arr.find(item => item.syncedLyrics) || arr.find(item => item.plainLyrics);
+        if (best) {
+          return {
+            syncedLyrics: best.syncedLyrics || null,
+            plainLyrics: best.plainLyrics || null,
+            trackName: best.trackName || cleanTitle,
+            artistName: best.artistName || cleanArtist
+          };
+        }
+      }
+    }
+  } catch (_) {}
+  return null;
 });
 
 // IPC: Znajomi
@@ -365,8 +500,18 @@ ipcMain.handle('spotify:get-status', async () => {
   const authData = cfg?.spotifyAuth || null;
   return {
     isLoggedIn: !!(authData && authData.accessToken),
-    user: authData?.user || null
+    user: authData?.user || null,
+    clientId: cfg?.spotifyClientId || '',
+    usingCustomClientId: !!(cfg?.spotifyClientId && cfg.spotifyClientId.trim())
   };
+});
+
+ipcMain.handle('spotify:set-client-id', async (_e, clientId) => {
+  return spotify.setSpotifyClientId(clientId);
+});
+
+ipcMain.handle('spotify:remove-playlist', async (_e, playlistId) => {
+  return spotify.removeImportedPlaylist(playlistId);
 });
 
 ipcMain.handle('spotify:get-mpris-status', async () => {
@@ -374,7 +519,11 @@ ipcMain.handle('spotify:get-mpris-status', async () => {
 });
 
 ipcMain.handle('spotify:get-playlists', async () => {
-  return await spotify.getUserPlaylists();
+  return await spotify.getAccountPlaylistsBundle(() => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('spotify:playlists-updated');
+    }
+  });
 });
 
 ipcMain.handle('spotify:get-tracks', async (_e, playlistId) => {
@@ -389,6 +538,10 @@ ipcMain.handle('spotify:resolve-audio', async (_e, title, artist) => {
   return await spotify.resolveTrackAudio(title, artist);
 });
 
+ipcMain.handle('spotify:search-tracks', async (_e, query) => {
+  return await spotify.searchTracks(query);
+});
+
 ipcMain.handle('spotify:control', async (_e, arg1, arg2) => {
   const action = typeof arg1 === 'object' && arg1 !== null ? arg1.action : arg1;
   const uri = typeof arg1 === 'object' && arg1 !== null ? arg1.uri : arg2;
@@ -396,6 +549,29 @@ ipcMain.handle('spotify:control', async (_e, arg1, arg2) => {
 });
 
 const CURRENT_TRACK_PATH = path.join(config.APP_DIR, 'current_track.json');
+const MUSIC_COMMAND_PATH = path.join(config.APP_DIR, 'music_command.json');
+let lastProcessedCommandTime = Date.now();
+
+// Odbiór komend z Minecrafta (In-game Quick Music Menu)
+setInterval(() => {
+  try {
+    if (fs.existsSync(MUSIC_COMMAND_PATH)) {
+      const content = fs.readFileSync(MUSIC_COMMAND_PATH, 'utf8');
+      if (content && content.trim()) {
+        const cmd = JSON.parse(content);
+        if (cmd && cmd.timestamp && cmd.timestamp > lastProcessedCommandTime) {
+          lastProcessedCommandTime = cmd.timestamp;
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('music:action', cmd.action, cmd.value);
+          }
+          if (cmd.action) {
+            spotify.controlSpotifyWeb(cmd.action).catch(() => {});
+          }
+        }
+      }
+    }
+  } catch (_) {}
+}, 100);
 
 ipcMain.handle('music:update-state', async (_e, state) => {
   try {
@@ -413,4 +589,67 @@ ipcMain.handle('music:update-state', async (_e, state) => {
   } catch (err) {
     return { success: false, error: err.message };
   }
+});
+
+// IPC: Screenshots & Clips Hub
+ipcMain.handle('screenshots:get-list', async (_e, profileId) => {
+  return await screenshots.getScreenshots(profileId);
+});
+
+ipcMain.handle('screenshots:get-thumbnail', async (_e, filePath) => {
+  return await screenshots.getScreenshotThumbnail(filePath);
+});
+
+ipcMain.handle('screenshots:get-full', async (_e, filePath) => {
+  return await screenshots.getScreenshotFull(filePath);
+});
+
+ipcMain.handle('screenshots:copy', async (_e, filePath) => {
+  return await screenshots.copyScreenshotToClipboard(filePath);
+});
+
+ipcMain.handle('screenshots:delete', async (_e, filePath) => {
+  return await screenshots.deleteScreenshot(filePath);
+});
+
+ipcMain.handle('screenshots:open-folder', async (_e, profileId) => {
+  return await screenshots.openScreenshotsFolder(profileId);
+});
+
+ipcMain.handle('screenshots:open-file', async (_e, filePath) => {
+  return await screenshots.openScreenshotFile(filePath);
+});
+
+// IPC: Diagnoza Crashy & Rozwiązywanie Błędów Modów
+const crashDoctor = require('./crashDoctor');
+
+ipcMain.handle('crash:diagnose', async (_e, profileId) => {
+  return await crashDoctor.diagnose(profileId);
+});
+
+ipcMain.handle('crash:execute-fix', async (_e, actionId, payload) => {
+  return await crashDoctor.executeFix(actionId, payload);
+});
+
+ipcMain.handle('crash:open-folder', async (_e, profileId) => {
+  return await crashDoctor.executeFix('open_crash_folder', { profileId });
+});
+
+// IPC: Hardware Benchmark & PC Performance Tuning
+const benchmark = require('./benchmark');
+
+ipcMain.handle('benchmark:get-specs', async () => {
+  return benchmark.getDetailedSystemSpecs();
+});
+
+ipcMain.handle('benchmark:run', async () => {
+  return await benchmark.runSyntheticBenchmark();
+});
+
+ipcMain.handle('benchmark:get-optimal', async (_e, profileId) => {
+  return await benchmark.getOptimalConfig(profileId);
+});
+
+ipcMain.handle('benchmark:apply', async (_e, payload, profileId) => {
+  return await benchmark.applyOptimalSettings(payload, profileId);
 });

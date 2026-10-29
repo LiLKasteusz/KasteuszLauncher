@@ -24,10 +24,19 @@ contextBridge.exposeInMainWorld('api', {
   selectDirectory: () => ipcRenderer.invoke('config:select-directory'),
   selectJava: () => ipcRenderer.invoke('config:select-java'),
 
-  // Game & Versions
+  // Game, Profiles & Versions
   getVersions: () => ipcRenderer.invoke('game:get-versions'),
   launchGame: (version) => ipcRenderer.invoke('game:launch', version),
   isLaunching: () => ipcRenderer.invoke('game:is-launching'),
+  getJvmPresets: () => ipcRenderer.invoke('game:get-jvm-presets'),
+  getSystemSpecs: () => ipcRenderer.invoke('system:get-specs'),
+  getProfilesState: () => ipcRenderer.invoke('profiles:get-state'),
+  selectProfile: (id) => ipcRenderer.invoke('profiles:select', id),
+  createProfile: (payload) => ipcRenderer.invoke('profiles:create', payload),
+  updateProfile: (id, updates) => ipcRenderer.invoke('profiles:update', id, updates),
+  duplicateProfile: (id) => ipcRenderer.invoke('profiles:duplicate', id),
+  deleteProfile: (id) => ipcRenderer.invoke('profiles:delete', id),
+  openProfileFolder: (id) => ipcRenderer.invoke('profiles:open-folder', id),
 
   // Mods Manager
   getModsList: () => ipcRenderer.invoke('mods:get-list'),
@@ -37,9 +46,26 @@ contextBridge.exposeInMainWorld('api', {
   deleteMod: (filename) => ipcRenderer.invoke('mods:delete', filename),
   openModsFolder: () => ipcRenderer.invoke('mods:open-folder'),
   installFabric: (version) => ipcRenderer.invoke('mods:install-fabric', version),
+  installQuilt: (version) => ipcRenderer.invoke('mods:install-quilt', version),
   installSodium: (version) => ipcRenderer.invoke('mods:install-sodium', version),
   searchModrinth: (params) => ipcRenderer.invoke('mods:search-modrinth', params),
+  getModrinthProjectVersions: (idOrSlug) => ipcRenderer.invoke('mods:get-modrinth-versions', idOrSlug),
   installModrinthMod: (params) => ipcRenderer.invoke('mods:install-modrinth', params),
+  installModrinthModpack: (params) => ipcRenderer.invoke('mods:install-modpack', params),
+  onModpackProgress: (callback) => {
+    const handler = (_event, data) => callback(data);
+    ipcRenderer.on('mods:modpack-progress', handler);
+    return () => ipcRenderer.removeListener('mods:modpack-progress', handler);
+  },
+
+  // Resource Packs & Shaders
+  getPacksList: (type) => ipcRenderer.invoke('packs:get-list', type),
+  addPackFiles: (type) => ipcRenderer.invoke('packs:add-files', type),
+  copyPackFiles: (type, paths) => ipcRenderer.invoke('packs:copy-files', type, paths),
+  togglePack: (type, filename) => ipcRenderer.invoke('packs:toggle', type, filename),
+  deletePack: (type, filename) => ipcRenderer.invoke('packs:delete', type, filename),
+  openPacksFolder: (type) => ipcRenderer.invoke('packs:open-folder', type),
+  getLyrics: (title, artist) => ipcRenderer.invoke('music:get-lyrics', title, artist),
 
   // External Links
   openExternal: (url) => ipcRenderer.send('system:open-external', url),
@@ -119,16 +145,49 @@ contextBridge.exposeInMainWorld('api', {
   spotifyLogin: (clientId) => ipcRenderer.invoke('spotify:login', clientId),
   spotifyLogout: () => ipcRenderer.invoke('spotify:logout'),
   spotifyGetStatus: () => ipcRenderer.invoke('spotify:get-status'),
+  spotifySetClientId: (clientId) => ipcRenderer.invoke('spotify:set-client-id', clientId),
+  spotifyRemovePlaylist: (id) => ipcRenderer.invoke('spotify:remove-playlist', id),
   spotifyGetMprisStatus: () => ipcRenderer.invoke('spotify:get-mpris-status'),
   spotifyGetPlaylists: () => ipcRenderer.invoke('spotify:get-playlists'),
+  onSpotifyPlaylistsUpdated: (callback) => {
+    const sub = () => callback();
+    ipcRenderer.on('spotify:playlists-updated', sub);
+    return () => ipcRenderer.removeListener('spotify:playlists-updated', sub);
+  },
   spotifyGetTracks: (playlistId) => ipcRenderer.invoke('spotify:get-tracks', playlistId),
   spotifyGetPlaylistInfo: (urlOrId) => ipcRenderer.invoke('spotify:get-playlist-info', urlOrId),
+  spotifySearchTracks: (query) => ipcRenderer.invoke('spotify:search-tracks', query),
   spotifyResolveAudio: (title, artist) => ipcRenderer.invoke('spotify:resolve-audio', title, artist),
   spotifyControl: (action, uri) => ipcRenderer.invoke('spotify:control', action, uri),
   updateMusicState: (state) => ipcRenderer.invoke('music:update-state', state),
   onMusicAction: (callback) => {
-    const sub = (_event, action) => callback(action);
+    const sub = (_event, action, value) => callback(action, value);
     ipcRenderer.on('music:action', sub);
     return () => ipcRenderer.removeListener('music:action', sub);
-  }
+  },
+
+  // Screenshots & Media Gallery
+  getScreenshots: (profileId) => ipcRenderer.invoke('screenshots:get-list', profileId),
+  getScreenshotThumbnail: (filePath) => ipcRenderer.invoke('screenshots:get-thumbnail', filePath),
+  getScreenshotFull: (filePath) => ipcRenderer.invoke('screenshots:get-full', filePath),
+  copyScreenshot: (filePath) => ipcRenderer.invoke('screenshots:copy', filePath),
+  deleteScreenshot: (filePath) => ipcRenderer.invoke('screenshots:delete', filePath),
+  openScreenshotsFolder: (profileId) => ipcRenderer.invoke('screenshots:open-folder', profileId),
+  openScreenshotFile: (filePath) => ipcRenderer.invoke('screenshots:open-file', filePath),
+
+  // Diagnoza Crashy & Rozwiązywanie Błędów Modów
+  diagnoseCrash: (profileId) => ipcRenderer.invoke('crash:diagnose', profileId),
+  executeCrashFix: (actionId, payload) => ipcRenderer.invoke('crash:execute-fix', actionId, payload),
+  openCrashFolder: (profileId) => ipcRenderer.invoke('crash:open-folder', profileId),
+  onCrashDetected: (callback) => {
+    const sub = (_event, val) => callback(val);
+    ipcRenderer.on('crash:detected', sub);
+    return () => ipcRenderer.removeListener('crash:detected', sub);
+  },
+
+  // PC Hardware Benchmark & Auto-Tuning
+  getDetailedSpecs: () => ipcRenderer.invoke('benchmark:get-specs'),
+  runBenchmark: () => ipcRenderer.invoke('benchmark:run'),
+  getOptimalConfig: (profileId) => ipcRenderer.invoke('benchmark:get-optimal', profileId),
+  applyOptimalConfig: (payload, profileId) => ipcRenderer.invoke('benchmark:apply', payload, profileId)
 });

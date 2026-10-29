@@ -154,11 +154,16 @@ async function initApp() {
     setupThemesListeners();
     setupSettingsListeners();
     setupModsListeners();
+    setupProfilesListeners();
     setupModBrowser();
     setupLauncherEventListeners();
     setupFriendsListeners();
     setupServerHostingListeners();
     setupSpotifyMusicListeners();
+    setupPacksListeners();
+    setupScreenshotsListeners();
+    setupCrashDoctorListeners();
+    setupBenchmarkListeners();
   } catch (listenerErr) {
     console.error('Błąd rejestracji listenerów UI:', listenerErr);
   }
@@ -174,12 +179,20 @@ async function initApp() {
   try { await loadConfig(); } catch (e) { console.error('Błąd loadConfig:', e); }
   try { await loadAccount(); } catch (e) { console.error('Błąd loadAccount:', e); }
   try { await loadVersions(); } catch (e) { console.error('Błąd loadVersions:', e); }
+  try { await loadProfiles(); } catch (e) { console.error('Błąd loadProfiles:', e); }
   try { await loadMods(); } catch (e) { console.error('Błąd loadMods:', e); }
+  try { await loadPacks('resourcepacks'); } catch (e) { console.error('Błąd loadPacks:', e); }
   try { await loadFriends(); } catch (e) { console.error('Błąd loadFriends:', e); }
   try { initOfficialServerWidget(); } catch (e) { console.error('Błąd initOfficialServerWidget:', e); }
   try { await loadServerHosting(); } catch (e) { console.error('Błąd loadServerHosting:', e); }
   try { await loadStats(); } catch (e) { console.error('Błąd loadStats:', e); }
-  try { await checkSpotifyStatus(); } catch (e) { console.error('Błąd checkSpotifyStatus:', e); }
+  try { await loadScreenshots(); } catch (e) { console.error('Błąd loadScreenshots:', e); }
+  try { await loadBenchmarkHardwareSpecs(); } catch (e) { console.error('Błąd loadBenchmarkHardwareSpecs:', e); }
+  try {
+    await checkSpotifyStatus();
+  } catch (e) {
+    console.error('Błąd checkSpotifyStatus:', e);
+  }
 
   // 4. Automatyczne otwieranie okna logowania jeśli użytkownik nie jest jeszcze zalogowany
   if (!currentAccount) {
@@ -197,35 +210,64 @@ function setupWindowControls() {
   elements.btnWinClose?.addEventListener('click', () => window.api.closeWindow());
 }
 
+function switchToTab(targetTab) {
+  elements.navPills.forEach(p => {
+    p.classList.toggle('active', p.getAttribute('data-tab') === targetTab);
+  });
+
+  elements.tabViews.forEach(view => {
+    const isTarget = view.id === `view-${targetTab}`;
+    view.classList.toggle('active', isTarget);
+    if (isTarget) {
+      view.scrollTop = 0;
+    }
+  });
+
+  if (targetTab === 'mods') {
+    loadMods();
+  }
+
+  if (targetTab === 'packs') {
+    loadPacks(currentPackType);
+  }
+
+  if (targetTab === 'music') {
+    syncMprisStatus();
+  }
+
+  if (targetTab === 'screenshots') {
+    loadScreenshots();
+  }
+
+  if (targetTab === 'benchmark') {
+    loadBenchmarkHardwareSpecs();
+  }
+
+  if (targetTab === 'play' && skinViewer) {
+    setTimeout(handleViewerResize, 50);
+  }
+}
+
 // Navigation between tabs
 function setupNavigation() {
   elements.navPills.forEach(pill => {
     pill.addEventListener('click', () => {
       const targetTab = pill.getAttribute('data-tab');
-      
-      elements.navPills.forEach(p => p.classList.remove('active'));
-      pill.classList.add('active');
-
-      elements.tabViews.forEach(view => {
-        view.classList.remove('active');
-        if (view.id === `view-${targetTab}`) {
-          view.classList.add('active');
-          const panel = view.querySelector('.view-panel');
-          if (panel) panel.scrollTop = 0;
-        }
-      });
-
-      // Lazy load mod browser on first click to 'mods' tab
-      if (targetTab === 'mods' && !hasLoadedModBrowseOnce) {
-        hasLoadedModBrowseOnce = true;
-        loadModrinthMods();
-      }
-
-      // Resize 3D viewer when switching back to play view
-      if (targetTab === 'play' && skinViewer) {
-        setTimeout(handleViewerResize, 50);
-      }
+      switchToTab(targetTab);
     });
+  });
+
+  // Quick Telemetry Cards on Play Dashboard
+  document.getElementById('quick-card-ram')?.addEventListener('click', () => switchToTab('settings'));
+  document.getElementById('quick-card-mods')?.addEventListener('click', () => {
+    switchToTab('mods');
+    if (typeof window.switchModsSubtab === 'function') {
+      window.switchModsSubtab('installed');
+    }
+  });
+  document.getElementById('quick-card-account')?.addEventListener('click', () => {
+    if (!currentAccount) openLoginModal();
+    else openProfileModal();
   });
 
   // Profile Button Click
@@ -244,36 +286,63 @@ function setupNavigation() {
   });
 
   document.addEventListener('click', (e) => {
-    if (!elements.versionQuickMenu.contains(e.target) && e.target !== elements.btnVersionDropdown) {
+    if (!elements.versionQuickMenu.contains(e.target) && !elements.btnVersionDropdown.contains(e.target)) {
       elements.versionQuickMenu.classList.remove('open');
     }
   });
 
-  // Subtabs inside Instancje (Zainstalowane / Wersje)
-  const subtabBtnMods = document.getElementById('subtab-btn-mods');
+  // Subtabs inside Profile Gry (Twoje Profile / Katalog Wersji)
+  const subtabBtnProfiles = document.getElementById('subtab-btn-profiles');
   const subtabBtnVersions = document.getElementById('subtab-btn-versions');
-  const subtabViewMods = document.getElementById('subtab-view-mods');
+  const subtabBtnModsLegacy = document.getElementById('subtab-btn-mods');
+  const subtabViewProfiles = document.getElementById('subtab-view-profiles');
   const subtabViewVersions = document.getElementById('subtab-view-versions');
 
-  function activateSubtab(btn, view) {
-    [subtabBtnMods, subtabBtnVersions].forEach(b => {
-      if (b) {
-        b.classList.remove('active');
-        b.style.background = 'transparent';
-      }
-    });
-    [subtabViewMods, subtabViewVersions].forEach(v => {
+  function activateInstanceSubtab(btn, view) {
+    [subtabBtnProfiles, subtabBtnVersions].forEach(b => b?.classList.remove('active'));
+    [subtabViewProfiles, subtabViewVersions].forEach(v => {
       if (v) v.style.display = 'none';
     });
-    if (btn) {
-      btn.classList.add('active');
-      btn.style.background = 'rgba(255, 255, 255, 0.1)';
-    }
+    btn?.classList.add('active');
     if (view) view.style.display = 'block';
   }
 
-  subtabBtnMods?.addEventListener('click', () => activateSubtab(subtabBtnMods, subtabViewMods));
-  subtabBtnVersions?.addEventListener('click', () => activateSubtab(subtabBtnVersions, subtabViewVersions));
+  subtabBtnProfiles?.addEventListener('click', () => activateInstanceSubtab(subtabBtnProfiles, subtabViewProfiles));
+  subtabBtnVersions?.addEventListener('click', () => activateInstanceSubtab(subtabBtnVersions, subtabViewVersions));
+  subtabBtnModsLegacy?.addEventListener('click', () => {
+    switchToTab('mods');
+    if (typeof window.switchModsSubtab === 'function') {
+      window.switchModsSubtab('installed');
+    }
+  });
+
+  // Subtabs inside Mody (Zainstalowane Mody / Katalog Modrinth)
+  const modsSubtabBtnInstalled = document.getElementById('mods-subtab-btn-installed');
+  const modsSubtabBtnModrinth = document.getElementById('mods-subtab-btn-modrinth');
+  const modsSubtabViewInstalled = document.getElementById('mods-subtab-view-installed');
+  const modsSubtabViewModrinth = document.getElementById('mods-subtab-view-modrinth');
+
+  window.switchModsSubtab = function(tabName) {
+    if (tabName === 'modrinth') {
+      modsSubtabBtnInstalled?.classList.remove('active');
+      modsSubtabBtnModrinth?.classList.add('active');
+      if (modsSubtabViewInstalled) modsSubtabViewInstalled.style.display = 'none';
+      if (modsSubtabViewModrinth) modsSubtabViewModrinth.style.display = 'block';
+      if (!hasLoadedModBrowseOnce) {
+        hasLoadedModBrowseOnce = true;
+        loadModrinthMods();
+      }
+    } else {
+      modsSubtabBtnModrinth?.classList.remove('active');
+      modsSubtabBtnInstalled?.classList.add('active');
+      if (modsSubtabViewModrinth) modsSubtabViewModrinth.style.display = 'none';
+      if (modsSubtabViewInstalled) modsSubtabViewInstalled.style.display = 'block';
+      loadMods();
+    }
+  };
+
+  modsSubtabBtnInstalled?.addEventListener('click', () => window.switchModsSubtab('installed'));
+  modsSubtabBtnModrinth?.addEventListener('click', () => window.switchModsSubtab('modrinth'));
 
   // Play Button Click
   elements.btnPlayGame.addEventListener('click', handlePlayClick);
@@ -486,8 +555,17 @@ async function loadConfig() {
     }
 
     // RAM
-    elements.settingRamMax.value = currentConfig.memoryMax || 4;
-    elements.settingRamVal.textContent = `${currentConfig.memoryMax || 4} GB`;
+    const memGb = currentConfig.memoryMax || 4;
+    elements.settingRamMax.value = memGb;
+    updateRamIndicators(memGb);
+
+    // JVM Optimizer Presets
+    const jvmPreset = currentConfig.jvmPreset || 'ultra';
+    document.querySelectorAll('#jvm-presets-grid .jvm-preset-card').forEach(c => {
+      c.classList.toggle('active', c.dataset.preset === jvmPreset);
+    });
+    const customJvmInput = document.getElementById('setting-custom-jvm-args');
+    if (customJvmInput) customJvmInput.value = currentConfig.customJvmArgs || '';
 
     // Java
     elements.settingJavaPath.value = currentConfig.javaPath || '/usr/bin/java';
@@ -517,7 +595,7 @@ async function loadConfig() {
 
     // Live Wallpapers
     const savedWallpaper = currentConfig.liveWallpaper || 'matrix';
-    const savedOpacity = (currentConfig.wallpaperOpacity !== undefined) ? currentConfig.wallpaperOpacity : 0.6;
+    const savedOpacity = (currentConfig.wallpaperOpacity !== undefined) ? currentConfig.wallpaperOpacity : 0.55;
     window.liveWallpapers?.init(savedWallpaper, savedOpacity);
     document.querySelectorAll('.wallpaper-opt-btn').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.style === savedWallpaper);
@@ -568,6 +646,27 @@ async function loadConfig() {
   }
 }
 
+function updateRamIndicators(gbVal) {
+  const gb = parseInt(gbVal, 10) || 4;
+  if (elements.settingRamVal) elements.settingRamVal.textContent = `${gb} GB`;
+  const quickRam = document.getElementById('quick-stat-ram');
+  if (quickRam) quickRam.textContent = `${gb} GB przydzielone`;
+
+  const hint = document.getElementById('ram-recommendation-hint');
+  if (hint) {
+    if (gb <= 3) {
+      hint.style.color = '#94A3B8';
+      hint.innerHTML = '<span>Podstawowy profil pamięci dla lekkiej rozgrywki (2 – 3 GB)</span>';
+    } else if (gb <= 8) {
+      hint.style.color = '#34D399';
+      hint.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="20 6 9 17 4 12"/></svg><span>Optymalny zakres dla Minecraft z modami Fabric (4 – 8 GB)</span>';
+    } else {
+      hint.style.color = '#FBBF24';
+      hint.innerHTML = '<span>Wysoki przydział dla ciężkich paczek modów i shaderów 4K (9 – 16 GB)</span>';
+    }
+  }
+}
+
 function setupSettingsListeners() {
   // Live Wallpapers Settings
   document.querySelectorAll('.wallpaper-opt-btn').forEach(btn => {
@@ -592,7 +691,7 @@ function setupSettingsListeners() {
   elements.settingUiSounds?.addEventListener('change', (e) => {
     window.uiSounds?.setEnabled(e.target.checked);
     window.api.saveConfig({ uiSoundsEnabled: e.target.checked });
-    showToast(e.target.checked ? '🔊 Włączono dźwięki interfejsu' : 'Wyciszono dźwięki interfejsu');
+    showToast(e.target.checked ? 'Włączono dźwięki interfejsu' : 'Wyciszono dźwięki interfejsu');
   });
 
   elements.settingSoundsVolume?.addEventListener('input', (e) => {
@@ -605,7 +704,82 @@ function setupSettingsListeners() {
   // FPS Boost Toggle
   elements.settingFpsBoost?.addEventListener('change', (e) => {
     window.api.saveConfig({ fpsBoostMode: e.target.checked });
-    showToast(e.target.checked ? '⚡ Włączono tryb FPS Boost!' : 'Wyłączono tryb FPS Boost');
+    showToast(e.target.checked ? 'Włączono tryb optymalizacji FPS' : 'Wyłączono optymalizator FPS');
+  });
+
+  // 1-Click Tuning Optymalizator JVM & RAM
+  const jvmCards = document.querySelectorAll('#jvm-presets-grid .jvm-preset-card');
+  const customJvmInput = document.getElementById('setting-custom-jvm-args');
+  const btn1ClickTune = document.getElementById('btn-1click-auto-tune');
+
+  function applyJvmPresetUI(presetKey) {
+    jvmCards.forEach(card => {
+      card.classList.toggle('active', card.dataset.preset === presetKey);
+    });
+  }
+
+  jvmCards.forEach(card => {
+    card.addEventListener('click', () => {
+      const preset = card.dataset.preset;
+      applyJvmPresetUI(preset);
+      window.api.saveConfig({ jvmPreset: preset });
+      const names = {
+        ultra: 'Ultra FPS (Generational ZGC Java 21)',
+        g1gc: 'Stabilny (G1GC Aikar Tuned)',
+        lowend: 'Low-End PC (Oszczędny Parallel)'
+      };
+      showToast(`Wybrano profil: ${names[preset] || preset}`);
+    });
+  });
+
+  customJvmInput?.addEventListener('change', (e) => {
+    window.api.saveConfig({ customJvmArgs: e.target.value.trim() });
+    showToast('Zapisano dodatkowe parametry JVM.');
+  });
+
+  btn1ClickTune?.addEventListener('click', async () => {
+    btn1ClickTune.classList.add('rotating');
+    try {
+      const specs = await window.api.getSystemSpecs?.().catch(() => ({ totalRamGb: 16 }));
+      const totalRam = specs?.totalRamGb || 16;
+      let recRam = 8;
+      let recPreset = 'ultra';
+
+      if (totalRam >= 16) {
+        recRam = 8;
+        recPreset = 'ultra';
+      } else if (totalRam >= 12) {
+        recRam = 6;
+        recPreset = 'ultra';
+      } else if (totalRam >= 8) {
+        recRam = 4;
+        recPreset = 'g1gc';
+      } else {
+        recRam = 3;
+        recPreset = 'lowend';
+      }
+
+      elements.settingRamMax.value = recRam;
+      updateRamIndicators(recRam);
+      applyJvmPresetUI(recPreset);
+      if (elements.settingFpsBoost) elements.settingFpsBoost.checked = true;
+
+      window.api.saveConfig({
+        memoryMax: recRam,
+        jvmPreset: recPreset,
+        fpsBoostMode: true
+      });
+
+      const presetNames = {
+        ultra: 'Ultra FPS (ZGC Java 21)',
+        g1gc: 'Stabilny (G1GC Aikar)',
+        lowend: 'Low-End PC'
+      };
+
+      showToast(`⚡ 1-Click Tuning: Wykryto ${totalRam} GB RAM. Zastosowano ${recRam} GB RAM + ${presetNames[recPreset]}!`);
+    } finally {
+      setTimeout(() => btn1ClickTune.classList.remove('rotating'), 650);
+    }
   });
 
   // Optimize Options Toggle
@@ -616,13 +790,13 @@ function setupSettingsListeners() {
   // Discord RPC Settings
   elements.settingDiscordRpc?.addEventListener('change', (e) => {
     window.api.saveConfig({ discordRpcEnabled: e.target.checked });
-    showToast(e.target.checked ? '👾 Włączono Discord RPC!' : 'Wyłączono Discord RPC.');
+    showToast(e.target.checked ? 'Włączono status Discord Rich Presence' : 'Wyłączono Discord Rich Presence');
   });
 
   elements.settingDiscordClientId?.addEventListener('change', (e) => {
     const val = e.target.value.trim();
     window.api.saveConfig({ discordClientId: val });
-    showToast(val ? 'Zaktualizowano Client ID dla Discord RPC!' : 'Wyczyszczono Client ID.');
+    showToast(val ? 'Zaktualizowano Client ID dla Discord RPC' : 'Przywrócono domyślne Client ID');
   });
 
   elements.btnOpenDiscordDev?.addEventListener('click', () => {
@@ -631,9 +805,9 @@ function setupSettingsListeners() {
 
   // RAM slider
   elements.settingRamMax.addEventListener('input', (e) => {
-    const val = e.target.value;
-    elements.settingRamVal.textContent = `${val} GB`;
-    window.api.saveConfig({ memoryMax: parseInt(val, 10) });
+    const val = parseInt(e.target.value, 10) || 4;
+    updateRamIndicators(val);
+    window.api.saveConfig({ memoryMax: val });
   });
 
   // Java Browse
@@ -663,7 +837,7 @@ function setupSettingsListeners() {
 
   // Clear logs
   elements.btnClearLogs.addEventListener('click', () => {
-    elements.logsConsole.innerHTML = '[KasteuszLauncher] Konsola wyczyszczona.<br>';
+    elements.logsConsole.innerHTML = '<div class="log-line">[SYSTEM] Konsola wyczyszczona.</div>';
   });
 }
 
@@ -680,11 +854,19 @@ async function loadAccount() {
 
 async function applyAccountToUI(account) {
   currentAccount = account;
+  const subTypeEl = document.getElementById('user-account-type-label');
+  const quickAccEl = document.getElementById('quick-stat-account');
+
   if (account) {
     elements.userNicknameText.textContent = account.username;
-    if (elements.userStatusDot) elements.userStatusDot.style.background = '#22c55e';
+    if (elements.userStatusDot) {
+      elements.userStatusDot.classList.add('online');
+      elements.userStatusDot.style.background = '';
+    }
+    const typeLabel = account.isPremium ? 'Microsoft Premium' : 'Sesja Offline';
+    if (subTypeEl) subTypeEl.textContent = typeLabel;
+    if (quickAccEl) quickAccEl.textContent = typeLabel;
 
-    // Prioritize custom skin (e.g. Zygzak McQueen #95) over generic Mojang skin
     let skinToUse = account.customSkinUrl || account.skinUrl || 'assets/default-skin.png';
 
     if (skinToUse) {
@@ -698,7 +880,12 @@ async function applyAccountToUI(account) {
     renderAccountCapes(account);
   } else {
     elements.userNicknameText.textContent = 'Zaloguj się';
-    if (elements.userStatusDot) elements.userStatusDot.style.background = '#f59e0b';
+    if (elements.userStatusDot) {
+      elements.userStatusDot.classList.remove('online');
+      elements.userStatusDot.style.background = '#F59E0B';
+    }
+    if (subTypeEl) subTypeEl.textContent = 'Kliknij, aby połączyć';
+    if (quickAccEl) quickAccEl.textContent = 'Wymagane logowanie';
     if (elements.userAvatarHead) elements.userAvatarHead.src = 'assets/default-skin.png';
     updateSkinDisplay('assets/default-skin.png');
   }
@@ -823,6 +1010,7 @@ document.addEventListener('keydown', (e) => {
     closeLoginModal();
     closeProfileModal();
     closeWardrobeModal();
+    closeProfileEditorModal();
   }
 });
 
@@ -867,8 +1055,25 @@ function closeProfileModal() {
   if (elements.profileModal) elements.profileModal.classList.remove('open');
 }
 
-// 4.5. Mods Manager
+// 4.5. Mods Manager + Local Search + Resource Packs & Shaders
 let installedMods = [];
+let localModFilterQuery = '';
+let currentPackType = 'resourcepacks';
+let installedPacks = [];
+
+function updateModCounters(mods) {
+  const list = Array.isArray(mods) ? mods : [];
+  const activeCount = list.filter(m => m.enabled).length;
+  const sidebarBadge = document.getElementById('sidebar-mods-badge');
+  const subtabBadge = document.getElementById('mods-subtab-badge');
+  const quickMods = document.getElementById('quick-stat-mods');
+  const summaryTag = document.getElementById('mods-summary-counter');
+
+  if (sidebarBadge) sidebarBadge.textContent = String(activeCount);
+  if (subtabBadge) subtabBadge.textContent = String(activeCount);
+  if (quickMods) quickMods.textContent = `${activeCount} aktywnych`;
+  if (summaryTag) summaryTag.textContent = `${activeCount} / ${list.length} aktywnych`;
+}
 
 async function loadMods() {
   try {
@@ -880,91 +1085,110 @@ async function loadMods() {
 }
 
 function renderModsList(mods) {
+  updateModCounters(mods);
   if (!elements.modsListContainer) return;
   elements.modsListContainer.innerHTML = '';
 
-  if (!mods || mods.length === 0) {
+  const allMods = Array.isArray(mods) ? mods : [];
+  const q = localModFilterQuery.trim().toLowerCase();
+  const filtered = q
+    ? allMods.filter(m =>
+        (m.displayName || m.name || '').toLowerCase().includes(q) ||
+        (m.filename || '').toLowerCase().includes(q) ||
+        (m.description || '').toLowerCase().includes(q)
+      )
+    : allMods;
+
+  if (allMods.length === 0) {
     elements.modsListContainer.innerHTML = `
-      <div style="background: rgba(255, 255, 255, 0.02); border: 2px dashed rgba(255, 255, 255, 0.08); border-radius: 14px; padding: 40px 20px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 12px;">
-        <div style="width: 52px; height: 52px; border-radius: 14px; background: rgba(168, 85, 247, 0.15); display: flex; align-items: center; justify-content: center; font-size: 24px;">
-          🧩
+      <div class="empty-state-box">
+        <div class="friends-empty-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
         </div>
-        <div style="font-size: 16px; font-weight: 700; color: #ffffff;">Brak zainstalowanych modów</div>
-        <div style="font-size: 12.5px; color: #8e95a5; max-width: 440px; line-height: 1.5;">
-          Możesz dodawać mody w formacie <b>.jar</b> (np. Sodium, Lithium, Iris) klikając przycisk powyżej lub przeciągając pliki bezpośrednio do tego okna.
-        </div>
-        <button class="btn-secondary" id="btn-empty-add-mods" style="margin-top: 6px; background: #ffffff; color: #000000; font-weight: 700; padding: 10px 20px;">
-          ➕ Dodaj Mody (.jar)
-        </button>
+        <div class="setting-title" style="font-size: 14px;">Brak zainstalowanych modów</div>
+        <div class="setting-desc" style="max-width: 400px;">Dodaj pliki .jar z dysku, przeciągnij je na okno lub pobierz gotowe mody z zakładki Modrinth.</div>
+        <button class="btn-primary" id="btn-empty-add-mods" style="margin-top: 6px;">Dodaj mody (.jar)</button>
       </div>
     `;
-
     document.getElementById('btn-empty-add-mods')?.addEventListener('click', () => {
       elements.btnAddMods?.click();
     });
     return;
   }
 
-  mods.forEach(mod => {
+  if (filtered.length === 0) {
+    elements.modsListContainer.innerHTML = `
+      <div class="empty-state-box">
+        <div class="setting-title">Brak wyników filtrowania</div>
+        <div class="setting-desc">Żaden zainstalowany mod nie pasuje do frazy „${localModFilterQuery}”.</div>
+      </div>
+    `;
+    return;
+  }
+
+  filtered.forEach(mod => {
     const card = document.createElement('div');
-    card.className = 'setting-row';
-    card.style.padding = '14px 18px';
-    card.style.opacity = mod.enabled ? '1' : '0.6';
-    card.style.transition = 'opacity 0.2s ease, transform 0.15s ease';
+    card.className = `mod-row-card ${mod.enabled ? '' : 'is-disabled'}`;
+
+    const thumbHtml = mod.iconDataUrl
+      ? `<img src="${mod.iconDataUrl}" alt="">`
+      : `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>`;
+
+    const titleText = mod.displayName || mod.name;
+    const versionBadge = mod.version ? `<span class="mod-tag tnum">v${String(mod.version).replace(/^v/i, '')}</span>` : '';
+    const statusBadge = mod.enabled
+      ? `<span class="mod-tag status-on">Aktywny</span>`
+      : `<span class="mod-tag status-off">Wyłączony</span>`;
+    const subLine = mod.description
+      ? `${mod.description} • ${mod.size}`
+      : `${mod.filename} • ${mod.size}`;
 
     card.innerHTML = `
-      <div style="display: flex; align-items: center; gap: 14px;">
-        <div style="width: 38px; height: 38px; border-radius: 10px; background: ${mod.enabled ? 'rgba(34, 197, 94, 0.15)' : 'rgba(255, 255, 255, 0.05)'}; display: flex; align-items: center; justify-content: center; font-size: 18px;">
-          ${mod.enabled ? '🧩' : '💤'}
-        </div>
-        <div style="display: flex; flex-direction: column; gap: 3px;">
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <span style="font-size: 13.5px; font-weight: 600; color: #ffffff;">${mod.name}</span>
-            <span style="font-size: 9.5px; font-weight: 700; background: rgba(255, 255, 255, 0.08); padding: 1px 5px; border-radius: 4px; color: #94a3b8;">
-              ${mod.enabled ? '.JAR' : 'WYŁĄCZONY'}
-            </span>
+      <div class="mod-row-left">
+        <div class="mod-row-thumb">${thumbHtml}</div>
+        <div class="mod-row-info">
+          <div class="mod-row-title-line">
+            <span class="mod-row-name">${titleText}</span>
+            ${versionBadge}
+            ${statusBadge}
           </div>
-          <span style="font-size: 11px; color: #64748b;">Rozmiar: ${mod.size}</span>
+          <span class="mod-row-sub tnum">${subLine}</span>
         </div>
       </div>
 
-      <div style="display: flex; align-items: center; gap: 12px;">
-        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 12px; color: ${mod.enabled ? '#4ade80' : '#94a3b8'};">
-          <input type="checkbox" class="mod-toggle" data-filename="${mod.filename}" ${mod.enabled ? 'checked' : ''} style="width: 17px; height: 17px; accent-color: #22c55e; cursor: pointer;">
-          <span>${mod.enabled ? 'Aktywny' : 'Wyłączony'}</span>
-        </label>
-
-        <button class="win-btn close mod-delete-btn" data-filename="${mod.filename}" title="Usuń mod" style="width: 30px; height: 30px;">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="3 6 5 6 21 6"></polyline>
-            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+      <div class="mod-row-actions">
+        <input type="checkbox" class="ui-switch mod-toggle" data-filename="${mod.filename}" ${mod.enabled ? 'checked' : ''} title="Włącz / Wyłącz mod">
+        <button class="btn-icon-only mod-delete-btn" data-filename="${mod.filename}" title="Usuń mod">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="3 6 5 6 21 6"/>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
           </svg>
         </button>
       </div>
     `;
 
-    // Toggle switch
     const toggle = card.querySelector('.mod-toggle');
     toggle?.addEventListener('change', async () => {
       try {
         const updated = await window.api.toggleMod(mod.filename);
         installedMods = updated;
         renderModsList(installedMods);
-        showToast(toggle.checked ? `Włączono mod: ${mod.name}` : `Wyłączono mod: ${mod.name}`);
+        loadProfiles();
+        showToast(toggle.checked ? `Włączono mod: ${titleText}` : `Wyłączono mod: ${titleText}`);
       } catch (err) {
         showToast(`Błąd: ${err.message}`);
       }
     });
 
-    // Delete button
     const deleteBtn = card.querySelector('.mod-delete-btn');
     deleteBtn?.addEventListener('click', async () => {
-      if (confirm(`Czy na pewno chcesz usunąć mod "${mod.name}"?`)) {
+      if (confirm(`Czy na pewno chcesz usunąć mod "${titleText}"?`)) {
         try {
           const updated = await window.api.deleteMod(mod.filename);
           installedMods = updated;
           renderModsList(installedMods);
-          showToast(`Usunięto mod: ${mod.name}`);
+          loadProfiles();
+          showToast(`Usunięto mod: ${titleText}`);
         } catch (err) {
           showToast(`Błąd: ${err.message}`);
         }
@@ -976,107 +1200,268 @@ function renderModsList(mods) {
 }
 
 function setupModsListeners() {
-  // Add mods button
+  const localSearch = document.getElementById('mods-local-search');
+  const localClear = document.getElementById('mods-local-search-clear');
+  const modsDropBanner = document.getElementById('mods-dropzone-banner');
+
+  localSearch?.addEventListener('input', () => {
+    localModFilterQuery = localSearch.value || '';
+    if (localClear) localClear.style.display = localModFilterQuery.trim() ? 'inline-flex' : 'none';
+    renderModsList(installedMods);
+  });
+
+  localClear?.addEventListener('click', () => {
+    localModFilterQuery = '';
+    if (localSearch) localSearch.value = '';
+    localClear.style.display = 'none';
+    renderModsList(installedMods);
+  });
+
   elements.btnAddMods?.addEventListener('click', async () => {
     try {
-      showToast('Wybierz pliki modów .jar...');
       const res = await window.api.addModFiles();
       if (res && res.added > 0) {
         installedMods = res.mods;
         renderModsList(installedMods);
-        showToast(`Pomyślnie dodano ${res.added} mod(ów)!`);
+        loadProfiles();
+        showToast(`Pomyślnie dodano ${res.added} mod(ów)`);
       }
     } catch (err) {
       showToast(`Błąd dodawania modów: ${err.message}`);
     }
   });
 
-  // Open mods folder
   elements.btnOpenModsFolder?.addEventListener('click', async () => {
     try {
       await window.api.openModsFolder();
-      showToast('Otwarto folder mods w menedżerze plików.');
+      showToast('Otwarto folder mods');
     } catch (err) {
       showToast(`Błąd: ${err.message}`);
     }
   });
 
-  // Install Fabric Loader
   elements.btnInstallFabric?.addEventListener('click', async () => {
-    const currentVer = elements.currentVersionDisplay.textContent || '1.20.4';
-    // Jeśli wersja to np. 1.21.4, wyciągamy wersję bazową
-    const baseVer = currentVer.replace(/fabric-loader-[^-]+-/, '');
-    showToast(`Pobieranie i instalacja Fabric Loader dla Minecraft ${baseVer}...`);
+    const activeProf = getActiveProfileObj();
+    const baseVer = activeProf?.mcVersion || (currentSelectedVersionId || '1.21.11').replace(/^(fabric|quilt)-/, '');
+    showToast(`Instalacja Fabric Loader dla Minecraft ${baseVer}...`);
 
     try {
       const res = await window.api.installFabric(baseVer);
-      updateSelectedVersion(res.versionId);
-      showToast(`Zainstalowano Fabric Loader ${res.loaderVersion} dla ${res.minecraftVersion}!`);
+      if (activeProf && activeProf.loader !== 'fabric') {
+        await window.api.updateProfile?.(activeProf.id, { loader: 'fabric' });
+      }
+      await loadProfiles();
+      showToast(`Zainstalowano Fabric Loader ${res.loaderVersion} (${res.minecraftVersion})`);
       appendLog(`[Fabric] Zainstalowano pomyślnie wersję ${res.versionId}.`);
     } catch (err) {
-      console.warn('Fabric install error:', err);
-      // Fallback: 1.20.4
-      try {
-        const res2 = await window.api.installFabric('1.20.4');
-        updateSelectedVersion(res2.versionId);
-        showToast(`Zainstalowano Fabric dla stabilnej wersji 1.20.4!`);
-      } catch (err2) {
-        showToast(`Błąd instalacji Fabric: ${err.message}`);
-      }
+      showToast(`Błąd instalacji Fabric: ${err.message}`);
     }
   });
 
-  // Install Sodium 1-click
   elements.btnInstallSodium?.addEventListener('click', async () => {
-    const currentVer = elements.currentVersionDisplay.textContent || '1.20.4';
-    const baseVer = currentVer.replace(/fabric-[^-]+-/, '');
-    showToast(`Pobieranie i instalacja modu Sodium dla Minecraft ${baseVer}...`);
+    const activeProf = getActiveProfileObj();
+    const baseVer = activeProf?.mcVersion || (currentSelectedVersionId || '1.21.11').replace(/^(fabric|quilt)-/, '');
+    showToast(`Pobieranie modu Sodium dla Minecraft ${baseVer}...`);
     try {
       const res = await window.api.installSodium(baseVer);
       installedMods = res.mods;
       renderModsList(installedMods);
-      updateSelectedVersion(`fabric-${baseVer}`);
-      showToast(`Pomyślnie zainstalowano Sodium i włączono silnik Fabric!`);
-    } catch (err) {
-      try {
-        const res2 = await window.api.installSodium('1.20.4');
-        installedMods = res2.mods;
-        renderModsList(installedMods);
-        updateSelectedVersion('fabric-1.20.4');
-        showToast('Pomyślnie zainstalowano Sodium dla 1.20.4!');
-      } catch (err2) {
-        showToast(`Błąd instalacji Sodium: ${err.message}`);
+      if (activeProf && activeProf.loader === 'vanilla') {
+        await window.api.updateProfile?.(activeProf.id, { loader: 'fabric' });
       }
+      await loadProfiles();
+      showToast(`Zainstalowano Sodium w profilu ${activeProf?.name || baseVer}`);
+    } catch (err) {
+      showToast(`Błąd instalacji Sodium: ${err.message}`);
     }
   });
 
-  // Obsługa przeciągania modów (Drag and drop)
+  // Global Drag & Drop (.jar -> mods, .zip -> resourcepacks/shaderpacks)
   window.addEventListener('dragover', (e) => {
     e.preventDefault();
     e.stopPropagation();
+    modsDropBanner?.classList.add('dragover');
+    document.getElementById('packs-dropzone')?.classList.add('dragover');
+  });
+
+  window.addEventListener('dragleave', () => {
+    modsDropBanner?.classList.remove('dragover');
+    document.getElementById('packs-dropzone')?.classList.remove('dragover');
   });
 
   window.addEventListener('drop', async (e) => {
     e.preventDefault();
     e.stopPropagation();
-    if (e.dataTransfer && e.dataTransfer.files.length > 0) {
-      const jarPaths = Array.from(e.dataTransfer.files)
-        .filter(f => f.name.endsWith('.jar'))
-        .map(f => f.path);
+    modsDropBanner?.classList.remove('dragover');
+    document.getElementById('packs-dropzone')?.classList.remove('dragover');
 
-      if (jarPaths.length > 0) {
-        showToast(`Dodawanie ${jarPaths.length} przeciągniętych modów...`);
+    if (!e.dataTransfer || e.dataTransfer.files.length === 0) return;
+    const files = Array.from(e.dataTransfer.files);
+
+    const jarPaths = files.filter(f => f.name.toLowerCase().endsWith('.jar')).map(f => f.path);
+    const zipPaths = files.filter(f => f.name.toLowerCase().endsWith('.zip')).map(f => f.path);
+
+    if (jarPaths.length > 0) {
+      try {
+        const res = await window.api.copyModFiles(jarPaths);
+        if (res && res.added > 0) {
+          installedMods = res.mods;
+          renderModsList(installedMods);
+          showToast(`Zaimportowano ${res.added} mod(ów) .jar`);
+        }
+      } catch (err) {
+        showToast(`Błąd importu .jar: ${err.message}`);
+      }
+    }
+
+    if (zipPaths.length > 0 && window.api?.copyPackFiles) {
+      try {
+        const res = await window.api.copyPackFiles(currentPackType, zipPaths);
+        if (res && res.added > 0) {
+          installedPacks = res.packs;
+          renderPacksList(installedPacks);
+          const label = currentPackType === 'shaderpacks' ? 'shaderów' : 'pakietów zasobów';
+          showToast(`Zaimportowano ${res.added} ${label} (.zip)`);
+        }
+      } catch (err) {
+        showToast(`Błąd importu .zip: ${err.message}`);
+      }
+    }
+  });
+}
+
+// ============================================================================
+// PAKIETY ZASOBÓW & SHADERY (#view-packs)
+// ============================================================================
+async function loadPacks(type = currentPackType) {
+  currentPackType = type;
+  if (!window.api?.getPacksList) return;
+  try {
+    installedPacks = await window.api.getPacksList(currentPackType);
+    renderPacksList(installedPacks);
+  } catch (err) {
+    console.warn('Błąd ładowania paczek:', err);
+  }
+}
+
+function renderPacksList(packs) {
+  const container = document.getElementById('packs-list-container');
+  if (!container) return;
+  container.innerHTML = '';
+
+  const isShader = currentPackType === 'shaderpacks';
+  if (!packs || packs.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state-box" style="grid-column: 1 / -1;">
+        <div class="friends-empty-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+        </div>
+        <div class="setting-title" style="font-size: 14px;">Brak zainstalowanych ${isShader ? 'shaderów' : 'pakietów zasobów'}</div>
+        <div class="setting-desc" style="max-width: 420px;">Przeciągnij archiwa .zip w strefę powyżej lub kliknij „Dodaj paczkę .zip”, aby zainstalować ${isShader ? 'shadery Iris' : 'paczki tekstur'}.</div>
+      </div>
+    `;
+    return;
+  }
+
+  packs.forEach(pack => {
+    const card = document.createElement('div');
+    card.className = `pack-card ${pack.enabled ? '' : 'is-disabled'}`;
+
+    const thumbHtml = pack.iconDataUrl
+      ? `<img src="${pack.iconDataUrl}" alt="">`
+      : `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>`;
+
+    const formatTag = pack.packFormat ? `<span class="mod-tag tnum">Format ${pack.packFormat}</span>` : '';
+    const statusTag = pack.enabled
+      ? `<span class="mod-tag status-on">Włączony</span>`
+      : `<span class="mod-tag status-off">Wyłączony</span>`;
+
+    card.innerHTML = `
+      <div class="pack-thumb">${thumbHtml}</div>
+      <div class="pack-body">
+        <div class="pack-title" title="${pack.name}">${pack.name}</div>
+        <div class="pack-desc" title="${pack.description || ''}">${pack.description || ''}</div>
+        <div class="pack-meta-row">
+          ${statusTag}
+          ${formatTag}
+          <span class="mod-tag tnum">${pack.size}</span>
+        </div>
+      </div>
+      <div class="mod-row-actions">
+        <input type="checkbox" class="ui-switch pack-toggle" ${pack.enabled ? 'checked' : ''} title="Włącz / Wyłącz paczkę">
+        <button class="btn-icon-only pack-delete-btn" title="Usuń paczkę">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        </button>
+      </div>
+    `;
+
+    card.querySelector('.pack-toggle')?.addEventListener('change', async (e) => {
+      try {
+        installedPacks = await window.api.togglePack(currentPackType, pack.filename);
+        renderPacksList(installedPacks);
+        showToast(e.target.checked ? `Włączono: ${pack.name}` : `Wyłączono: ${pack.name}`);
+      } catch (err) {
+        showToast(`Błąd: ${err.message}`);
+      }
+    });
+
+    card.querySelector('.pack-delete-btn')?.addEventListener('click', async () => {
+      if (confirm(`Usunąć paczkę "${pack.name}"?`)) {
         try {
-          const res = await window.api.copyModFiles(jarPaths);
-          if (res && res.added > 0) {
-            installedMods = res.mods;
-            renderModsList(installedMods);
-            showToast(`Pomyślnie dodano ${res.added} mod(ów)!`);
-          }
+          installedPacks = await window.api.deletePack(currentPackType, pack.filename);
+          renderPacksList(installedPacks);
+          showToast(`Usunięto: ${pack.name}`);
         } catch (err) {
           showToast(`Błąd: ${err.message}`);
         }
       }
+    });
+
+    container.appendChild(card);
+  });
+}
+
+function setupPacksListeners() {
+  const btnRes = document.getElementById('packs-subtab-resourcepacks');
+  const btnSha = document.getElementById('packs-subtab-shaderpacks');
+  const dropTitle = document.getElementById('packs-dropzone-title');
+  const btnAdd = document.getElementById('btn-add-packs');
+  const btnOpen = document.getElementById('btn-open-packs-folder');
+
+  const switchPackTab = (type) => {
+    currentPackType = type;
+    btnRes?.classList.toggle('active', type === 'resourcepacks');
+    btnSha?.classList.toggle('active', type === 'shaderpacks');
+    if (dropTitle) {
+      dropTitle.textContent = type === 'shaderpacks'
+        ? 'Przeciągnij i upuść paczki shaderów Iris (.zip)'
+        : 'Przeciągnij i upuść pakiety zasobów (.zip)';
+    }
+    loadPacks(type);
+  };
+
+  btnRes?.addEventListener('click', () => switchPackTab('resourcepacks'));
+  btnSha?.addEventListener('click', () => switchPackTab('shaderpacks'));
+
+  btnAdd?.addEventListener('click', async () => {
+    try {
+      const res = await window.api.addPackFiles(currentPackType);
+      if (res && res.added > 0) {
+        installedPacks = res.packs;
+        renderPacksList(installedPacks);
+        showToast(`Dodano ${res.added} paczkę/paczek (.zip)`);
+      }
+    } catch (err) {
+      showToast(`Błąd: ${err.message}`);
+    }
+  });
+
+  btnOpen?.addEventListener('click', async () => {
+    try {
+      await window.api.openPacksFolder(currentPackType);
+      showToast(`Otwarto katalog ${currentPackType}`);
+    } catch (err) {
+      showToast(`Błąd: ${err.message}`);
     }
   });
 }
@@ -1086,8 +1471,15 @@ function setupModsListeners() {
 // ============================================================================
 
 let hasLoadedModBrowseOnce = false;
+let currentModBrowseType = 'mod'; // 'mod' lub 'modpack'
 let currentModCategory = 'all';
+let currentModBrowseLoader = 'all';
+let currentModBrowseOffset = 0;
+const MOD_BROWSE_PAGE_SIZE = 30;
+let currentModBrowseTotalHits = 0;
+let currentModBrowseHits = [];
 let modSearchTimeout = null;
+let currentModpackModalData = null;
 
 function isModInstalled(modHit) {
   if (!installedMods || installedMods.length === 0) return false;
@@ -1112,296 +1504,990 @@ function setupModBrowser() {
   const searchInput = document.getElementById('mod-browse-search-input');
   const clearBtn = document.getElementById('mod-browse-search-clear');
   const sortSelect = document.getElementById('mod-browse-sort-select');
+  const loaderSelect = document.getElementById('mod-browse-loader-select');
   const verLock = document.getElementById('mod-browse-ver-lock');
   const chipsContainer = document.getElementById('mod-categories-chips');
+  const loadMoreBtn = document.getElementById('btn-mod-browse-load-more');
+  const typeSwitchMod = document.getElementById('modrinth-type-mod');
+  const typeSwitchModpack = document.getElementById('modrinth-type-modpack');
 
-  // Search input with debounce
+  // Przełącznik Mody / Modpacki
+  typeSwitchMod?.addEventListener('click', () => {
+    if (currentModBrowseType === 'mod') return;
+    currentModBrowseType = 'mod';
+    typeSwitchMod.classList.add('active');
+    typeSwitchModpack?.classList.remove('active');
+    if (chipsContainer) chipsContainer.style.display = 'flex';
+    if (searchInput) searchInput.placeholder = 'Szukaj modów na Modrinth (np. Sodium, Iris, Zoomify, ReplayMod)...';
+    loadModrinthMods(false);
+  });
+
+  typeSwitchModpack?.addEventListener('click', () => {
+    if (currentModBrowseType === 'modpack') return;
+    currentModBrowseType = 'modpack';
+    typeSwitchModpack.classList.add('active');
+    typeSwitchMod?.classList.remove('active');
+    if (chipsContainer) chipsContainer.style.display = 'none';
+    if (searchInput) searchInput.placeholder = 'Szukaj modpacków na Modrinth (np. Fabulously Optimized, Cobblemon, Better MC)...';
+    loadModrinthMods(false);
+  });
+
+  // Wyszukiwanie tekstowe z debouncingiem
   searchInput?.addEventListener('input', () => {
     const val = searchInput.value.trim();
-    if (clearBtn) clearBtn.style.display = val ? 'block' : 'none';
+    if (clearBtn) clearBtn.style.display = val ? 'inline-flex' : 'none';
     clearTimeout(modSearchTimeout);
     modSearchTimeout = setTimeout(() => {
-      loadModrinthMods();
+      loadModrinthMods(false);
     }, 350);
   });
 
   clearBtn?.addEventListener('click', () => {
     if (searchInput) searchInput.value = '';
     if (clearBtn) clearBtn.style.display = 'none';
-    loadModrinthMods();
+    loadModrinthMods(false);
   });
 
-  sortSelect?.addEventListener('change', () => {
-    loadModrinthMods();
+  sortSelect?.addEventListener('change', () => loadModrinthMods(false));
+  loaderSelect?.addEventListener('change', () => {
+    currentModBrowseLoader = loaderSelect.value || 'all';
+    loadModrinthMods(false);
   });
+  verLock?.addEventListener('change', () => loadModrinthMods(false));
 
-  verLock?.addEventListener('change', () => {
-    loadModrinthMods();
-  });
-
-  // Category chips
   chipsContainer?.querySelectorAll('.mod-chip').forEach(chip => {
     chip.addEventListener('click', () => {
       chipsContainer.querySelectorAll('.mod-chip').forEach(c => c.classList.remove('active'));
       chip.classList.add('active');
       currentModCategory = chip.getAttribute('data-category') || 'all';
-      loadModrinthMods();
+      loadModrinthMods(false);
     });
   });
+
+  // Przycisk Załaduj więcej (+30)
+  loadMoreBtn?.addEventListener('click', () => {
+    currentModBrowseOffset += MOD_BROWSE_PAGE_SIZE;
+    loadModrinthMods(true);
+  });
+
+  // Obsługa Modala Instalacji Modpacka
+  setupModpackModalEvents();
 }
 
-async function loadModrinthMods() {
+async function loadModrinthMods(append = false) {
   const searchInput = document.getElementById('mod-browse-search-input');
   const sortSelect = document.getElementById('mod-browse-sort-select');
+  const loaderSelect = document.getElementById('mod-browse-loader-select');
   const verLock = document.getElementById('mod-browse-ver-lock');
   const resultsContainer = document.getElementById('mod-browse-results');
   const loadingEl = document.getElementById('mod-browse-loading');
+  const hitsCountEl = document.getElementById('mod-browse-hits-count');
+  const loadMoreBtn = document.getElementById('btn-mod-browse-load-more');
+  const paginationWrap = document.getElementById('mod-browse-pagination-wrap');
 
   if (!resultsContainer) return;
-  if (loadingEl) loadingEl.style.display = 'block';
-  resultsContainer.style.opacity = '0.5';
+
+  if (!append) {
+    currentModBrowseOffset = 0;
+    currentModBrowseHits = [];
+    if (loadingEl) loadingEl.style.display = 'flex';
+    resultsContainer.style.opacity = '0.35';
+    if (paginationWrap) paginationWrap.style.display = 'none';
+  } else {
+    if (loadMoreBtn) {
+      loadMoreBtn.disabled = true;
+      loadMoreBtn.innerHTML = `<span class="spinner-ring" style="width: 14px; height: 14px;"></span><span>Ładowanie kolejnych...</span>`;
+    }
+  }
 
   const query = searchInput?.value.trim() || '';
   const sort = sortSelect?.value || 'downloads';
+  const loader = loaderSelect?.value || currentModBrowseLoader || 'all';
   const onlyCurrent = verLock ? verLock.checked : false;
+  const activeMcVer = (getActiveProfileObj()?.mcVersion || currentSelectedVersionId || '1.21.11').replace(/^(fabric|quilt)-/, '');
 
   try {
     const res = await window.api.searchModrinth({
       query,
-      category: currentModCategory,
-      gameVersion: '1.21.11',
+      projectType: currentModBrowseType,
+      category: currentModBrowseType === 'mod' ? currentModCategory : '',
+      loader,
+      gameVersion: activeMcVer,
       sort,
       onlyCurrentVersion: onlyCurrent,
-      limit: 24
+      limit: MOD_BROWSE_PAGE_SIZE,
+      offset: currentModBrowseOffset
     });
 
     if (loadingEl) loadingEl.style.display = 'none';
     resultsContainer.style.opacity = '1';
-    renderModBrowseResults(res.hits || []);
+
+    currentModBrowseTotalHits = res.total_hits || 0;
+    const incomingHits = res.hits || [];
+
+    if (!append) {
+      currentModBrowseHits = incomingHits;
+    } else {
+      currentModBrowseHits = currentModBrowseHits.concat(incomingHits);
+    }
+
+    if (hitsCountEl) {
+      const typeLabel = currentModBrowseType === 'modpack' ? 'modpacków' : 'modów';
+      hitsCountEl.textContent = `Znaleziono: ${currentModBrowseTotalHits.toLocaleString('pl-PL')} ${typeLabel} (wyświetlono: ${currentModBrowseHits.length})`;
+    }
+
+    renderModBrowseResults(incomingHits, append);
+
+    // Aktualizacja paginacji
+    if (paginationWrap) {
+      if (currentModBrowseHits.length < currentModBrowseTotalHits) {
+        paginationWrap.style.display = 'flex';
+        if (loadMoreBtn) {
+          loadMoreBtn.disabled = false;
+          loadMoreBtn.innerHTML = `
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            <span>Załaduj więcej (+${MOD_BROWSE_PAGE_SIZE})</span>
+          `;
+        }
+      } else {
+        paginationWrap.style.display = 'none';
+      }
+    }
   } catch (err) {
     if (loadingEl) loadingEl.style.display = 'none';
     resultsContainer.style.opacity = '1';
-    resultsContainer.innerHTML = `
-      <div style="padding: 30px; text-align: center; color: #ef4444; background: rgba(239, 68, 68, 0.05); border-radius: 12px; border: 1px solid rgba(239, 68, 68, 0.2);">
-        <p style="font-weight: 700; margin-bottom: 6px;">Błąd połączenia z Modrinth</p>
-        <p style="font-size: 12px; color: #94a3b8;">${err.message || 'Nie udało się pobrać listy modów'}</p>
-        <button class="btn-secondary" id="btn-retry-browse" style="margin-top: 10px; padding: 6px 14px; font-size: 12px;">Spróbuj ponownie</button>
-      </div>
-    `;
-    document.getElementById('btn-retry-browse')?.addEventListener('click', loadModrinthMods);
+    if (!append) {
+      resultsContainer.innerHTML = `
+        <div class="empty-state-box" style="grid-column: 1 / -1;">
+          <div class="setting-title" style="color: #F87171;">Błąd połączenia z bazą Modrinth</div>
+          <div class="setting-desc">${err.message || 'Nie udało się pobrać katalogu.'}</div>
+          <button class="btn-secondary" id="btn-retry-browse" style="margin-top: 8px;">Spróbuj ponownie</button>
+        </div>
+      `;
+      document.getElementById('btn-retry-browse')?.addEventListener('click', () => loadModrinthMods(false));
+    } else {
+      showToast(`Błąd ładowania kolejnych wyników: ${err.message}`);
+      if (loadMoreBtn) {
+        loadMoreBtn.disabled = false;
+        loadMoreBtn.innerHTML = `<span>Spróbuj ponownie</span>`;
+      }
+    }
   }
 }
 
-function renderModBrowseResults(hits) {
+function renderModBrowseResults(hitsToRender, append = false) {
   const resultsContainer = document.getElementById('mod-browse-results');
   if (!resultsContainer) return;
-  resultsContainer.innerHTML = '';
 
-  if (!hits || hits.length === 0) {
+  if (!append) {
+    resultsContainer.innerHTML = '';
+  }
+
+  if ((!hitsToRender || hitsToRender.length === 0) && !append) {
+    const isPack = currentModBrowseType === 'modpack';
     resultsContainer.innerHTML = `
-      <div style="padding: 40px; text-align: center; color: #94a3b8; background: rgba(255, 255, 255, 0.02); border-radius: 12px; border: 1px dashed rgba(255, 255, 255, 0.08);">
-        <div style="font-size: 28px; margin-bottom: 8px;">🔍</div>
-        <p style="font-weight: 700; color: #ffffff; margin-bottom: 4px;">Nie znaleziono modów</p>
-        <p style="font-size: 12px;">Spróbuj zmienić zapytanie, odznaczyć filtr „Wersja 1.21.11” lub wybrać inną kategorię.</p>
+      <div class="empty-state-box" style="grid-column: 1 / -1;">
+        <div class="setting-title">Brak wyników</div>
+        <div class="setting-desc">Nie znaleziono ${isPack ? 'modpacków' : 'modów'} dla zadanych filtrów. Spróbuj zmienić frazę lub wyłączyć filtr „Tylko wersja profilu”.</div>
       </div>
     `;
     return;
   }
 
-  hits.forEach(mod => {
+  const activeMcVer = (getActiveProfileObj()?.mcVersion || currentSelectedVersionId || '1.21.11').replace(/^(fabric|quilt)-/, '');
+
+  hitsToRender.forEach(item => {
     const card = document.createElement('div');
-    card.className = 'mod-browse-card';
+    card.className = 'modrinth-card';
 
-    const installed = isModInstalled(mod);
-    const iconUrl = mod.icon_url || 'assets/logo.svg';
-    const downloadsFmt = formatDownloads(mod.downloads);
-    const followsFmt = formatDownloads(mod.follows);
+    const isPack = item.project_type === 'modpack' || currentModBrowseType === 'modpack';
+    const installed = !isPack && isModInstalled(item);
+    const iconUrl = item.icon_url || 'assets/logo.svg';
+    const downloadsFmt = formatDownloads(item.downloads);
 
-    const catMap = {
-      'optimization': 'Wydajność',
-      'decoration': 'Grafika',
-      'gui': 'Interfejs',
-      'game-mechanics': 'Rozgrywka',
-      'utility': 'Narzędzia',
-      'adventure': 'Przygoda',
-      'magic': 'Magia',
-      'technology': 'Technologia',
-      'storage': 'Magazyn'
-    };
-
-    const tagsHtml = (mod.categories || [])
-      .filter(c => c !== 'fabric' && catMap[c])
-      .slice(0, 2)
-      .map(c => `<span class="mod-card-tag">${catMap[c]}</span>`)
-      .join('');
+    const typeBadge = isPack
+      ? `<span class="modpack-card-badge"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg> Modpack</span>`
+      : `<span class="mod-tag">Mod</span>`;
 
     card.innerHTML = `
-      <div class="mod-card-left">
-        <img src="${iconUrl}" class="mod-card-icon" alt="${mod.title}" onerror="this.src='assets/logo.svg'">
-        <div class="mod-card-details">
-          <div class="mod-card-title-row">
-            <span class="mod-card-title" title="${mod.title}">${mod.title}</span>
-            <span class="mod-card-author">od ${mod.author}</span>
+      <div class="modrinth-card-top">
+        <img src="${iconUrl}" class="modrinth-card-icon" alt="${item.title}" onerror="this.src='assets/logo.svg'">
+        <div class="modrinth-card-head">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 2px;">
+            <div class="modrinth-card-title" title="${item.title}">${item.title}</div>
+            ${typeBadge}
           </div>
-          <div class="mod-card-desc" title="${mod.description}">${mod.description}</div>
-          <div class="mod-card-meta">
-            <span class="mod-card-stat">🔥 ${downloadsFmt} pobrań</span>
-            <span class="mod-card-stat">⭐ ${followsFmt}</span>
-            <span class="mod-card-tag" style="color: #c084fc; background: rgba(192, 132, 252, 0.1);">Fabric</span>
-            ${tagsHtml}
-          </div>
+          <div class="modrinth-card-author">Autor: ${item.author || 'Społeczność'}</div>
+          <div class="modrinth-card-desc" title="${item.description || ''}">${item.description || ''}</div>
         </div>
       </div>
 
-      <div class="mod-card-actions">
-        ${installed ? `
-          <button class="btn-mod-installed" disabled>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <polyline points="20 6 9 17 4 12"/>
-            </svg>
-            <span>Zainstalowany</span>
+      <div class="modrinth-card-footer">
+        <div class="modrinth-stats tnum">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span>${downloadsFmt} pobrań</span>
+          ${item.versions && item.versions.length > 0 ? `<span class="mod-tag" title="Obsługiwane wersje">${item.versions[item.versions.length - 1]}</span>` : ''}
+        </div>
+
+        ${isPack ? `
+          <button class="btn-modpack-install btn-modpack-trigger" data-slug="${item.slug}" data-id="${item.project_id}" data-title="${encodeURIComponent(item.title)}" data-author="${encodeURIComponent(item.author || '')}" data-icon="${encodeURIComponent(iconUrl)}">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <span>Zainstaluj Modpack</span>
+          </button>
+        ` : (installed ? `
+          <button class="btn-modrinth-install installed" disabled>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="20 6 9 17 4 12"/></svg>
+            <span>Zainstalowano</span>
           </button>
         ` : `
-          <button class="btn-mod-download" data-slug="${mod.slug}" data-id="${mod.project_id}" data-title="${encodeURIComponent(mod.title)}">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-              <polyline points="7 10 12 15 17 10"/>
-              <line x1="12" y1="15" x2="12" y2="3"/>
-            </svg>
-            <span>Pobierz mod</span>
+          <button class="btn-modrinth-install btn-mod-download" data-slug="${item.slug}" data-id="${item.project_id}" data-title="${encodeURIComponent(item.title)}">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <span>Instaluj</span>
           </button>
-        `}
+        `)}
       </div>
     `;
 
+    // Obsługa instalacji moda
     const downloadBtn = card.querySelector('.btn-mod-download');
     downloadBtn?.addEventListener('click', async () => {
       const slug = downloadBtn.getAttribute('data-slug');
       const pid = downloadBtn.getAttribute('data-id');
       const title = decodeURIComponent(downloadBtn.getAttribute('data-title'));
-      console.log('Clicked download for mod:', title, slug, pid);
 
       downloadBtn.disabled = true;
-      downloadBtn.innerHTML = `
-        <span class="mod-browse-spinner" style="width: 14px; height: 14px; border-width: 2px;"></span>
-        <span>Pobieranie...</span>
-      `;
+      downloadBtn.classList.add('installing');
+      downloadBtn.innerHTML = `<span class="spinner-ring" style="width: 13px; height: 13px;"></span><span>Pobieranie...</span>`;
 
       try {
+        const activeProfile = getActiveProfileObj();
         const res = await window.api.installModrinthMod({
           projectId: pid,
           slug,
-          gameVersion: '1.21.11'
+          gameVersion: activeMcVer,
+          loader: activeProfile?.loader || 'fabric'
         });
 
         if (res.success) {
           installedMods = res.mods;
           renderModsList(installedMods);
-
-          showToast(`Pomyślnie pobrano mod: ${title}`);
+          loadProfiles();
+          showToast(`Zainstalowano mod: ${title}`);
           if (res.dependencies && res.dependencies.length > 0) {
-            showToast(`Pobrano także wymagane zależności: ${res.dependencies.join(', ')}`);
+            showToast(`Pobrano zależności: ${res.dependencies.join(', ')}`);
           }
-
-          downloadBtn.className = 'btn-mod-installed';
-          downloadBtn.disabled = true;
-          downloadBtn.innerHTML = `
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <polyline points="20 6 9 17 4 12"/>
-            </svg>
-            <span>Zainstalowany</span>
-          `;
+          downloadBtn.className = 'btn-modrinth-install installed';
+          downloadBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="20 6 9 17 4 12"/></svg><span>Zainstalowano</span>`;
         }
       } catch (dlErr) {
-        showToast(`Błąd pobierania: ${dlErr.message}`);
+        showToast(`Błąd instalacji moda: ${dlErr.message}`);
         downloadBtn.disabled = false;
-        downloadBtn.className = 'btn-mod-download';
-        downloadBtn.innerHTML = `
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-            <polyline points="7 10 12 15 17 10"/>
-            <line x1="12" y1="15" x2="12" y2="3"/>
-          </svg>
-          <span>Spróbuj ponownie</span>
-        `;
+        downloadBtn.className = 'btn-modrinth-install btn-mod-download';
+        downloadBtn.innerHTML = `<span>Ponów próbę</span>`;
       }
+    });
+
+    // Obsługa kliknięcia w instalator Modpacka
+    const modpackTrigger = card.querySelector('.btn-modpack-trigger');
+    modpackTrigger?.addEventListener('click', () => {
+      const slug = modpackTrigger.getAttribute('data-slug');
+      const pid = modpackTrigger.getAttribute('data-id');
+      const title = decodeURIComponent(modpackTrigger.getAttribute('data-title'));
+      const author = decodeURIComponent(modpackTrigger.getAttribute('data-author'));
+      const icon = decodeURIComponent(modpackTrigger.getAttribute('data-icon'));
+
+      openModpackInstallModal({ id: pid, slug, title, author, iconUrl: icon });
     });
 
     resultsContainer.appendChild(card);
   });
 }
 
-// 5. Versions list
+/**
+ * Logika i Eventy Modala Instalatora Modpacków
+ */
+function setupModpackModalEvents() {
+  const modal = document.getElementById('modpack-install-modal');
+  const closeBtn = document.getElementById('btn-close-modpack-modal');
+  const cancelBtn = document.getElementById('btn-cancel-modpack-install');
+  const confirmBtn = document.getElementById('btn-confirm-modpack-install');
+
+  function closeModal() {
+    if (modal) modal.classList.remove('active');
+    currentModpackModalData = null;
+  }
+
+  closeBtn?.addEventListener('click', closeModal);
+  cancelBtn?.addEventListener('click', closeModal);
+
+  confirmBtn?.addEventListener('click', async () => {
+    if (!currentModpackModalData) return;
+    const versionSelect = document.getElementById('modpack-modal-version-select');
+    const nameInput = document.getElementById('modpack-modal-profile-name');
+    const configSection = document.getElementById('modpack-install-config-section');
+    const progressSection = document.getElementById('modpack-install-progress-section');
+    const progressStatus = document.getElementById('modpack-progress-status');
+    const progressPct = document.getElementById('modpack-progress-pct');
+    const progressFill = document.getElementById('modpack-progress-fill');
+    const progressFile = document.getElementById('modpack-progress-file');
+
+    const selectedVersionId = versionSelect?.value || null;
+    const profileName = nameInput?.value.trim() || currentModpackModalData.title;
+
+    if (configSection) configSection.style.display = 'none';
+    if (progressSection) progressSection.style.display = 'flex';
+    if (closeBtn) closeBtn.style.display = 'none'; // nie zamykaj w trakcie pobierania
+
+    // Subskrypcja postępu pobierania
+    const removeProgressListener = window.api.onModpackProgress((p) => {
+      if (p.percent !== undefined) {
+        if (progressFill) progressFill.style.width = `${p.percent}%`;
+        if (progressPct) progressPct.textContent = `${p.percent}%`;
+      }
+      if (p.message && progressStatus) {
+        progressStatus.textContent = p.message;
+      }
+      if (p.file && progressFile) {
+        progressFile.textContent = p.file;
+      }
+    });
+
+    try {
+      const res = await window.api.installModrinthModpack({
+        projectId: currentModpackModalData.id,
+        slug: currentModpackModalData.slug,
+        versionId: selectedVersionId,
+        profileName
+      });
+
+      removeProgressListener();
+      closeModal();
+      if (closeBtn) closeBtn.style.display = 'flex';
+
+      await loadProfiles();
+      showToast(`Pomyślnie zainstalowano paczkę: ${res.name} (${res.modCount} modów)!`);
+    } catch (err) {
+      removeProgressListener();
+      if (closeBtn) closeBtn.style.display = 'flex';
+      if (progressStatus) progressStatus.textContent = `Błąd: ${err.message}`;
+      if (progressFill) progressFill.style.background = '#EF4444';
+      showToast(`Błąd instalacji modpacka: ${err.message}`);
+
+      setTimeout(() => {
+        if (configSection) configSection.style.display = 'block';
+        if (progressSection) progressSection.style.display = 'none';
+      }, 3500);
+    }
+  });
+}
+
+async function openModpackInstallModal({ id, slug, title, author, iconUrl }) {
+  const modal = document.getElementById('modpack-install-modal');
+  const iconEl = document.getElementById('modpack-modal-icon');
+  const nameEl = document.getElementById('modpack-modal-name');
+  const authorEl = document.getElementById('modpack-modal-author');
+  const detailsEl = document.getElementById('modpack-modal-details');
+  const versionSelect = document.getElementById('modpack-modal-version-select');
+  const nameInput = document.getElementById('modpack-modal-profile-name');
+  const configSection = document.getElementById('modpack-install-config-section');
+  const progressSection = document.getElementById('modpack-install-progress-section');
+  const confirmBtn = document.getElementById('btn-confirm-modpack-install');
+
+  currentModpackModalData = { id, slug, title, author, iconUrl };
+
+  if (iconEl) iconEl.src = iconUrl || 'assets/logo.svg';
+  if (nameEl) nameEl.textContent = title;
+  if (authorEl) authorEl.textContent = author ? `Autor: ${author}` : 'Modpack społeczności';
+  if (detailsEl) detailsEl.textContent = 'Pobieranie dostępnych wersji...';
+  if (nameInput) nameInput.value = `[Modpack] ${title}`;
+
+  if (configSection) configSection.style.display = 'block';
+  if (progressSection) progressSection.style.display = 'none';
+  if (confirmBtn) confirmBtn.disabled = true;
+
+  if (versionSelect) {
+    versionSelect.innerHTML = `<option value="">Pobieranie wersji modpacka...</option>`;
+  }
+
+  if (modal) modal.classList.add('active');
+
+  try {
+    const versions = await window.api.getModrinthProjectVersions(slug || id);
+    if (!versions || versions.length === 0) {
+      if (detailsEl) detailsEl.textContent = 'Brak dostępnych wersji.';
+      if (versionSelect) versionSelect.innerHTML = `<option value="">Brak wersji do pobrania</option>`;
+      return;
+    }
+
+    if (versionSelect) {
+      versionSelect.innerHTML = '';
+      versions.forEach((v, idx) => {
+        const opt = document.createElement('option');
+        opt.value = v.id;
+        const mcVers = (v.game_versions || []).slice(0, 2).join(', ');
+        const loaders = (v.loaders || []).join(', ');
+        opt.textContent = `${v.name || v.version_number} (MC: ${mcVers || 'Inne'} • ${loaders || 'Fabric'})`;
+        versionSelect.appendChild(opt);
+      });
+      versionSelect.selectedIndex = 0;
+    }
+
+    const firstVer = versions[0];
+    const mcStr = (firstVer.game_versions || []).join(', ');
+    const loaderStr = (firstVer.loaders || []).join(', ') || 'Fabric';
+    if (detailsEl) detailsEl.textContent = `Minecraft: ${mcStr} • Silnik: ${loaderStr}`;
+    if (confirmBtn) confirmBtn.disabled = false;
+  } catch (err) {
+    console.error('Błąd pobierania wersji modpacka:', err);
+    if (detailsEl) detailsEl.textContent = 'Nie udało się wczytać listy wersji.';
+  }
+}
+
+// 5. Custom Profiles (Fabric / Quilt / Vanilla / Custom) & Versions
+let currentSelectedVersionId = '1.21.11';
+let profilesState = { activeProfileId: 'default-main', profiles: [], customEngines: [] };
+let editingProfileId = null;
+let selectedModalIcon = 'bolt';
+let selectedModalLoader = 'fabric';
+
+const PROFILE_ICONS_SVG = {
+  bolt: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>',
+  sword: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="14.5 17.5 3 6 3 3 6 3 17.5 14.5"/><line x1="13" y1="19" x2="19" y2="13"/><line x1="16" y1="16" x2="20" y2="20"/><line x1="19" y1="21" x2="21" y2="19"/></svg>',
+  cube: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>',
+  spark: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg>',
+  compass: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>',
+  crown: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 4 3 12h14l3-12-6 7-4-7-4 7-6-7zm3 16h14"/></svg>'
+};
+
+const LOADER_LABELS = {
+  fabric: 'Fabric',
+  quilt: 'Quilt',
+  vanilla: 'Vanilla',
+  custom: 'Własny'
+};
+
+function getActiveProfileObj() {
+  if (!profilesState?.profiles?.length) return null;
+  return profilesState.profiles.find(p => p.id === profilesState.activeProfileId) || profilesState.profiles[0];
+}
+
+function formatPolishProfilesCount(n) {
+  if (n === 1) return '1 profil';
+  const m10 = n % 10;
+  const m100 = n % 100;
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return `${n} profile`;
+  return `${n} profili`;
+}
+
 async function loadVersions() {
   try {
     const data = await window.api.getVersions();
     availableVersions = data.releases || [];
-    renderQuickVersionDropdown();
     renderFullVersionsGrid();
   } catch (err) {
     console.error('Błąd pobierania wersji:', err);
   }
 }
 
-let currentSelectedVersionId = '1.21.11';
+async function loadProfiles() {
+  if (!window.api?.getProfilesState) return;
+  try {
+    profilesState = await window.api.getProfilesState();
+    applyActiveProfileToUI();
+    renderQuickVersionDropdown();
+    renderProfilesCardsGrid();
+    renderFullVersionsGrid();
+    updateScreenshotsProfileDropdown();
+    updateBenchmarkProfileDropdown();
+  } catch (err) {
+    console.error('Błąd ładowania profili:', err);
+  }
+}
+
+function applyActiveProfileToUI() {
+  const active = getActiveProfileObj();
+  if (!active) return;
+
+  currentSelectedVersionId = active.effectiveVersionId || active.mcVersion || '1.21.11';
+  const loaderLabel = LOADER_LABELS[active.loader] || 'Fabric';
+  const verText = active.loader === 'custom' && active.customVersionId
+    ? active.customVersionId
+    : active.mcVersion;
+
+  const emblemEl = document.getElementById('active-profile-emblem');
+  const kickerEl = document.getElementById('active-profile-kicker');
+  const modsPill = document.getElementById('mods-active-profile-pill');
+  const topbarLabel = document.getElementById('topbar-status-label');
+  const quickRam = document.getElementById('quick-stat-ram');
+
+  if (emblemEl) emblemEl.innerHTML = PROFILE_ICONS_SVG[active.icon] || PROFILE_ICONS_SVG.bolt;
+  if (kickerEl) kickerEl.textContent = `${loaderLabel.toUpperCase()} • ${verText}`;
+  if (elements.currentVersionDisplay) elements.currentVersionDisplay.textContent = active.name;
+  if (modsPill) modsPill.textContent = `Profil: ${active.name} (${loaderLabel} ${verText})`;
+
+  if (!isGameLaunching && topbarLabel) {
+    topbarLabel.textContent = `Profil ${active.name} (${loaderLabel} ${verText}) gotowy`;
+  }
+  if (!isGameLaunching && elements.playBtnText) {
+    elements.playBtnText.textContent = 'URUCHOM GRĘ';
+  }
+
+  const effectiveRam = active.memoryMax || currentConfig?.memoryMax || 4;
+  if (quickRam) {
+    quickRam.textContent = active.memoryMax
+      ? `${effectiveRam} GB (profil)`
+      : `${effectiveRam} GB przydzielone`;
+  }
+
+  const activeModsCount = active.loader === 'vanilla' ? 0 : (active.modsEnabled ?? 0);
+  const sidebarModsBadge = document.getElementById('sidebar-mods-badge');
+  const subtabModsBadge = document.getElementById('mods-subtab-badge');
+  const quickMods = document.getElementById('quick-stat-mods');
+  if (sidebarModsBadge) sidebarModsBadge.textContent = String(activeModsCount);
+  if (subtabModsBadge) subtabModsBadge.textContent = String(activeModsCount);
+  if (quickMods) quickMods.textContent = `${activeModsCount} aktywnych`;
+}
+
+async function activateProfileById(profileId) {
+  try {
+    profilesState = await window.api.selectProfile(profileId);
+    applyActiveProfileToUI();
+    renderQuickVersionDropdown();
+    renderProfilesCardsGrid();
+    renderFullVersionsGrid();
+    hasLoadedModBrowseOnce = false;
+    await loadMods();
+    await loadPacks(currentPackType);
+    const active = getActiveProfileObj();
+    if (active) {
+      showToast(`Aktywny profil: ${active.name} (${LOADER_LABELS[active.loader] || active.loader} ${active.mcVersion})`);
+    }
+  } catch (err) {
+    showToast(`Błąd zmiany profilu: ${err.message}`);
+  }
+}
 
 function updateSelectedVersion(versionId, save = true) {
   currentSelectedVersionId = versionId || '1.21.11';
-  const cleanDisplay = currentSelectedVersionId.replace(/^fabric-/, '');
-  elements.currentVersionDisplay.textContent = cleanDisplay;
-  elements.playBtnText.textContent = `Graj ${cleanDisplay}`;
-  
+  const active = getActiveProfileObj();
+  if (active) {
+    applyActiveProfileToUI();
+    return;
+  }
+  const isFabric = currentSelectedVersionId.startsWith('fabric-');
+  const cleanDisplay = currentSelectedVersionId.replace(/^(fabric|quilt)-/, '');
+  elements.currentVersionDisplay.textContent = isFabric ? `Fabric ${cleanDisplay}` : cleanDisplay;
   if (save) {
     window.api.saveConfig({ selectedVersion: currentSelectedVersionId });
-    showToast(`Wybrano wersję ${cleanDisplay}`);
   }
-
-  // Update selected class in dropdown and grid
-  renderQuickVersionDropdown();
-  renderFullVersionsGrid();
 }
 
 function renderQuickVersionDropdown() {
-  const current = currentSelectedVersionId;
+  if (!elements.versionQuickMenu) return;
   elements.versionQuickMenu.innerHTML = '';
 
-  availableVersions.slice(0, 10).forEach(ver => {
+  const list = profilesState?.profiles || [];
+  list.forEach(prof => {
     const item = document.createElement('div');
-    const isSelected = ver.id === current || ver.id === elements.currentVersionDisplay.textContent;
-    item.className = `version-item ${isSelected ? 'selected' : ''}`;
+    const isSelected = prof.id === profilesState.activeProfileId;
+    const loaderLabel = LOADER_LABELS[prof.loader] || 'Fabric';
+    const verLabel = prof.loader === 'custom' && prof.customVersionId ? prof.customVersionId : prof.mcVersion;
+
+    item.className = `version-menu-item ${isSelected ? 'active' : ''}`;
     item.innerHTML = `
-      <span>${ver.id}</span>
-      <span class="version-item-badge">Wydanie</span>
+      <div style="display: flex; align-items: center; gap: 9px; min-width: 0;">
+        <span style="color: var(--accent-primary-hover); display: inline-flex;">${PROFILE_ICONS_SVG[prof.icon] || PROFILE_ICONS_SVG.bolt}</span>
+        <div style="display: flex; flex-direction: column; min-width: 0;">
+          <span style="font-size: 12.5px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${prof.name}</span>
+          <span class="tnum" style="font-size: 10.5px; color: var(--text-muted);">${verLabel}${prof.loader !== 'vanilla' ? ` • ${prof.modsEnabled || 0} modów` : ''}</span>
+        </div>
+      </div>
+      <span class="loader-pill ${prof.loader}">${loaderLabel}</span>
     `;
     item.addEventListener('click', () => {
-      updateSelectedVersion(ver.id);
       elements.versionQuickMenu.classList.remove('open');
+      activateProfileById(prof.id);
     });
     elements.versionQuickMenu.appendChild(item);
+  });
+
+  const footer = document.createElement('div');
+  footer.className = 'quick-menu-footer';
+  footer.innerHTML = `
+    <button type="button" class="btn-primary" id="btn-quick-new-profile" style="flex: 1; height: 30px; font-size: 11.5px;">
+      + Nowy Profil
+    </button>
+    <button type="button" class="btn-secondary" id="btn-quick-manage-profiles" style="height: 30px; font-size: 11.5px;">
+      Zarządzaj
+    </button>
+  `;
+  elements.versionQuickMenu.appendChild(footer);
+
+  footer.querySelector('#btn-quick-new-profile')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    elements.versionQuickMenu.classList.remove('open');
+    openProfileEditorModal();
+  });
+  footer.querySelector('#btn-quick-manage-profiles')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    elements.versionQuickMenu.classList.remove('open');
+    switchToTab('instances');
+    document.getElementById('subtab-btn-profiles')?.click();
+  });
+}
+
+function renderProfilesCardsGrid() {
+  const grid = document.getElementById('profiles-cards-grid');
+  const badge = document.getElementById('profiles-count-badge');
+  const sidebarProfBadge = document.getElementById('sidebar-profiles-badge');
+  if (!grid) return;
+
+  const list = profilesState?.profiles || [];
+  if (badge) badge.textContent = formatPolishProfilesCount(list.length);
+  if (sidebarProfBadge) sidebarProfBadge.textContent = String(list.length);
+
+  grid.innerHTML = '';
+  list.forEach(prof => {
+    const isActive = prof.id === profilesState.activeProfileId;
+    const loaderLabel = LOADER_LABELS[prof.loader] || 'Fabric';
+    const verLabel = prof.loader === 'custom' && prof.customVersionId ? prof.customVersionId : prof.mcVersion;
+    const ramTag = prof.memoryMax ? `${prof.memoryMax} GB RAM` : 'Domyślny RAM';
+    const folderTag = prof.isolated ? 'Izolowany folder' : 'Główny katalog';
+    const modsTag = prof.loader === 'vanilla'
+      ? 'Bez modów (Czysta)'
+      : `${prof.modsEnabled || 0} / ${prof.modsTotal || 0} modów`;
+
+    const card = document.createElement('div');
+    card.className = `profile-instance-card ${isActive ? 'active' : ''}`;
+    card.innerHTML = `
+      <div class="profile-card-top">
+        <div class="profile-card-identity">
+          <div class="profile-emblem-box">${PROFILE_ICONS_SVG[prof.icon] || PROFILE_ICONS_SVG.bolt}</div>
+          <div style="min-width: 0;">
+            <div class="profile-card-name" title="${prof.name}">${prof.name}</div>
+            <div class="profile-card-sub tnum">Minecraft ${verLabel} • ${folderTag}</div>
+          </div>
+        </div>
+        ${isActive
+          ? '<span class="mod-tag status-on">Aktywny</span>'
+          : `<button type="button" class="btn-secondary btn-prof-activate" style="height: 26px; padding: 0 10px; font-size: 11px;">Wybierz</button>`}
+      </div>
+
+      <div class="profile-card-tags">
+        <span class="loader-pill ${prof.loader}">${loaderLabel}</span>
+        <span class="mod-tag tnum">${modsTag}</span>
+        <span class="mod-tag tnum">${ramTag}</span>
+      </div>
+
+      <div class="profile-card-actions">
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <button type="button" class="btn-emerald btn-prof-play" style="height: 28px; padding: 0 11px; font-size: 11.5px;">
+            Graj
+          </button>
+          ${prof.loader !== 'vanilla' ? `
+            <button type="button" class="btn-secondary btn-prof-mods" style="height: 28px; padding: 0 10px; font-size: 11.5px;">
+              Mody
+            </button>
+          ` : ''}
+        </div>
+        <div style="display: flex; align-items: center; gap: 4px;">
+          <button type="button" class="btn-icon-only btn-prof-folder" title="Otwórz folder profilu" style="width: 28px; height: 28px;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          </button>
+          <button type="button" class="btn-icon-only btn-prof-edit" title="Edytuj profil" style="width: 28px; height: 28px;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+          </button>
+          <button type="button" class="btn-icon-only btn-prof-dup" title="Duplikuj profil" style="width: 28px; height: 28px;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          </button>
+          ${prof.id !== 'default-main' ? `
+            <button type="button" class="btn-icon-only btn-prof-del" title="Usuń profil" style="width: 28px; height: 28px;">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            </button>
+          ` : ''}
+        </div>
+      </div>
+    `;
+
+    card.querySelector('.btn-prof-activate')?.addEventListener('click', () => activateProfileById(prof.id));
+    card.querySelector('.btn-prof-play')?.addEventListener('click', async () => {
+      if (!isActive) await activateProfileById(prof.id);
+      switchToTab('play');
+      handlePlayClick();
+    });
+    card.querySelector('.btn-prof-mods')?.addEventListener('click', async () => {
+      if (!isActive) await activateProfileById(prof.id);
+      switchToTab('mods');
+      if (typeof window.switchModsSubtab === 'function') {
+        window.switchModsSubtab('installed');
+      }
+    });
+    card.querySelector('.btn-prof-folder')?.addEventListener('click', () => {
+      window.api.openProfileFolder(prof.id);
+    });
+    card.querySelector('.btn-prof-edit')?.addEventListener('click', () => {
+      openProfileEditorModal(prof);
+    });
+    card.querySelector('.btn-prof-dup')?.addEventListener('click', async () => {
+      try {
+        profilesState = await window.api.duplicateProfile(prof.id);
+        applyActiveProfileToUI();
+        renderQuickVersionDropdown();
+        renderProfilesCardsGrid();
+        await loadMods();
+        showToast(`Zduplikowano profil: ${prof.name}`);
+      } catch (err) {
+        showToast(`Błąd duplikowania: ${err.message}`);
+      }
+    });
+    card.querySelector('.btn-prof-del')?.addEventListener('click', async () => {
+      if (!confirm(`Czy na pewno chcesz usunąć profil „${prof.name}”?`)) return;
+      try {
+        profilesState = await window.api.deleteProfile(prof.id);
+        applyActiveProfileToUI();
+        renderQuickVersionDropdown();
+        renderProfilesCardsGrid();
+        await loadMods();
+        showToast(`Usunięto profil: ${prof.name}`);
+      } catch (err) {
+        showToast(`Błąd usuwania: ${err.message}`);
+      }
+    });
+
+    grid.appendChild(card);
   });
 }
 
 function renderFullVersionsGrid() {
-  const current = currentSelectedVersionId;
+  if (!elements.versionsFullGrid) return;
+  const activeProf = getActiveProfileObj();
   elements.versionsFullGrid.innerHTML = '';
 
   availableVersions.forEach(ver => {
     const card = document.createElement('div');
-    const isSelected = ver.id === current || ver.id === elements.currentVersionDisplay.textContent;
-    card.className = `version-card ${isSelected ? 'active' : ''}`;
+    const isSelected = activeProf?.mcVersion === ver.id;
+    card.className = `version-card-item ${isSelected ? 'selected' : ''}`;
+    card.style.flexDirection = 'column';
+    card.style.alignItems = 'stretch';
+    card.style.gap = '10px';
+
     card.innerHTML = `
-      <div class="version-card-top">
-        <span class="version-card-id">${ver.id}</span>
-        <span class="version-item-badge">Wydanie</span>
+      <div style="display: flex; align-items: center; justify-content: space-between;">
+        <div>
+          <div class="v-card-name tnum">${ver.id}</div>
+          <div class="setting-desc" style="font-size: 10.5px;">Wydanie ${ver.releaseTime || 'Mojang'}</div>
+        </div>
+        <span class="v-card-badge">${isSelected ? 'W aktywnym profilu' : 'Utwórz profil'}</span>
       </div>
-      <div class="version-card-date">Data wydania: ${ver.releaseTime || 'Oficjalne'}</div>
+      <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+        <button type="button" class="btn-secondary btn-ver-fabric" style="flex: 1; height: 26px; padding: 0 8px; font-size: 10.5px;">+ Fabric</button>
+        <button type="button" class="btn-secondary btn-ver-quilt" style="flex: 1; height: 26px; padding: 0 8px; font-size: 10.5px;">+ Quilt</button>
+        <button type="button" class="btn-secondary btn-ver-vanilla" style="flex: 1; height: 26px; padding: 0 8px; font-size: 10.5px;">+ Vanilla</button>
+      </div>
     `;
-    card.addEventListener('click', () => {
-      updateSelectedVersion(ver.id);
-      // Switch back to play tab
-      elements.navPills[0].click();
+
+    card.querySelector('.btn-ver-fabric')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openProfileEditorModal(null, ver.id, 'fabric');
     });
+    card.querySelector('.btn-ver-quilt')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openProfileEditorModal(null, ver.id, 'quilt');
+    });
+    card.querySelector('.btn-ver-vanilla')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openProfileEditorModal(null, ver.id, 'vanilla');
+    });
+
     elements.versionsFullGrid.appendChild(card);
+  });
+}
+
+function openProfileEditorModal(existingProfile = null, presetMcVersion = null, presetLoader = null) {
+  const modal = document.getElementById('profile-editor-modal');
+  const titleEl = document.getElementById('profile-editor-title');
+  const nameInput = document.getElementById('prof-input-name');
+  const verSelect = document.getElementById('prof-select-mcversion');
+  const ramSelect = document.getElementById('prof-select-ram');
+  const customWrap = document.getElementById('prof-custom-engine-wrap');
+  const customSelect = document.getElementById('prof-select-custom-engine');
+  const isolatedToggle = document.getElementById('prof-toggle-isolated');
+  const saveBtn = document.getElementById('btn-save-profile-modal');
+
+  if (!modal) return;
+
+  editingProfileId = existingProfile ? existingProfile.id : null;
+  selectedModalIcon = existingProfile?.icon || (presetLoader === 'vanilla' ? 'cube' : 'bolt');
+  selectedModalLoader = existingProfile?.loader || presetLoader || 'fabric';
+
+  if (titleEl) titleEl.textContent = existingProfile ? `Edytuj Profil: ${existingProfile.name}` : 'Nowy Profil Gry';
+  if (saveBtn) saveBtn.textContent = existingProfile ? 'Zapisz Zmiany' : 'Utwórz Profil';
+
+  // Populate Minecraft versions
+  if (verSelect) {
+    verSelect.innerHTML = '';
+    const vers = availableVersions.length > 0 ? availableVersions : [{ id: '1.21.11' }, { id: '1.21.4' }, { id: '1.21.1' }, { id: '1.20.4' }, { id: '1.20.1' }, { id: '1.19.4' }, { id: '1.18.2' }, { id: '1.16.5' }, { id: '1.12.2' }, { id: '1.8.9' }];
+    vers.forEach(v => {
+      const opt = document.createElement('option');
+      opt.value = v.id;
+      opt.textContent = `Minecraft ${v.id}`;
+      verSelect.appendChild(opt);
+    });
+    verSelect.value = existingProfile?.mcVersion || presetMcVersion || '1.21.11';
+  }
+
+  // Populate Custom Engines from versions/
+  if (customSelect) {
+    customSelect.innerHTML = '';
+    const engines = profilesState?.customEngines || [];
+    if (engines.length === 0) {
+      const opt = document.createElement('option');
+      opt.value = '';
+      opt.textContent = 'Brak ręcznie zainstalowanych silników w katalogu versions/';
+      customSelect.appendChild(opt);
+    } else {
+      engines.forEach(eng => {
+        const opt = document.createElement('option');
+        opt.value = eng;
+        opt.textContent = eng;
+        customSelect.appendChild(opt);
+      });
+      if (existingProfile?.customVersionId) customSelect.value = existingProfile.customVersionId;
+    }
+  }
+
+  if (nameInput) {
+    if (existingProfile) {
+      nameInput.value = existingProfile.name;
+    } else if (presetMcVersion && presetLoader) {
+      nameInput.value = `${LOADER_LABELS[presetLoader] || 'Profil'} ${presetMcVersion}`;
+    } else {
+      nameInput.value = '';
+    }
+  }
+
+  if (ramSelect) {
+    ramSelect.value = existingProfile?.memoryMax ? String(existingProfile.memoryMax) : '';
+  }
+
+  const jvmPresetSelect = document.getElementById('prof-select-jvm-preset');
+  const jvmArgsInput = document.getElementById('prof-input-jvm-args');
+  if (jvmPresetSelect) jvmPresetSelect.value = existingProfile?.jvmPreset || '';
+  if (jvmArgsInput) jvmArgsInput.value = existingProfile?.jvmArgs || '';
+
+  if (isolatedToggle) {
+    isolatedToggle.checked = existingProfile ? !!existingProfile.isolated : true;
+    isolatedToggle.disabled = existingProfile?.id === 'default-main';
+  }
+
+  document.querySelectorAll('#prof-icon-picker .icon-option-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.icon === selectedModalIcon);
+  });
+  document.querySelectorAll('#prof-loader-picker .loader-option-card').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.loader === selectedModalLoader);
+  });
+  if (customWrap) {
+    customWrap.style.display = selectedModalLoader === 'custom' ? 'block' : 'none';
+  }
+
+  modal.classList.add('open');
+  setTimeout(() => nameInput?.focus(), 60);
+}
+
+function closeProfileEditorModal() {
+  document.getElementById('profile-editor-modal')?.classList.remove('open');
+}
+
+function setupProfilesListeners() {
+  const modal = document.getElementById('profile-editor-modal');
+  const btnOpenCreate = document.getElementById('btn-open-create-profile');
+  const btnClose = document.getElementById('btn-close-profile-editor');
+  const btnCancel = document.getElementById('btn-cancel-profile-editor');
+  const btnSave = document.getElementById('btn-save-profile-modal');
+  const customWrap = document.getElementById('prof-custom-engine-wrap');
+
+  btnOpenCreate?.addEventListener('click', () => openProfileEditorModal());
+  btnClose?.addEventListener('click', closeProfileEditorModal);
+  btnCancel?.addEventListener('click', closeProfileEditorModal);
+  modal?.addEventListener('click', (e) => {
+    if (e.target === modal) closeProfileEditorModal();
+  });
+
+  document.querySelectorAll('#prof-icon-picker .icon-option-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      selectedModalIcon = btn.dataset.icon || 'bolt';
+      document.querySelectorAll('#prof-icon-picker .icon-option-btn').forEach(b => {
+        b.classList.toggle('active', b === btn);
+      });
+    });
+  });
+
+  document.querySelectorAll('#prof-loader-picker .loader-option-card').forEach(card => {
+    card.addEventListener('click', () => {
+      selectedModalLoader = card.dataset.loader || 'fabric';
+      document.querySelectorAll('#prof-loader-picker .loader-option-card').forEach(c => {
+        c.classList.toggle('active', c === card);
+      });
+      if (customWrap) {
+        customWrap.style.display = selectedModalLoader === 'custom' ? 'block' : 'none';
+      }
+    });
+  });
+
+  btnSave?.addEventListener('click', async () => {
+    const nameInput = document.getElementById('prof-input-name');
+    const verSelect = document.getElementById('prof-select-mcversion');
+    const ramSelect = document.getElementById('prof-select-ram');
+    const customSelect = document.getElementById('prof-select-custom-engine');
+    const isolatedToggle = document.getElementById('prof-toggle-isolated');
+
+    const mcVersion = verSelect?.value || '1.21.11';
+    const loaderLabel = LOADER_LABELS[selectedModalLoader] || 'Profil';
+    const rawName = (nameInput?.value || '').trim() || `${loaderLabel} ${mcVersion}`;
+    const customVersionId = customSelect?.value || '';
+
+    if (selectedModalLoader === 'custom' && !customVersionId) {
+      showToast('Brak zainstalowanego własnego silnika w katalogu versions/');
+      return;
+    }
+
+    const jvmPresetSelect = document.getElementById('prof-select-jvm-preset');
+    const jvmArgsInput = document.getElementById('prof-input-jvm-args');
+
+    const payload = {
+      name: rawName,
+      mcVersion,
+      loader: selectedModalLoader,
+      customVersionId: selectedModalLoader === 'custom' ? customVersionId : null,
+      icon: selectedModalIcon,
+      isolated: isolatedToggle ? isolatedToggle.checked : true,
+      memoryMax: ramSelect?.value ? parseInt(ramSelect.value, 10) : null,
+      jvmPreset: jvmPresetSelect?.value || null,
+      jvmArgs: (jvmArgsInput?.value || '').trim()
+    };
+
+    try {
+      btnSave.disabled = true;
+      if (editingProfileId) {
+        profilesState = await window.api.updateProfile(editingProfileId, payload);
+        showToast(`Zapisano profil: ${rawName}`);
+      } else {
+        profilesState = await window.api.createProfile(payload);
+        showToast(`Utworzono i wybrano profil: ${rawName}`);
+      }
+      closeProfileEditorModal();
+      applyActiveProfileToUI();
+      renderQuickVersionDropdown();
+      renderProfilesCardsGrid();
+      renderFullVersionsGrid();
+      hasLoadedModBrowseOnce = false;
+      await loadMods();
+      await loadPacks(currentPackType);
+    } catch (err) {
+      showToast(`Błąd zapisu profilu: ${err.message}`);
+    } finally {
+      btnSave.disabled = false;
+    }
   });
 }
 
@@ -1414,17 +2500,20 @@ async function handlePlayClick() {
   } catch (_) {}
 
   if (!currentAccount) {
-    showToast('Przed uruchomieniem gry musisz się zalogować!');
+    showToast('Zaloguj się przed uruchomieniem gry');
     openLoginModal();
     return;
   }
 
-  const selectedVer = currentSelectedVersionId || '1.21.11';
-  const cleanDisplay = selectedVer.replace(/^fabric-/, '');
-  setLaunchingState(true, `Uruchamianie ${cleanDisplay}...`);
+  const activeProf = getActiveProfileObj();
+  const launchLabel = activeProf
+    ? `${activeProf.name} (${LOADER_LABELS[activeProf.loader] || activeProf.loader} ${activeProf.mcVersion})`
+    : (currentSelectedVersionId || '1.21.11');
+
+  setLaunchingState(true, `Uruchamianie ${launchLabel}...`);
 
   try {
-    await window.api.launchGame(selectedVer);
+    await window.api.launchGame();
   } catch (err) {
     console.error('Błąd startu gry:', err);
     showToast(`Błąd uruchamiania: ${err.message}`);
@@ -1434,27 +2523,39 @@ async function handlePlayClick() {
 
 function setLaunchingState(launching, text = '') {
   isGameLaunching = launching;
+  const progBar = document.getElementById('launch-progress-bar');
+  const topbarLabel = document.getElementById('topbar-status-label');
+
   if (launching) {
     elements.playBtnGroup.classList.add('launching');
-    elements.playBtnText.textContent = text || 'Pobieranie plików...';
+    elements.playBtnText.textContent = text || 'Weryfikacja plików...';
+    if (progBar) progBar.style.width = '12%';
+    if (topbarLabel) topbarLabel.textContent = text || 'Przygotowywanie sesji gry...';
   } else {
     elements.playBtnGroup.classList.remove('launching');
-    const ver = elements.currentVersionDisplay.textContent;
-    elements.playBtnText.textContent = `Graj ${ver}`;
+    elements.playBtnText.textContent = 'URUCHOM GRĘ';
+    if (progBar) progBar.style.width = '0%';
+    if (topbarLabel) topbarLabel.textContent = 'Silnik gotowy do uruchomienia';
   }
 }
 
 function setupLauncherEventListeners() {
+  const progBar = document.getElementById('launch-progress-bar');
+  const topbarLabel = document.getElementById('topbar-status-label');
+
   window.api.onLauncherStatus((data) => {
     if (data?.message) {
       elements.playBtnText.textContent = data.message;
+      if (topbarLabel) topbarLabel.textContent = data.message;
       appendLog(`[STATUS] ${data.message}`);
     }
   });
 
   window.api.onLauncherProgress((data) => {
     if (data) {
-      elements.playBtnText.textContent = `Pobieranie: ${data.percentage}% (${data.task}/${data.total})`;
+      const pct = Math.max(5, Math.min(100, Number(data.percentage) || 0));
+      elements.playBtnText.textContent = `Pobieranie ${pct}%`;
+      if (progBar) progBar.style.width = `${pct}%`;
     }
   });
 
@@ -1465,14 +2566,15 @@ function setupLauncherEventListeners() {
   });
 
   window.api.onLauncherStarted((data) => {
-    showToast(`Minecraft ${data.version} został uruchomiony!`);
-    elements.playBtnText.textContent = 'Gra jest uruchomiona';
+    showToast(`Uruchomiono Minecraft ${data.version}`);
+    elements.playBtnText.textContent = 'SESJA AKTYWNA';
+    if (progBar) progBar.style.width = '100%';
+    if (topbarLabel) topbarLabel.textContent = `W grze: Minecraft ${data.version}`;
     appendLog(`[KasteuszLauncher] Minecraft ${data.version} wystartował.`);
     try {
       window.liveWallpapers?.pause(true);
       window.musicPlayer?.onGameLaunch();
     } catch (_) {}
-    // FPS Boost: wyłączamy animację 3D dla 0% obciążenia GPU podczas grania
     if (skinViewer) {
       skinViewer.animation = null;
     }
@@ -1480,13 +2582,12 @@ function setupLauncherEventListeners() {
 
   window.api.onLauncherClosed((data) => {
     setLaunchingState(false);
-    showToast(`Gra została zamknięta (kod: ${data.code}).`);
+    showToast(`Sesja gry zakończona (kod: ${data.code})`);
     appendLog(`[KasteuszLauncher] Proces gry zakończony z kodem ${data.code}.`);
     try {
       window.liveWallpapers?.pause(false);
       window.musicPlayer?.onGameClose();
     } catch (_) {}
-    // Wznawiamy animację 3D po wyjściu z gry
     if (skinViewer && window.skinview3d) {
       const StanceAnim = createStanceAnimationClass();
       if (StanceAnim) {
@@ -1498,13 +2599,14 @@ function setupLauncherEventListeners() {
 
   window.api.onLauncherError((data) => {
     setLaunchingState(false);
-    showToast(`Błąd Minecraft: ${data.message}`);
+    showToast(`Błąd uruchomienia: ${data.message}`);
     appendLog(`[BŁĄD] ${data.message}`);
   });
 }
 
 function appendLog(line) {
   const lineEl = document.createElement('div');
+  lineEl.className = /error|exception|błąd/i.test(line) ? 'log-line log-err' : 'log-line';
   lineEl.textContent = line;
   elements.logsConsole.appendChild(lineEl);
   elements.logsConsole.scrollTop = elements.logsConsole.scrollHeight;
@@ -1517,21 +2619,14 @@ function showToast(message) {
   } catch (_) {}
   const toast = document.createElement('div');
   toast.className = 'toast';
-  toast.innerHTML = `
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#a855f7" stroke-width="2.5">
-      <circle cx="12" cy="12" r="10"></circle>
-      <line x1="12" y1="8" x2="12" y2="12"></line>
-      <line x1="12" y1="16" x2="12.01" y2="16"></line>
-    </svg>
-    <span>${message}</span>
-  `;
+  toast.textContent = message;
   elements.toastContainer.appendChild(toast);
 
   setTimeout(() => {
     toast.style.opacity = '0';
-    toast.style.transition = 'opacity 0.3s ease';
-    setTimeout(() => toast.remove(), 300);
-  }, 3500);
+    toast.style.transition = 'opacity 0.25s ease';
+    setTimeout(() => toast.remove(), 260);
+  }, 3200);
 }
 
 // ============================================================================
@@ -1553,16 +2648,20 @@ function renderFriendsList(friends) {
   const countEl = document.getElementById('friends-count');
   if (!container) return;
 
-  const onlineCount = (friends || []).filter(f => f.online).length;
+  const list = Array.isArray(friends) ? friends : [];
   if (countEl) {
-    countEl.textContent = `${onlineCount} online`;
+    countEl.textContent = String(list.length);
   }
 
-  if (!friends || friends.length === 0) {
+  if (list.length === 0) {
     container.innerHTML = `
-      <div class="sidebar-empty-text">
-        Brak znajomych w tej chwili.<br>
-        <span style="font-size: 11.5px; color: #a855f7; cursor: pointer; text-decoration: underline;" id="btn-empty-add-friend">Kliknij +, aby dodać gracza</span>
+      <div class="friends-empty-state">
+        <div class="friends-empty-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+        </div>
+        <div class="friends-empty-title">Lista znajomych jest pusta</div>
+        <div class="friends-empty-desc">Dodaj graczy, aby szybko sprawdzać ich profile i kopiować nicki.</div>
+        <button class="btn-secondary" id="btn-empty-add-friend" style="margin-top: 6px; height: 28px; font-size: 11.5px;">Dodaj gracza</button>
       </div>
     `;
     document.getElementById('btn-empty-add-friend')?.addEventListener('click', openAddFriendModal);
@@ -1573,33 +2672,34 @@ function renderFriendsList(friends) {
   const listEl = document.createElement('div');
   listEl.className = 'friends-list';
 
-  friends.forEach(f => {
+  list.forEach(f => {
     const item = document.createElement('div');
     item.className = 'friend-item';
     item.innerHTML = `
-      <div class="friend-avatar-wrap">
-        <img src="https://mc-heads.net/avatar/${encodeURIComponent(f.username)}/32" class="friend-avatar" alt="${f.username}" onerror="this.src='assets/default-skin.png'">
-        <span class="friend-status-dot ${f.online ? 'online' : 'offline'}"></span>
+      <div class="friend-item-left">
+        <div class="friend-avatar-wrap">
+          <img src="https://mc-heads.net/avatar/${encodeURIComponent(f.username)}/32" class="friend-avatar" alt="${f.username}" onerror="this.src='assets/default-skin.png'">
+          <span class="friend-dot" style="background: ${f.online ? 'var(--emerald)' : 'var(--text-muted)'};"></span>
+        </div>
+        <div class="friend-meta">
+          <div class="friend-name">${f.username}</div>
+          <div class="friend-status">${f.status || (f.online ? 'Aktywny' : 'Gracz Minecraft')}</div>
+        </div>
       </div>
-      <div class="friend-info">
-        <div class="friend-name">${f.username}</div>
-        <div class="friend-status">${f.status || (f.online ? 'Online' : 'Offline')}</div>
-      </div>
-      <button class="friend-delete-btn" title="Usuń ${f.username}">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-          <line x1="18" y1="6" x2="6" y2="18"></line>
-          <line x1="6" y1="6" x2="18" y2="18"></line>
+      <button class="friend-remove-btn" title="Usuń ${f.username}">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
         </svg>
       </button>
     `;
 
-    item.querySelector('.friend-delete-btn')?.addEventListener('click', async (e) => {
+    item.querySelector('.friend-remove-btn')?.addEventListener('click', async (e) => {
       e.stopPropagation();
       try {
         const updated = await window.api.removeFriend(f.username);
         friendsList = updated;
         renderFriendsList(friendsList);
-        showToast(`Usunięto gracza ${f.username} z listy znajomych.`);
+        showToast(`Usunięto ze znajomych: ${f.username}`);
       } catch (err) {
         showToast(`Błąd: ${err.message}`);
       }
@@ -1607,7 +2707,7 @@ function renderFriendsList(friends) {
 
     item.addEventListener('click', () => {
       navigator.clipboard.writeText(f.username);
-      showToast(`Skopiowano nick znajomego: ${f.username}`);
+      showToast(`Skopiowano nick: ${f.username}`);
     });
 
     listEl.appendChild(item);
@@ -1741,9 +2841,14 @@ function updateServerHostUI(status) {
   const btn = document.getElementById('btn-toggle-server');
   const statusText = document.getElementById('server-console-status-text');
   const statusDot = document.getElementById('server-console-dot');
+  const sidebarServerDot = document.getElementById('sidebar-server-dot');
   const ipDisplay = document.getElementById('server-local-ip-display');
   const cmdInput = document.getElementById('server-cmd-input');
   const btnSend = document.getElementById('btn-send-server-cmd');
+
+  if (sidebarServerDot) {
+    sidebarServerDot.classList.toggle('visible', isServerRunning);
+  }
 
   if (ipDisplay && status.localIp) {
     ipDisplay.textContent = `${status.localIp}:${status.port || 25565}`;
@@ -1751,9 +2856,10 @@ function updateServerHostUI(status) {
 
   if (isServerRunning) {
     if (btn) {
-      btn.style.background = '#ef4444';
+      btn.className = 'btn-danger-ghost';
+      btn.style.background = '';
       btn.innerHTML = `
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
           <rect x="4" y="4" width="16" height="16" rx="2"/>
         </svg>
         <span>Zatrzymaj Serwer</span>
@@ -1761,16 +2867,17 @@ function updateServerHostUI(status) {
     }
     if (statusText) {
       statusText.textContent = 'Status: Serwer działa (Online)';
-      statusText.style.color = '#4ade80';
+      statusText.style.color = '#34D399';
     }
     if (statusDot) statusDot.style.display = 'inline-block';
     if (cmdInput) cmdInput.disabled = false;
     if (btnSend) btnSend.disabled = false;
   } else {
     if (btn) {
-      btn.style.background = '#22c55e';
+      btn.className = 'btn-emerald';
+      btn.style.background = '';
       btn.innerHTML = `
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
           <polygon points="5 3 19 12 5 21 5 3"/>
         </svg>
         <span>Uruchom Serwer</span>
@@ -1778,7 +2885,7 @@ function updateServerHostUI(status) {
     }
     if (statusText) {
       statusText.textContent = status.starting ? 'Status: Uruchamianie...' : 'Status: Wyłączony';
-      statusText.style.color = status.starting ? '#facc15' : '#94a3b8';
+      statusText.style.color = status.starting ? '#FBBF24' : '#94A3B8';
     }
     if (statusDot) statusDot.style.display = 'none';
     if (cmdInput) cmdInput.disabled = true;
@@ -2378,7 +3485,7 @@ function updateStatsUI(statsData) {
   }
 
   if (elements.profileStatRank) {
-    elements.profileStatRank.textContent = statsData.rankTitle || "Zygzak #95 ⚡";
+    elements.profileStatRank.textContent = String(statsData.rankTitle || 'Gracz Kasteusz').replace(/[^\w\sąćęłńóśźżĄĆĘŁŃÓŚŹŻ#-]/g, '').trim() || 'Gracz';
   }
 }
 
@@ -2399,12 +3506,12 @@ async function loadStats() {
 // FEATURE 7: THEMES & PERSONALIZATION
 // ========================================================
 const THEME_NAMES = {
-  purple: "Kasteusz Purple",
-  red: "McQueen #95 Red",
-  emerald: "Szkolne SMP",
+  purple: "Indigo Obsidian",
+  red: "Crimson #95",
+  emerald: "Emerald SMP",
   cyan: "Cyber Cyan",
-  gold: "Złoto Kasteusza",
-  ruby: "Krwawy Rubin"
+  gold: "Amber Gold",
+  ruby: "Obsidian Rose"
 };
 
 function applyTheme(themeName, save = true) {
@@ -2420,23 +3527,16 @@ function applyTheme(themeName, save = true) {
 
   const logoEl = document.querySelector(".logo-icon");
   if (logoEl) {
-    logoEl.style.filter = "drop-shadow(0 0 10px var(--accent-glow))";
-  }
-
-  // Active pill highlight
-  const activeNav = document.querySelector(".nav-pill.active");
-  if (activeNav) {
-    activeNav.style.borderColor = "var(--accent-primary)";
-    activeNav.style.boxShadow = "0 0 14px var(--accent-glow)";
+    logoEl.style.filter = "drop-shadow(0 0 8px var(--accent-glow))";
   }
 
   try {
-    window.liveWallpapers?.updateThemeColors();
+    window.liveWallpapers?.updateThemeColors?.();
   } catch (_) {}
 
   if (save) {
     window.api.saveConfig({ themeAccent: theme });
-    showToast(`Aktywowano motyw: ${THEME_NAMES[theme] || theme}!`);
+    showToast(`Aktywowano motyw: ${THEME_NAMES[theme] || theme}`);
   }
 }
 
@@ -2471,18 +3571,20 @@ function setupThemesListeners() {
 
 
 // ==========================================================================
-// SPOTIFY & MUSIC HUB INTEGRATION
+// SPOTIFY & MUSIC STUDIO INTEGRATION (VIEW 5 + BOTTOM DOCK)
 // ==========================================================================
 let spotifyUser = null;
 let spotifyPlaylists = [];
 let currentSpotifyPlaylistId = null;
 
+const SVG_ICON_PLAY_SM = '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg>';
+const SVG_ICON_PAUSE_SM = '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>';
+const SVG_ICON_PLAY_LG = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg>';
+const SVG_ICON_PAUSE_LG = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>';
+
 function openMusicModal() {
-  const modal = document.getElementById('music-modal');
-  if (modal) {
-    modal.classList.add('open');
-    checkSpotifyStatus();
-  }
+  switchToTab('music');
+  checkSpotifyStatus();
 }
 
 function closeMusicModal() {
@@ -2495,9 +3597,7 @@ async function checkSpotifyStatus() {
   try {
     const status = await window.api.spotifyGetStatus();
     updateSpotifyUI(status);
-    if (status && status.isLoggedIn) {
-      loadSpotifyPlaylists();
-    }
+    await loadSpotifyPlaylists();
   } catch (err) {
     console.warn('[Spotify] Błąd sprawdzania statusu:', err);
   }
@@ -2509,14 +3609,28 @@ function updateSpotifyUI(status) {
   const avatarEl = document.getElementById('spotify-user-avatar');
   const nameEl = document.getElementById('spotify-user-name');
   const planEl = document.getElementById('spotify-user-plan');
+  const clientIdInput = document.getElementById('spotify-client-id-input');
+  const keyBadge = document.getElementById('spotify-api-key-badge');
 
-  if (status && status.isLoggedIn && status.user) {
-    spotifyUser = status.user;
+  if (clientIdInput && status?.clientId && !clientIdInput.value) {
+    clientIdInput.value = status.clientId;
+  }
+  if (keyBadge) {
+    keyBadge.textContent = status?.usingCustomClientId ? 'Własne API ✓' : 'Klucz API';
+    keyBadge.style.color = status?.usingCustomClientId ? 'var(--emerald)' : '';
+  }
+
+  if (status && status.isLoggedIn) {
+    spotifyUser = status.user || { displayName: 'Konto Spotify' };
     if (cardDisconnected) cardDisconnected.style.display = 'none';
     if (cardConnected) cardConnected.style.display = 'flex';
-    if (avatarEl && status.user.avatar) avatarEl.src = status.user.avatar;
-    if (nameEl) nameEl.textContent = status.user.displayName || 'Użytkownik Spotify';
-    if (planEl) planEl.textContent = `Konto Spotify (${status.user.product === 'premium' ? 'Premium ⚡' : 'Free'})`;
+    if (avatarEl) avatarEl.src = status.user?.avatar || 'assets/icon-256.png';
+    if (nameEl) nameEl.textContent = status.user?.displayName || 'Konto Spotify';
+    if (planEl) {
+      planEl.textContent = status.user?.product
+        ? (status.user.product === 'premium' ? 'Premium' : 'Free')
+        : 'Połączono';
+    }
   } else {
     spotifyUser = null;
     if (cardDisconnected) cardDisconnected.style.display = 'flex';
@@ -2524,42 +3638,172 @@ function updateSpotifyUI(status) {
   }
 }
 
+function formatPolishPlaylistCount(n) {
+  if (n === 1) return '1 playlista';
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${n} playlisty`;
+  return `${n} playlist`;
+}
+
 const FEATURED_SPOTIFY_PLAYLISTS = [
-  { id: '37i9dQZF1DXcBWIGoYBM5M', name: 'Today\'s Top Hits', tracksCount: 50, image: 'https://i.scdn.co/image/ab67706f00000002b8d5a1f2674e7dfc757a3e74' },
+  { id: '37i9dQZF1DXcBWIGoYBM5M', name: "Today's Top Hits", tracksCount: 50, image: 'https://i.scdn.co/image/ab67706f00000002b8d5a1f2674e7dfc757a3e74' },
   { id: '37i9dQZF1DX0k8z58Zk88K', name: 'Top Utwory Polska', tracksCount: 50, image: 'https://i.scdn.co/image/ab67706f00000002e7d71cd3fca000b21eec4d57' },
   { id: '37i9dQZF1DWY4lFlSbtbk1', name: 'Polski Hip-Hop & Rap', tracksCount: 50, image: 'https://i.scdn.co/image/ab67706f0000000213d29a5975eb1f87aa61a6b4' },
-  { id: '37i9dQZF1DX4t95PZ0T4U0', name: 'TikTok Viral & Gaming Hits', tracksCount: 50, image: 'https://i.scdn.co/image/ab67706f00000002444b005118ce5288515ad47a' }
+  { id: '37i9dQZF1DX4t95PZ0T4U0', name: 'Gaming & Viral Hits', tracksCount: 50, image: 'https://i.scdn.co/image/ab67706f00000002444b005118ce5288515ad47a' }
 ];
 
-async function loadSpotifyPlaylists() {
-  const grid = document.getElementById('spotify-playlists-grid');
-  const countLabel = document.getElementById('spotify-playlists-count-label');
-  if (!grid) return;
-
-  grid.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-dim); font-size: 12px; grid-column: 1 / -1;">Pobieranie playlist Spotify...</div>';
-
-  let playlists = [];
-  try {
-    playlists = await window.api.spotifyGetPlaylists();
-  } catch (_) {}
-
-  spotifyPlaylists = (playlists && playlists.length > 0) ? playlists : FEATURED_SPOTIFY_PLAYLISTS;
-  if (countLabel) countLabel.textContent = `${spotifyPlaylists.length} playlist`;
-
-  grid.innerHTML = '';
-  spotifyPlaylists.forEach(pl => {
+function renderFeaturedSpotifyPlaylists() {
+  const featGrid = document.getElementById('spotify-featured-playlists-grid');
+  if (!featGrid || featGrid.children.length > 0) return;
+  featGrid.innerHTML = '';
+  FEATURED_SPOTIFY_PLAYLISTS.forEach(pl => {
     const card = document.createElement('div');
     card.className = `spotify-playlist-card ${currentSpotifyPlaylistId === pl.id ? 'active' : ''}`;
     card.innerHTML = `
-      <img src="${pl.image || 'assets/icon-256.png'}" class="spotify-playlist-img" alt="${pl.name}" onerror="this.src='assets/icon-256.png'">
-      <div class="spotify-playlist-details">
+      <img src="${pl.image}" class="spotify-playlist-img" alt="${pl.name}" onerror="this.src='assets/icon-256.png'">
+      <div class="spotify-playlist-details" style="flex: 1;">
         <span class="spotify-playlist-name" title="${pl.name}">${pl.name}</span>
-        <span class="spotify-playlist-count">${pl.tracksCount || 50} utworów</span>
+        <span class="spotify-playlist-count tnum">${pl.tracksCount} utworów • Polecane</span>
       </div>
     `;
+    card.addEventListener('click', () => {
+      playSpotifyPlaylist(pl, card);
+    });
+    featGrid.appendChild(card);
+  });
+}
+
+async function loadSpotifyPlaylists() {
+  renderFeaturedSpotifyPlaylists();
+  const grid = document.getElementById('spotify-playlists-grid');
+  const countLabel = document.getElementById('spotify-playlists-count-label');
+  const titleLabel = document.getElementById('spotify-playlists-title-label');
+  if (!grid) return;
+
+  grid.innerHTML = '<div style="padding: 16px; text-align: center; color: var(--text-muted); font-size: 12px; grid-column: 1 / -1;">Synchronizowanie playlist z konta Spotify...</div>';
+
+  let bundle = { playlists: [], isLoggedIn: !!spotifyUser, rateLimited: false, retryAfter: 0 };
+  try {
+    const res = await window.api.spotifyGetPlaylists();
+    bundle = Array.isArray(res) ? { playlists: res, isLoggedIn: !!spotifyUser } : (res || bundle);
+  } catch (err) {
+    bundle.error = err.message;
+  }
+
+  spotifyPlaylists = Array.isArray(bundle.playlists) ? bundle.playlists : [];
+  if (countLabel) {
+    countLabel.textContent = formatPolishPlaylistCount(spotifyPlaylists.length);
+  }
+  if (titleLabel) {
+    titleLabel.textContent = bundle.fromCache
+      ? 'Twoje Playlisty Spotify (Zapisane)'
+      : 'Twoje Playlisty Spotify';
+  }
+
+  grid.innerHTML = '';
+
+  if (spotifyPlaylists.length === 0) {
+    const emptyBox = document.createElement('div');
+    emptyBox.className = 'spotify-empty-box';
+
+    if (bundle.isLoggedIn && bundle.rateLimited) {
+      emptyBox.innerHTML = `
+        <div style="font-size: 12.5px; font-weight: 700; color: var(--text-primary);">
+          Oczekiwanie na limit wspólnego klucza Spotify API (HTTP 429 • auto-ponowienie za <span class="tnum">${bundle.retryAfter || 30}s</span>)
+        </div>
+        <div style="font-size: 11.5px; color: var(--text-secondary); line-height: 1.5;">
+          Konto jest połączone, ale domyślny publiczny klucz API jest współdzielony globalnie. Aby <strong>natychmiast i bez limitów</strong> wyświetlić wszystkie swoje prywatne i publiczne playlisty z konta Spotify, ustaw własny darmowy <code>Client ID</code> (30 sekund) — lub wklej wyżej link do swojej playlisty.
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px; margin-top: 2px; flex-wrap: wrap;">
+          <button type="button" class="btn-primary" id="btn-empty-open-api-setup" style="height: 30px; font-size: 11.5px;">
+            Ustaw własny Client ID (bez limitów)
+          </button>
+          <button type="button" class="btn-secondary" id="btn-empty-retry-playlists" style="height: 30px; font-size: 11.5px;">
+            Spróbuj pobrać teraz
+          </button>
+        </div>
+      `;
+      grid.appendChild(emptyBox);
+      emptyBox.querySelector('#btn-empty-open-api-setup')?.addEventListener('click', () => {
+        const setupBox = document.getElementById('spotify-api-setup-box');
+        if (setupBox) setupBox.style.display = 'flex';
+        document.getElementById('spotify-client-id-input')?.focus();
+      });
+      emptyBox.querySelector('#btn-empty-retry-playlists')?.addEventListener('click', () => {
+        loadSpotifyPlaylists();
+      });
+    } else if (!bundle.isLoggedIn) {
+      emptyBox.innerHTML = `
+        <div style="font-size: 12.5px; font-weight: 700; color: var(--text-primary);">
+          Połącz swoje konto Spotify
+        </div>
+        <div style="font-size: 11.5px; color: var(--text-secondary); line-height: 1.5;">
+          Zaloguj się do Spotify powyżej, aby automatycznie wczytać swoje playlisty i Polubione utwory, albo wklej link do wybranej playlisty.
+        </div>
+        <button type="button" class="btn-spotify-pill" id="btn-empty-connect-spotify" style="margin-top: 2px;">
+          Połącz konto Spotify
+        </button>
+      `;
+      grid.appendChild(emptyBox);
+      emptyBox.querySelector('#btn-empty-connect-spotify')?.addEventListener('click', () => {
+        document.getElementById('btn-spotify-login')?.click();
+      });
+    } else {
+      emptyBox.innerHTML = `
+        <div style="font-size: 12.5px; font-weight: 700; color: var(--text-primary);">
+          Brak playlist do wyświetlenia
+        </div>
+        <div style="font-size: 11.5px; color: var(--text-secondary); line-height: 1.5;">
+          ${bundle.error ? `Komunikat Spotify: ${bundle.error}` : 'Nie znaleziono playlist na koncie. Utwórz playlistę w Spotify lub wklej link powyżej.'}
+        </div>
+      `;
+      grid.appendChild(emptyBox);
+    }
+    return;
+  }
+
+  spotifyPlaylists.forEach(pl => {
+    const card = document.createElement('div');
+    card.className = `spotify-playlist-card ${currentSpotifyPlaylistId === pl.id ? 'active' : ''}`;
+
+    const thumbHtml = pl.isLikedSongs
+      ? `<div class="spotify-liked-thumb" aria-hidden="true">
+           <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+         </div>`
+      : `<img src="${pl.image || 'assets/icon-256.png'}" class="spotify-playlist-img" alt="" onerror="this.src='assets/icon-256.png'">`;
+
+    const subtitle = pl.owner
+      ? `${pl.tracksCount ?? 0} utworów • ${pl.owner}`
+      : `${pl.tracksCount ?? 0} utworów`;
+
+    const removeBtnHtml = pl.isManual
+      ? `<button type="button" class="spotify-playlist-remove" title="Usuń z zapisanych playlist">
+           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+         </button>`
+      : '';
+
+    card.innerHTML = `
+      ${thumbHtml}
+      <div class="spotify-playlist-details" style="flex: 1;">
+        <span class="spotify-playlist-name" title="${pl.name}">${pl.name}</span>
+        <span class="spotify-playlist-count tnum">${subtitle}</span>
+      </div>
+      ${removeBtnHtml}
+    `;
+
+    const removeBtn = card.querySelector('.spotify-playlist-remove');
+    if (removeBtn) {
+      removeBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await window.api.spotifyRemovePlaylist?.(pl.id);
+        showToast(`Usunięto playlistę: ${pl.name}`);
+        loadSpotifyPlaylists();
+      });
+    }
 
     card.addEventListener('click', () => {
-      playSpotifyPlaylist(pl);
+      playSpotifyPlaylist(pl, card);
     });
 
     grid.appendChild(card);
@@ -2567,7 +3811,7 @@ async function loadSpotifyPlaylists() {
 }
 
 async function syncMprisStatus() {
-  if (window.musicPlayer?.isStandalone?.()) return; // Samodzielny odtwarzacz w launcherze ma pierwszeństwo
+  if (window.musicPlayer?.isStandalone?.()) return;
   if (!window.api?.spotifyGetMprisStatus) return;
   try {
     const data = await window.api.spotifyGetMprisStatus();
@@ -2575,6 +3819,7 @@ async function syncMprisStatus() {
     const titleEl = document.getElementById('spotify-now-playing-title');
     const artistEl = document.getElementById('spotify-now-playing-artist');
     const artEl = document.getElementById('spotify-now-playing-art');
+    const footerArt = document.getElementById('footer-cover-art');
     const playBtn = document.getElementById('btn-spotify-modal-play');
     const badgeText = document.getElementById('spotify-playback-badge-text');
 
@@ -2586,55 +3831,73 @@ async function syncMprisStatus() {
     if (data && data.running && data.title) {
       if (titleEl) titleEl.textContent = data.title;
       if (artistEl) artistEl.textContent = data.artist || (data.album ? `Album: ${data.album}` : 'Spotify Desktop');
-      if (artEl && data.artUrl) {
-        artEl.src = data.artUrl;
+      if (data.artUrl) {
+        if (artEl) artEl.src = data.artUrl;
+        if (footerArt) footerArt.src = data.artUrl;
       }
       const isPlaying = (data.status === 'Playing');
-      if (playBtn) playBtn.textContent = isPlaying ? '⏸' : '▶';
-      if (badgeText) badgeText.textContent = isPlaying ? 'Spotify Desktop • Odtwarzanie w tle w Minecraft' : 'Spotify Desktop • Wstrzymano';
+      if (playBtn) playBtn.innerHTML = isPlaying ? SVG_ICON_PAUSE_LG : SVG_ICON_PLAY_LG;
+      if (badgeText) badgeText.textContent = isPlaying ? 'Spotify Desktop • Aktywne' : 'Spotify Desktop • Wstrzymano';
 
-      // Zaktualizuj dolny pasek odtwarzacza, jeśli nie gra radio
+      window.musicPlayer?.fetchLyricsForTrack?.(data.title, data.artist || '');
+
       if (window.musicPlayer && !window.musicPlayer.isRadioPlaying?.()) {
         if (footerTitle) footerTitle.textContent = data.title;
-        if (footerGenre) footerGenre.textContent = `🟢 Spotify • ${data.artist || 'Desktop'}`;
+        if (footerGenre) footerGenre.textContent = `Spotify • ${data.artist || 'Desktop'}`;
         if (footerToggle) {
-          footerToggle.innerHTML = isPlaying ? '⏸' : '▶';
+          footerToggle.innerHTML = isPlaying ? SVG_ICON_PAUSE_SM : SVG_ICON_PLAY_SM;
           footerToggle.title = isPlaying ? 'Pauza' : 'Odtwarzaj';
         }
         if (visualizer) visualizer.classList.toggle('animating', isPlaying);
       }
-    } else {
-      if (playBtn) playBtn.textContent = '▶';
     }
-  } catch (err) {
-    // Ignoruj chwilowy błąd DBus podczas startu
-  }
+  } catch (_) {}
 }
 window.syncMprisStatus = syncMprisStatus;
 
-async function playSpotifyPlaylist(playlist) {
+async function playSpotifyPlaylist(playlist, cardEl = null) {
   currentSpotifyPlaylistId = playlist.id;
-
-  // Podświetlenie aktywnej karty
   document.querySelectorAll('.spotify-playlist-card').forEach(c => c.classList.remove('active'));
+  if (cardEl) cardEl.classList.add('active');
 
   showToast(`Ładowanie playlisty: ${playlist.name}...`);
   try {
-    const playlistInfo = await window.api.spotifyGetPlaylistInfo(playlist.id || playlist.uri);
-    if (playlistInfo && playlistInfo.tracks && playlistInfo.tracks.length) {
-      window.musicPlayer.loadSpotifyPlaylist(playlistInfo);
-      showToast(`▶ Odtwarzanie bez aplikacji Spotify: ${playlistInfo.name} (${playlistInfo.tracks.length} utworów)!`);
-    } else {
+    let loaded = false;
+
+    // 1. Dla publicznych playlist próbujemy szybkiego odczytu embed bez zużywania limitu API
+    if (!playlist.isLikedSongs && playlist.id !== 'liked-songs') {
+      try {
+        const playlistInfo = await window.api.spotifyGetPlaylistInfo(playlist.id);
+        if (playlistInfo && Array.isArray(playlistInfo.tracks) && playlistInfo.tracks.length > 0) {
+          window.musicPlayer.loadSpotifyPlaylist(playlistInfo);
+          showToast(`Odtwarzanie: ${playlistInfo.name} (${playlistInfo.tracks.length} utworów)`);
+          loaded = true;
+        }
+      } catch (_) {}
+    }
+
+    // 2. Dla prywatnych playlist oraz „Polubionych utworów” pobieramy przez autoryzowane konto Spotify
+    if (!loaded) {
       const tracks = await window.api.spotifyGetTracks(playlist.id);
-      if (tracks && tracks.length) {
+      if (tracks && tracks.length > 0) {
         window.musicPlayer.loadSpotifyPlaylist({
           id: playlist.id,
           name: playlist.name,
           coverUrl: playlist.image,
-          tracks: tracks.map(t => ({ title: t.name, artist: t.artists, durationMs: t.durationMs }))
+          tracks: tracks.map(t => ({
+            title: t.name,
+            artist: t.artists,
+            durationMs: t.durationMs,
+            coverUrl: t.albumArt || playlist.image || null
+          }))
         });
-        showToast(`▶ Odtwarzanie: ${playlist.name} (${tracks.length} utworów)!`);
+        showToast(`Odtwarzanie: ${playlist.name} (${tracks.length} utworów)`);
+        loaded = true;
       }
+    }
+
+    if (!loaded) {
+      throw new Error('Playlista jest pusta lub niedostępna.');
     }
   } catch (err) {
     showToast(`Błąd odtwarzania playlisty: ${err.message}`);
@@ -2652,18 +3915,138 @@ function setupSpotifyMusicListeners() {
   const btnLoadUrl = document.getElementById('btn-load-spotify-url');
   const urlInput = document.getElementById('spotify-playlist-url-input');
 
+  const btnToggleApi = document.getElementById('btn-toggle-spotify-api');
+  const apiSetupBox = document.getElementById('spotify-api-setup-box');
+  const btnOpenSpotifyDev = document.getElementById('btn-open-spotify-dev');
+  const btnCopyRedirect = document.getElementById('btn-copy-spotify-redirect');
+  const clientIdInput = document.getElementById('spotify-client-id-input');
+  const btnSaveClientId = document.getElementById('btn-spotify-save-client-id');
+
   const btnModalPlay = document.getElementById('btn-spotify-modal-play');
   const btnModalNext = document.getElementById('btn-spotify-modal-next');
   const btnModalPrev = document.getElementById('btn-spotify-modal-prev');
 
+  // Toggle Personal Spotify Client ID Configurator
+  btnToggleApi?.addEventListener('click', () => {
+    if (!apiSetupBox) return;
+    const isHidden = apiSetupBox.style.display === 'none' || !apiSetupBox.style.display;
+    apiSetupBox.style.display = isHidden ? 'flex' : 'none';
+    if (isHidden) clientIdInput?.focus();
+  });
+
+  btnOpenSpotifyDev?.addEventListener('click', () => {
+    window.api.openExternal('https://developer.spotify.com/dashboard');
+  });
+
+  btnCopyRedirect?.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText('http://127.0.0.1:8989/login');
+      showToast('Skopiowano Redirect URI: http://127.0.0.1:8989/login');
+    } catch (_) {
+      showToast('Redirect URI: http://127.0.0.1:8989/login');
+    }
+  });
+
+  btnSaveClientId?.addEventListener('click', async () => {
+    const raw = (clientIdInput?.value || '').trim();
+    if (!raw || raw.length < 16 || raw.includes('http')) {
+      showToast('Wklej prawidłowy 32-znakowy Spotify Client ID z panelu Spotify Dev');
+      return;
+    }
+    try {
+      await window.api.spotifySetClientId?.(raw);
+      showToast('Zapisano własny Client ID — otwieranie logowania Spotify...');
+      const auth = await window.api.spotifyLogin(raw);
+      if (auth && auth.accessToken) {
+        if (apiSetupBox) apiSetupBox.style.display = 'none';
+        showToast('Połączono konto Spotify na własnym kluczu API!');
+        await checkSpotifyStatus();
+      }
+    } catch (err) {
+      showToast(`Błąd autoryzacji Spotify: ${err.message}`);
+    }
+  });
+
+  window.api.onSpotifyPlaylistsUpdated?.(() => {
+    checkSpotifyStatus();
+  });
+
+  // Music Studio Subtabs (Lyrics vs Library)
+  const subLyrics = document.getElementById('music-subtab-lyrics');
+  const subLibrary = document.getElementById('music-subtab-library');
+  const panelLyrics = document.getElementById('music-panel-lyrics');
+  const panelLibrary = document.getElementById('music-panel-library');
+
+  const activateMusicPanel = (which) => {
+    const isLyrics = which === 'lyrics';
+    subLyrics?.classList.toggle('active', isLyrics);
+    subLibrary?.classList.toggle('active', !isLyrics);
+    if (panelLyrics) panelLyrics.style.display = isLyrics ? 'flex' : 'none';
+    if (panelLibrary) panelLibrary.style.display = isLyrics ? 'none' : 'flex';
+  };
+
+  subLyrics?.addEventListener('click', () => activateMusicPanel('lyrics'));
+  subLibrary?.addEventListener('click', () => activateMusicPanel('library'));
+
+  // Direct Track Search in Music Studio
+  const trackSearchInput = document.getElementById('music-track-search-input');
+  const btnTrackSearch = document.getElementById('btn-music-track-search');
+  const trackResultsBox = document.getElementById('music-track-search-results');
+
+  const runTrackSearch = async () => {
+    const q = trackSearchInput?.value?.trim();
+    if (!q || !trackResultsBox) return;
+    trackResultsBox.innerHTML = '<div style="font-size: 11.5px; color: var(--text-muted); padding: 8px;">Wyszukiwanie utworów...</div>';
+    try {
+      const tracks = await window.api.spotifySearchTracks(q);
+      trackResultsBox.innerHTML = '';
+      if (!tracks || tracks.length === 0) {
+        trackResultsBox.innerHTML = '<div style="font-size: 11.5px; color: var(--text-muted); padding: 8px;">Brak wyników wyszukiwania.</div>';
+        return;
+      }
+      tracks.slice(0, 8).forEach(t => {
+        const row = document.createElement('div');
+        row.className = 'track-result-row';
+        const title = t.title || t.name || 'Utwór';
+        const artist = t.artist || t.artists || '';
+        const cover = t.coverUrl || t.thumbnail || t.image || 'assets/icon-256.png';
+        row.innerHTML = `
+          <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
+            <img src="${cover}" alt="" style="width: 32px; height: 32px; border-radius: 6px; object-fit: cover; flex-shrink: 0;" onerror="this.src='assets/icon-256.png'">
+            <div style="min-width: 0;">
+              <div style="font-size: 12px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${title}</div>
+              <div style="font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${artist}</div>
+            </div>
+          </div>
+          <span class="mod-tag">Odtwórz</span>
+        `;
+        row.addEventListener('click', () => {
+          window.musicPlayer?.playSingleTrack?.({ title, artist, coverUrl: cover });
+          activateMusicPanel('lyrics');
+          showToast(`Odtwarzanie: ${title}`);
+        });
+        trackResultsBox.appendChild(row);
+      });
+    } catch (err) {
+      trackResultsBox.innerHTML = `<div style="font-size: 11.5px; color: #F87171; padding: 8px;">Błąd wyszukiwania: ${err.message}</div>`;
+    }
+  };
+
+  btnTrackSearch?.addEventListener('click', runTrackSearch);
+  trackSearchInput?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') runTrackSearch();
+  });
+
   btnOpenHub?.addEventListener('click', (e) => {
     e.stopPropagation();
-    openMusicModal();
+    switchToTab('music');
+    activateMusicPanel('library');
     syncMprisStatus();
   });
 
   musicInfoClick?.addEventListener('click', () => {
-    openMusicModal();
+    switchToTab('music');
+    activateMusicPanel('lyrics');
     syncMprisStatus();
   });
 
@@ -2672,7 +4055,6 @@ function setupSpotifyMusicListeners() {
     if (e.target === musicModal) closeMusicModal();
   });
 
-  // Kontrolki odtwarzania w modalu (działają standalone bez Spotify!)
   btnModalPlay?.addEventListener('click', () => {
     window.musicPlayer?.toggle();
   });
@@ -2687,10 +4069,10 @@ function setupSpotifyMusicListeners() {
 
   btnLogin?.addEventListener('click', async () => {
     try {
-      showToast('Otwieranie logowania do Spotify...');
+      showToast('Otwieranie autoryzacji Spotify...');
       const auth = await window.api.spotifyLogin();
       if (auth && auth.accessToken) {
-        showToast('Pomyślnie połączono z kontem Spotify! 🎉');
+        showToast('Połączono z kontem Spotify');
         await checkSpotifyStatus();
       }
     } catch (err) {
@@ -2701,53 +4083,1002 @@ function setupSpotifyMusicListeners() {
   btnLogout?.addEventListener('click', async () => {
     await window.api.spotifyLogout();
     currentSpotifyPlaylistId = null;
-    showToast('Odłączono konto Spotify.');
+    showToast('Odłączono konto Spotify');
     checkSpotifyStatus();
   });
 
-  btnRefresh?.addEventListener('click', () => {
-    loadSpotifyPlaylists();
+  const btnQuickAdd = document.getElementById('btn-quick-add-playlist-link');
+  btnQuickAdd?.addEventListener('click', () => {
+    if (urlInput) {
+      urlInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      urlInput.focus();
+      urlInput.style.borderColor = 'var(--emerald)';
+      setTimeout(() => { urlInput.style.borderColor = ''; }, 1500);
+      showToast('Wklej poniżej link do playlisty Spotify i kliknij Dodaj i Graj');
+    }
+  });
+
+  btnRefresh?.addEventListener('click', async () => {
+    btnRefresh.classList.add('rotating');
+    showToast('Synchronizowanie playlist ze Spotify...');
+    try {
+      await loadSpotifyPlaylists();
+      if (spotifyPlaylists.length > 0) {
+        showToast(`Zsynchronizowano ${spotifyPlaylists.length} playlist z konta Spotify`);
+      } else if (spotifyUser) {
+        showToast('Spotify wymaga własnego Client ID (429) lub wklejenia linku do playlisty');
+        const setupBox = document.getElementById('spotify-api-setup-box');
+        if (setupBox) setupBox.style.display = 'flex';
+      }
+    } catch (err) {
+      showToast(`Błąd synchronizacji: ${err.message}`);
+    } finally {
+      setTimeout(() => btnRefresh.classList.remove('rotating'), 650);
+    }
   });
 
   btnLoadUrl?.addEventListener('click', async () => {
     const url = urlInput?.value?.trim();
     if (!url) {
-      showToast('Wklej link do playlisty Spotify (np. https://open.spotify.com/playlist/...)');
+      showToast('Wklej link do playlisty Spotify');
       return;
     }
 
-    showToast('Ładowanie playlisty bez potrzeby odpalania Spotify...');
+    showToast('Pobieranie i zapisywanie playlisty Spotify...');
     try {
       const playlistInfo = await window.api.spotifyGetPlaylistInfo(url);
       if (!playlistInfo || !playlistInfo.tracks || !playlistInfo.tracks.length) {
         throw new Error('Nie znaleziono utworów w podanej playliście.');
       }
+      if (urlInput) urlInput.value = '';
+      currentSpotifyPlaylistId = playlistInfo.id;
+      await loadSpotifyPlaylists();
       window.musicPlayer.loadSpotifyPlaylist(playlistInfo);
-      showToast(`▶ Odtwarzanie: ${playlistInfo.name} (${playlistInfo.tracks.length} utworów) w tle w grze!`);
+      showToast(`Zapisano i włączono: ${playlistInfo.name} (${playlistInfo.tracks.length} utworów)`);
     } catch (err) {
       showToast(`Błąd playlisty: ${err.message}`);
     }
   });
 
-  // Stacje radiowe wbudowane w launcher
+  urlInput?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') btnLoadUrl?.click();
+  });
+
   document.getElementById('btn-station-lofi')?.addEventListener('click', () => {
     window.musicPlayer.playStation('lofi');
-    showToast('Przełączono na stację: Lofi Chill Beats');
+    showToast('Stacja aktywna: Lofi Chill Beats');
   });
 
   document.getElementById('btn-station-synthwave')?.addEventListener('click', () => {
     window.musicPlayer.playStation('synthwave');
-    showToast('Przełączono na stację: Synthwave & Cyberpunk');
+    showToast('Stacja aktywna: Synthwave & Cyberpunk');
   });
 
   document.getElementById('btn-station-ambient')?.addEventListener('click', () => {
     window.musicPlayer.playStation('ambient');
-    showToast('Przełączono na stację: Minecraft Ambient');
+    showToast('Stacja aktywna: Minecraft Ambient OST');
   });
 
-  // Cykliczna synchronizacja stanu odtwarzacza w tle
   syncMprisStatus();
   setInterval(syncMprisStatus, 2500);
+}
+
+// ============================================================================
+// SCREENSHOT & CLIP HUB (GALERIA ZRZUTÓW EKRANU & KLIPÓW)
+// ============================================================================
+
+const screenshotsState = {
+  list: [],
+  filtered: [],
+  activeFilter: 'active', // 'all', 'active' lub profileId
+  searchQuery: '',
+  sortOrder: 'newest', // 'newest', 'oldest', 'size'
+  lightboxIndex: -1
+};
+
+function escapeHtml(str) {
+  if (typeof str !== 'string') return '';
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function updateScreenshotsProfileDropdown() {
+  const select = document.getElementById('select-screenshots-profile');
+  if (!select) return;
+
+  const currentVal = select.value || screenshotsState.activeFilter || 'active';
+  const activeProfile = getActiveProfileObj();
+  const activeName = activeProfile ? activeProfile.name : 'Główny';
+
+  let html = `
+    <option value="active">Aktywny profil (${escapeHtml(activeName)})</option>
+    <option value="all">Wszystkie profile i foldery</option>
+  `;
+
+  if (profilesState?.profiles && Array.isArray(profilesState.profiles)) {
+    for (const p of profilesState.profiles) {
+      html += `<option value="${escapeHtml(p.id)}">Profil: ${escapeHtml(p.name)}</option>`;
+    }
+  }
+
+  select.innerHTML = html;
+  if ([...select.options].some(o => o.value === currentVal)) {
+    select.value = currentVal;
+  }
+}
+
+async function loadScreenshots() {
+  if (!window.api?.getScreenshots) return;
+  const select = document.getElementById('select-screenshots-profile');
+  const filter = select?.value || screenshotsState.activeFilter || 'active';
+  screenshotsState.activeFilter = filter;
+
+  const refreshBtn = document.getElementById('btn-screenshots-refresh');
+  refreshBtn?.classList.add('rotating');
+
+  try {
+    const res = await window.api.getScreenshots(filter);
+    if (res?.success) {
+      screenshotsState.list = res.screenshots || [];
+
+      // Aktualizacja badge w pasku bocznym (sidebar)
+      const badge = document.getElementById('sidebar-screenshots-badge');
+      if (badge) {
+        if (res.screenshots.length > 0) {
+          badge.textContent = res.screenshots.length > 99 ? '99+' : res.screenshots.length;
+          badge.style.display = 'inline-flex';
+        } else {
+          badge.style.display = 'none';
+        }
+      }
+
+      applyScreenshotsFilterAndSort();
+    }
+  } catch (err) {
+    console.error('[Screenshots] Błąd pobierania listy zrzutów:', err);
+  } finally {
+    refreshBtn?.classList.remove('rotating');
+  }
+}
+
+function applyScreenshotsFilterAndSort() {
+  const searchInput = document.getElementById('input-screenshots-search');
+  const sortSelect = document.getElementById('select-screenshots-sort');
+
+  screenshotsState.searchQuery = searchInput?.value?.toLowerCase()?.trim() || '';
+  screenshotsState.sortOrder = sortSelect?.value || 'newest';
+
+  let list = [...screenshotsState.list];
+
+  // Filtrowanie po wyszukiwaniu
+  if (screenshotsState.searchQuery) {
+    const q = screenshotsState.searchQuery;
+    list = list.filter(item =>
+      item.fileName.toLowerCase().includes(q) ||
+      item.dateFormatted.toLowerCase().includes(q) ||
+      (item.profileName && item.profileName.toLowerCase().includes(q))
+    );
+  }
+
+  // Sortowanie
+  if (screenshotsState.sortOrder === 'newest') {
+    list.sort((a, b) => b.timestamp - a.timestamp);
+  } else if (screenshotsState.sortOrder === 'oldest') {
+    list.sort((a, b) => a.timestamp - b.timestamp);
+  } else if (screenshotsState.sortOrder === 'size') {
+    list.sort((a, b) => b.sizeBytes - a.sizeBytes);
+  }
+
+  screenshotsState.filtered = list;
+  renderScreenshotsUI();
+}
+
+function renderScreenshotsUI() {
+  const grid = document.getElementById('screenshots-grid');
+  const emptyState = document.getElementById('screenshots-empty');
+  const countLabel = document.getElementById('screenshots-count-label');
+  const sizeLabel = document.getElementById('screenshots-size-label');
+
+  const totalBytes = screenshotsState.filtered.reduce((sum, item) => sum + item.sizeBytes, 0);
+  const totalMb = (totalBytes / (1024 * 1024)).toFixed(1);
+
+  if (countLabel) {
+    const count = screenshotsState.filtered.length;
+    let unit = 'zrzutów';
+    if (count === 1) unit = 'zrzut';
+    else if (count % 10 >= 2 && count % 10 <= 4 && (count % 100 < 10 || count % 100 >= 20)) unit = 'zrzuty';
+    countLabel.textContent = `${count} ${unit}`;
+  }
+  if (sizeLabel) {
+    sizeLabel.textContent = `${totalMb} MB`;
+  }
+
+  if (!grid || !emptyState) return;
+
+  if (screenshotsState.filtered.length === 0) {
+    grid.innerHTML = '';
+    grid.style.display = 'none';
+    emptyState.style.display = 'flex';
+    return;
+  }
+
+  grid.style.display = 'grid';
+  emptyState.style.display = 'none';
+
+  grid.innerHTML = screenshotsState.filtered.map((item, index) => {
+    return `
+      <div class="screenshot-card" data-index="${index}" title="${escapeHtml(item.fileName)}">
+        <div class="screenshot-thumb-wrap">
+          ${item.isVideo ? `<div class="screenshot-video-badge"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> KLIP WIDEO</div>` : ''}
+          <img class="screenshot-thumb" data-path="${escapeHtml(item.filePath)}" src="assets/icon-256.png" loading="lazy" alt="Miniaturka zrzutu" />
+          <div class="screenshot-card-overlay">
+            <button class="btn-card-action btn-copy-card" data-path="${escapeHtml(item.filePath)}" title="Kopiuj do schowka (Discord Ctrl+V)">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            </button>
+            <button class="btn-card-action btn-view-card" data-index="${index}" title="Powiększ (Lightbox)">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+            </button>
+            <button class="btn-card-action danger btn-delete-card" data-path="${escapeHtml(item.filePath)}" title="Usuń zrzut">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="screenshot-meta">
+          <div class="screenshot-meta-header">
+            <span class="screenshot-name">${escapeHtml(item.fileName)}</span>
+            <span class="screenshot-badge-profile">${escapeHtml(item.profileName || 'Główny')}</span>
+          </div>
+          <div class="screenshot-meta-footer">
+            <span>${item.dateFormatted}</span>
+            <span>${item.sizeFormatted}</span>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  // Załaduj miniaturki asynchronicznie (cache + instant resize w tle)
+  const thumbImgs = grid.querySelectorAll('.screenshot-thumb');
+  thumbImgs.forEach(img => {
+    const fPath = img.getAttribute('data-path');
+    if (!fPath) return;
+
+    window.api.getScreenshotThumbnail(fPath).then(res => {
+      if (res?.success && res.dataUrl) {
+        img.src = res.dataUrl;
+      }
+    }).catch(() => {});
+  });
+
+  // Obsługa kliknięć w karty (otwiera Lightbox)
+  grid.querySelectorAll('.screenshot-card').forEach(card => {
+    card.addEventListener('click', (e) => {
+      if (e.target.closest('.btn-card-action')) return;
+      const idx = parseInt(card.getAttribute('data-index'), 10);
+      if (!isNaN(idx)) openScreenshotLightbox(idx);
+    });
+  });
+
+  // Obsługa przycisku Kopiuj w overlayu
+  grid.querySelectorAll('.btn-copy-card').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const fPath = btn.getAttribute('data-path');
+      await copyScreenshotToClipboard(fPath);
+    });
+  });
+
+  // Obsługa przycisku Powiększ w overlayu
+  grid.querySelectorAll('.btn-view-card').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const idx = parseInt(btn.getAttribute('data-index'), 10);
+      if (!isNaN(idx)) openScreenshotLightbox(idx);
+    });
+  });
+
+  // Obsługa przycisku Usuń w overlayu
+  grid.querySelectorAll('.btn-delete-card').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const fPath = btn.getAttribute('data-path');
+      await confirmAndDeleteScreenshot(fPath);
+    });
+  });
+}
+
+async function copyScreenshotToClipboard(filePath) {
+  if (!window.api?.copyScreenshot || !filePath) return;
+  try {
+    const res = await window.api.copyScreenshot(filePath);
+    if (res?.success) {
+      showToast('📸 Obraz skopiowany do schowka! Wklej w Discordzie (Ctrl+V).');
+      try { window.uiSounds?.playClick?.(); } catch (_) {}
+    } else {
+      showToast(`Błąd kopiowania: ${res?.error || 'Nieznany błąd'}`);
+    }
+  } catch (err) {
+    showToast(`Błąd: ${err.message}`);
+  }
+}
+
+async function openScreenshotLightbox(index) {
+  if (index < 0 || index >= screenshotsState.filtered.length) return;
+  screenshotsState.lightboxIndex = index;
+  const item = screenshotsState.filtered[index];
+
+  const modal = document.getElementById('screenshot-lightbox-modal');
+  const counter = document.getElementById('lightbox-counter');
+  const filename = document.getElementById('lightbox-filename');
+  const meta = document.getElementById('lightbox-meta');
+  const img = document.getElementById('lightbox-img');
+  const video = document.getElementById('lightbox-video');
+  const spinner = document.getElementById('lightbox-spinner');
+
+  if (!modal) return;
+  modal.classList.add('open');
+
+  if (counter) counter.textContent = `${index + 1} z ${screenshotsState.filtered.length}`;
+  if (filename) filename.textContent = item.fileName;
+  if (meta) meta.textContent = `${item.sizeFormatted} • ${item.dateFormatted} • ${item.profileName || 'Minecraft'}`;
+
+  if (item.isVideo) {
+    if (img) img.style.display = 'none';
+    if (spinner) spinner.style.display = 'none';
+    if (video) {
+      video.style.display = 'block';
+      video.src = `file://${item.filePath}`;
+      video.play().catch(() => {});
+    }
+  } else {
+    if (video) {
+      video.pause();
+      video.style.display = 'none';
+    }
+    if (img) {
+      img.style.display = 'none';
+      if (spinner) spinner.style.display = 'flex';
+
+      try {
+        const full = await window.api.getScreenshotFull(item.filePath);
+        if (full?.success && full.dataUrl) {
+          img.src = full.dataUrl;
+          img.style.display = 'block';
+          if (meta && full.width && full.height) {
+            meta.textContent = `${full.width}x${full.height} • ${item.sizeFormatted} • ${item.dateFormatted}`;
+          }
+        } else {
+          img.src = `file://${item.filePath}`;
+          img.style.display = 'block';
+        }
+      } catch (_) {
+        img.src = `file://${item.filePath}`;
+        img.style.display = 'block';
+      } finally {
+        if (spinner) spinner.style.display = 'none';
+      }
+    }
+  }
+}
+
+function closeScreenshotLightbox() {
+  const modal = document.getElementById('screenshot-lightbox-modal');
+  const video = document.getElementById('lightbox-video');
+  if (video) {
+    video.pause();
+    video.src = '';
+  }
+  if (modal) modal.classList.remove('open');
+  screenshotsState.lightboxIndex = -1;
+}
+
+function navigateLightbox(dir) {
+  if (screenshotsState.lightboxIndex < 0 || screenshotsState.filtered.length === 0) return;
+  let next = screenshotsState.lightboxIndex + dir;
+  if (next < 0) next = screenshotsState.filtered.length - 1;
+  if (next >= screenshotsState.filtered.length) next = 0;
+  openScreenshotLightbox(next);
+}
+
+async function copyCurrentLightboxScreenshot() {
+  if (screenshotsState.lightboxIndex < 0) return;
+  const item = screenshotsState.filtered[screenshotsState.lightboxIndex];
+  if (!item) return;
+
+  const copyLabel = document.getElementById('btn-lightbox-copy-label');
+  await copyScreenshotToClipboard(item.filePath);
+  if (copyLabel) {
+    const orig = copyLabel.textContent;
+    copyLabel.textContent = 'Skopiowano!';
+    setTimeout(() => { copyLabel.textContent = orig; }, 1600);
+  }
+}
+
+async function openCurrentLightboxFile() {
+  if (screenshotsState.lightboxIndex < 0) return;
+  const item = screenshotsState.filtered[screenshotsState.lightboxIndex];
+  if (!item || !window.api?.openScreenshotFile) return;
+  await window.api.openScreenshotFile(item.filePath);
+}
+
+async function deleteCurrentLightboxScreenshot() {
+  if (screenshotsState.lightboxIndex < 0) return;
+  const item = screenshotsState.filtered[screenshotsState.lightboxIndex];
+  if (!item) return;
+
+  const ok = confirm(`Czy na pewno chcesz usunąć zrzut ekranu "${item.fileName}"?`);
+  if (!ok) return;
+
+  try {
+    const res = await window.api.deleteScreenshot(item.filePath);
+    if (res?.success) {
+      showToast('Zrzut ekranu został usunięty.');
+      const oldIndex = screenshotsState.lightboxIndex;
+      await loadScreenshots();
+      if (screenshotsState.filtered.length > 0) {
+        const nextIdx = Math.min(oldIndex, screenshotsState.filtered.length - 1);
+        openScreenshotLightbox(nextIdx);
+      } else {
+        closeScreenshotLightbox();
+      }
+    } else {
+      showToast(`Błąd usuwania: ${res?.error || 'Nieznany błąd'}`);
+    }
+  } catch (err) {
+    showToast(`Błąd: ${err.message}`);
+  }
+}
+
+async function confirmAndDeleteScreenshot(filePath) {
+  const fileName = filePath.split(/[/\\]/).pop();
+  const ok = confirm(`Czy na pewno chcesz usunąć zrzut "${fileName}"?`);
+  if (!ok) return;
+
+  try {
+    const res = await window.api.deleteScreenshot(filePath);
+    if (res?.success) {
+      showToast('Zrzut ekranu został usunięty.');
+      await loadScreenshots();
+    } else {
+      showToast(`Błąd usuwania: ${res?.error || 'Nieznany błąd'}`);
+    }
+  } catch (err) {
+    showToast(`Błąd: ${err.message}`);
+  }
+}
+
+function setupScreenshotsListeners() {
+  // Przycisk Odśwież
+  document.getElementById('btn-screenshots-refresh')?.addEventListener('click', () => {
+    loadScreenshots();
+  });
+
+  // Przyciski Otwórz Folder
+  const openFolderHandler = () => {
+    const profileFilter = document.getElementById('select-screenshots-profile')?.value || 'active';
+    window.api?.openScreenshotsFolder(profileFilter);
+  };
+  document.getElementById('btn-screenshots-open-folder')?.addEventListener('click', openFolderHandler);
+  document.getElementById('btn-screenshots-empty-folder')?.addEventListener('click', openFolderHandler);
+
+  // Wyszukiwanie na żywo
+  document.getElementById('input-screenshots-search')?.addEventListener('input', () => {
+    applyScreenshotsFilterAndSort();
+  });
+
+  // Filtr profilu
+  document.getElementById('select-screenshots-profile')?.addEventListener('change', () => {
+    loadScreenshots();
+  });
+
+  // Sortowanie
+  document.getElementById('select-screenshots-sort')?.addEventListener('change', () => {
+    applyScreenshotsFilterAndSort();
+  });
+
+  // Lightbox akcje
+  document.getElementById('btn-close-lightbox')?.addEventListener('click', closeScreenshotLightbox);
+  document.getElementById('btn-lightbox-prev')?.addEventListener('click', () => navigateLightbox(-1));
+  document.getElementById('btn-lightbox-next')?.addEventListener('click', () => navigateLightbox(1));
+  document.getElementById('btn-lightbox-copy')?.addEventListener('click', copyCurrentLightboxScreenshot);
+  document.getElementById('btn-lightbox-open-file')?.addEventListener('click', openCurrentLightboxFile);
+  document.getElementById('btn-lightbox-delete')?.addEventListener('click', deleteCurrentLightboxScreenshot);
+
+  // Zamknięcie lightboxa kliknięciem w tło
+  const lightboxModal = document.getElementById('screenshot-lightbox-modal');
+  lightboxModal?.addEventListener('click', (e) => {
+    if (e.target === lightboxModal) {
+      closeScreenshotLightbox();
+    }
+  });
+
+  // Klawisze skrótów: Escape, Strzałki, Ctrl+C
+  window.addEventListener('keydown', (e) => {
+    if (!lightboxModal || !lightboxModal.classList.contains('open')) return;
+
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      closeScreenshotLightbox();
+    } else if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      navigateLightbox(-1);
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      navigateLightbox(1);
+    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
+      const selection = window.getSelection();
+      if (!selection || selection.toString().length === 0) {
+        e.preventDefault();
+        copyCurrentLightboxScreenshot();
+      }
+    }
+  });
+}
+
+// ============================================================================
+// CRASH & ERROR DIAGNOSTIC (MOD CONFLICT RESOLVER)
+// ============================================================================
+
+let currentCrashDiagnosis = null;
+
+function openCrashDoctorModal(diagnosis) {
+  if (!diagnosis) return;
+  currentCrashDiagnosis = diagnosis;
+
+  const modal = document.getElementById('crash-doctor-modal');
+  const badgeText = document.getElementById('crash-badge-text');
+  const badgeWrap = document.getElementById('crash-doctor-badge');
+  const title = document.getElementById('crash-modal-title');
+  const metaLine = document.getElementById('crash-meta-line');
+  const boxTitle = document.getElementById('crash-box-title');
+  const boxDesc = document.getElementById('crash-box-desc');
+  const culpritPill = document.getElementById('crash-culprit-pill');
+  const culpritName = document.getElementById('crash-culprit-name');
+  const solutionText = document.getElementById('crash-solution-text');
+  const actionsContainer = document.getElementById('crash-actions-container');
+  const rawCode = document.getElementById('crash-raw-code');
+
+  if (!modal) return;
+
+  // Nagłówek i status
+  if (badgeText) {
+    if (diagnosis.exitCode !== undefined && diagnosis.exitCode !== null) {
+      badgeText.textContent = `AWARIA GRY (KOD: ${diagnosis.exitCode})`;
+    } else {
+      badgeText.textContent = 'WYKRYTO BŁĄD LUB KONFLIKT';
+    }
+  }
+
+  if (badgeWrap) {
+    badgeWrap.className = 'crash-doctor-badge';
+    if (diagnosis.severity === 'warning') badgeWrap.classList.add('warning');
+    else if (diagnosis.severity === 'info') badgeWrap.classList.add('info');
+  }
+
+  if (title) title.textContent = diagnosis.title || 'Raport i Naprawa Błędów';
+  if (metaLine) {
+    metaLine.textContent = `Raport: ${diagnosis.crashTime || 'Brak daty'} • Plik: ${diagnosis.reportFileName || 'crash-reports'}`;
+  }
+
+  // Opis problemu
+  if (boxTitle) boxTitle.textContent = diagnosis.title || 'Wykryto problem';
+  if (boxDesc) boxDesc.textContent = diagnosis.summary || 'Gra wyłączyła się nieoczekiwanie.';
+
+  // Winowajca
+  if (culpritPill && culpritName) {
+    if (diagnosis.culpritFile || diagnosis.culpritMod) {
+      culpritPill.style.display = 'inline-flex';
+      culpritName.textContent = diagnosis.culpritFile || diagnosis.culpritMod;
+    } else {
+      culpritPill.style.display = 'none';
+    }
+  }
+
+  // Rozwiązanie
+  if (solutionText) {
+    solutionText.textContent = diagnosis.solution || 'Sprawdź kompatybilność modów z wybraną wersją gry.';
+  }
+
+  // Akcje 1-Click
+  if (actionsContainer) {
+    actionsContainer.innerHTML = '';
+
+    const actions = diagnosis.suggestedActions || [];
+    actions.forEach(act => {
+      const btn = document.createElement('button');
+      btn.className = `btn-${act.type === 'danger' ? 'danger' : act.type === 'primary' ? 'primary' : 'secondary'} btn-sm`;
+      btn.style.display = 'inline-flex';
+      btn.style.alignItems = 'center';
+      btn.style.gap = '6px';
+
+      // Ikonka akcji
+      if (act.id === 'disable_mod' || act.id === 'disable_duplicates' || act.id === 'delete_mod') {
+        btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg><span>${escapeHtml(act.label)}</span>`;
+      } else if (act.id === 'copy_discord') {
+        btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg><span>${escapeHtml(act.label)}</span>`;
+      } else if (act.id === 'increase_ram' || act.id === 'switch_java_21' || act.id === 'disable_shaders' || act.id === 'install_fabric_api') {
+        btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20"/></svg><span>${escapeHtml(act.label)}</span>`;
+      } else {
+        btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg><span>${escapeHtml(act.label)}</span>`;
+      }
+
+      btn.addEventListener('click', async () => {
+        try {
+          btn.disabled = true;
+          const originalContent = btn.innerHTML;
+          btn.innerHTML = '<span>Naprawianie...</span>';
+
+          const res = await window.api.executeCrashFix(act.id, act.payload || {});
+          if (res?.success) {
+            btn.innerHTML = '<span>Naprawiono! ✓</span>';
+            btn.classList.remove('btn-danger', 'btn-primary');
+            btn.classList.add('btn-emerald');
+            showToast(res.message || 'Problem został pomyślnie naprawiony!');
+
+            // Odświeżenie danych w launcherze
+            if (act.id === 'disable_mod' || act.id === 'delete_mod' || act.id === 'disable_duplicates') {
+              try { await loadMods(); } catch (_) {}
+            }
+            if (act.id === 'increase_ram' || act.id === 'switch_java_21') {
+              try { await loadConfig(); } catch (_) {}
+            }
+          } else {
+            btn.disabled = false;
+            btn.innerHTML = originalContent;
+            showToast(`Błąd naprawy: ${res?.error || 'Nieznany błąd'}`);
+          }
+        } catch (err) {
+          btn.disabled = false;
+          showToast(`Błąd: ${err.message}`);
+        }
+      });
+
+      actionsContainer.appendChild(btn);
+    });
+  }
+
+  // Zrzut tekstu raportu
+  if (rawCode) {
+    rawCode.textContent = diagnosis.rawReport || 'Brak szczegółowego zrzutu stosu.';
+  }
+
+  modal.classList.add('open');
+  try { window.uiSounds?.playClick?.(); } catch (_) {}
+}
+
+function closeCrashDoctorModal() {
+  const modal = document.getElementById('crash-doctor-modal');
+  if (modal) modal.classList.remove('open');
+}
+
+async function triggerManualCrashDoctor() {
+  showToast('Sprawdzanie logów gry i raportów błędów...');
+  try {
+    const diag = await window.api.diagnoseCrash('active');
+    if (diag && (diag.hasCrash || diag.duplicates?.length > 0)) {
+      openCrashDoctorModal(diag);
+    } else {
+      showToast('Wszystko w porządku! Nie wykryto żadnych problemów z modami.');
+    }
+  } catch (err) {
+    showToast(`Błąd diagnostyki: ${err.message}`);
+  }
+}
+
+function setupCrashDoctorListeners() {
+  // Przycisk ręcznego uruchomienia na scenie głównej
+  document.getElementById('btn-open-crash-doctor')?.addEventListener('click', () => {
+    triggerManualCrashDoctor();
+  });
+
+  // Zamknięcie modala
+  document.getElementById('btn-close-crash-modal')?.addEventListener('click', closeCrashDoctorModal);
+
+  const modal = document.getElementById('crash-doctor-modal');
+  modal?.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      closeCrashDoctorModal();
+    }
+  });
+
+  // Nasłuchiwanie na automatyczny sygnał z procesu gry (gdy Minecraft wyłączy się z błędem)
+  if (window.api?.onCrashDetected) {
+    window.api.onCrashDetected((diagnosis) => {
+      console.warn('[CrashDoctor] Otrzymano zdarzenie awarii gry:', diagnosis);
+      openCrashDoctorModal(diagnosis);
+    });
+  }
+}
+
+// ============================================================================
+// PC BENCHMARK & HARDWARE AUTO-TUNING (#view-benchmark)
+// ============================================================================
+
+const benchmarkUIState = {
+  specs: null,
+  recommendations: null,
+  lastScore: null,
+  isRunning: false
+};
+
+async function loadBenchmarkHardwareSpecs() {
+  if (!window.api?.getDetailedSpecs) return;
+
+  try {
+    const specs = await window.api.getDetailedSpecs();
+    if (specs) {
+      benchmarkUIState.specs = specs;
+
+      // Wypełnij karty parametrów podzespołów
+      const cpuName = document.getElementById('spec-cpu-name');
+      const cpuThreads = document.getElementById('spec-cpu-threads');
+      const gpuName = document.getElementById('spec-gpu-name');
+      const gpuType = document.getElementById('spec-gpu-type');
+      const ramTotal = document.getElementById('spec-ram-total');
+      const ramFree = document.getElementById('spec-ram-free');
+      const javaVer = document.getElementById('spec-java-ver');
+      const osInfo = document.getElementById('spec-os-info');
+
+      if (cpuName) cpuName.textContent = specs.cpu.model;
+      if (cpuThreads) cpuThreads.textContent = `${specs.cpu.cores} fiz. rdzeni / ${specs.cpu.threads} wątków (${specs.cpu.speedMhz} MHz)`;
+      if (gpuName) gpuName.textContent = specs.gpu.primary;
+      if (gpuType) gpuType.textContent = specs.gpu.hasDedicated ? 'Dedykowany akcelerator 3D' : 'Zintegrowany układ graficzny';
+      if (ramTotal) ramTotal.textContent = `${specs.ram.totalGb} GB RAM`;
+      if (ramFree) ramFree.textContent = `Dostępne: ${specs.ram.freeGb} GB (Zajęte: ${specs.ram.usedGb} GB)`;
+      if (javaVer) javaVer.textContent = `Java ${specs.java.version}`;
+      if (osInfo) osInfo.textContent = `${specs.os.platform} (${specs.os.arch}) • Dysk wolny: ${specs.disk.freeGb} GB`;
+    }
+
+    // Załaduj optymalne rekomendacje dla wybranego profilu
+    if (window.api?.getOptimalConfig) {
+      const targetProfileId = document.getElementById('select-benchmark-profile')?.value || 'active';
+      const configRes = await window.api.getOptimalConfig(targetProfileId);
+      if (configRes?.success && configRes.recommendations) {
+        benchmarkUIState.recommendations = configRes.recommendations;
+        updateBenchmarkComparisonUI(configRes.recommendations);
+      }
+    }
+  } catch (err) {
+    console.error('[Benchmark] Błąd ładowania parametrów sprzętu:', err);
+  }
+}
+
+function updateBenchmarkComparisonUI(recom) {
+  if (!recom) return;
+
+  const diffRamBefore = document.getElementById('diff-ram-before');
+  const diffRamAfter = document.getElementById('diff-ram-after');
+  const diffJvmBefore = document.getElementById('diff-jvm-before');
+  const diffJvmAfter = document.getElementById('diff-jvm-after');
+  const diffRenderBefore = document.getElementById('diff-render-before');
+  const diffRenderAfter = document.getElementById('diff-render-after');
+
+  if (diffRamBefore) diffRamBefore.textContent = `${recom.ram.current} GB`;
+  if (diffRamAfter) diffRamAfter.textContent = `${recom.ram.optimal} GB`;
+
+  if (diffJvmBefore) diffJvmBefore.textContent = (recom.jvmPreset.current || 'g1gc').toUpperCase();
+  if (diffJvmAfter) diffJvmAfter.textContent = recom.jvmPreset.optimal === 'ultra' ? 'Ultra FPS (ZGC)' : recom.jvmPreset.optimal.toUpperCase();
+
+  if (diffRenderBefore) diffRenderBefore.textContent = `${recom.renderDistance.current} chunków`;
+  if (diffRenderAfter) diffRenderAfter.textContent = `${recom.renderDistance.optimal} chunków`;
+}
+
+async function startBenchmarkTest() {
+  if (benchmarkUIState.isRunning || !window.api?.runBenchmark) return;
+  benchmarkUIState.isRunning = true;
+
+  const progressZone = document.getElementById('benchmark-progress-zone');
+  const stageText = document.getElementById('benchmark-stage-text');
+  const pctText = document.getElementById('benchmark-pct');
+  const fillBar = document.getElementById('benchmark-progress-fill');
+  const scoreText = document.getElementById('benchmark-score-text');
+  const circleBar = document.getElementById('score-circle-bar');
+  const heroTitle = document.getElementById('benchmark-hero-title');
+  const heroSubtitle = document.getElementById('benchmark-hero-subtitle');
+  const tierPill = document.getElementById('benchmark-tier-pill');
+  const tierLabel = document.getElementById('benchmark-tier-label');
+
+  if (progressZone) progressZone.style.display = 'flex';
+  if (scoreText) scoreText.textContent = '...';
+
+  // Animacja etapów testu
+  const setStage = (pct, text) => {
+    if (stageText) stageText.textContent = text;
+    if (pctText) pctText.textContent = `${pct}%`;
+    if (fillBar) fillBar.style.width = `${pct}%`;
+  };
+
+  setStage(15, '1/4 Testowanie wydajności jednowątkowej procesora CPU...');
+  await new Promise(r => setTimeout(r, 450));
+
+  setStage(45, '2/4 Testowanie alokatora pamięci RAM & przepustowości...');
+  await new Promise(r => setTimeout(r, 550));
+
+  setStage(75, '3/4 Testowanie jednostki GPU & shaderów...');
+  await new Promise(r => setTimeout(r, 500));
+
+  setStage(90, '4/4 Analiza wielowątkowości chunków i generowanie profilu...');
+
+  try {
+    const res = await window.api.runBenchmark();
+    setStage(100, 'Test zakończony sukcesem!');
+    await new Promise(r => setTimeout(r, 300));
+
+    if (res?.success) {
+      benchmarkUIState.lastScore = res.scores.total;
+
+      // Animowany licznik punktów
+      const targetScore = res.scores.total;
+      let currentVal = 0;
+      const step = Math.max(1, Math.floor(targetScore / 40));
+      const counterTimer = setInterval(() => {
+        currentVal += step;
+        if (currentVal >= targetScore) {
+          currentVal = targetScore;
+          clearInterval(counterTimer);
+        }
+        if (scoreText) scoreText.textContent = currentVal.toLocaleString();
+      }, 20);
+
+      // Animacja okręgu SVG (obwód = 2 * PI * 50 ≈ 314)
+      if (circleBar) {
+        const offset = Math.max(0, 314 - (314 * Math.min(10000, targetScore) / 10000));
+        circleBar.style.strokeDashoffset = offset;
+        circleBar.style.stroke = res.tierColor || '#10B981';
+      }
+
+      // Tier badge & napisy
+      if (tierLabel) tierLabel.textContent = res.tierLabel.toUpperCase();
+      if (tierPill) {
+        tierPill.style.color = res.tierColor || '#10B981';
+        tierPill.style.borderColor = `${res.tierColor || '#10B981'}44`;
+      }
+      if (heroTitle) heroTitle.textContent = `Wynik: ${res.tierLabel}`;
+      if (heroSubtitle) {
+        heroSubtitle.textContent = `Twój komputer uzyskał ${targetScore.toLocaleString()} punktów (CPU: ${res.scores.cpu}, RAM: ${res.scores.ram}, GPU: ${res.scores.gpu}). Rekomendowane ustawienia zostały zaktualizowane poniżej!`;
+      }
+
+      showToast(`🏆 Benchmark ukończony: ${targetScore.toLocaleString()} pkt (${res.tierLabel})!`);
+      try { window.uiSounds?.playClick?.(); } catch (_) {}
+
+      // Zaktualizuj widok porównania
+      await loadBenchmarkHardwareSpecs();
+    }
+  } catch (err) {
+    showToast(`Błąd podczas testu: ${err.message}`);
+  } finally {
+    benchmarkUIState.isRunning = false;
+    setTimeout(() => {
+      if (progressZone) progressZone.style.display = 'none';
+    }, 1200);
+  }
+}
+
+function updateBenchmarkProfileDropdown() {
+  const select = document.getElementById('select-benchmark-profile');
+  if (!select) return;
+
+  const currentVal = select.value || 'active';
+  const activeProfile = getActiveProfileObj();
+  const activeName = activeProfile ? activeProfile.name : 'Główny';
+
+  let html = `
+    <option value="active">Aktywny profil (${escapeHtml(activeName)})</option>
+  `;
+
+  if (profilesState?.profiles && Array.isArray(profilesState.profiles)) {
+    for (const p of profilesState.profiles) {
+      const isCurActive = activeProfile && activeProfile.id === p.id;
+      html += `<option value="${escapeHtml(p.id)}">${escapeHtml(p.name)} (${p.loader || 'Fabric'}) ${isCurActive ? '★' : ''}</option>`;
+    }
+  }
+
+  select.innerHTML = html;
+  if ([...select.options].some(o => o.value === currentVal)) {
+    select.value = currentVal;
+  }
+
+  updateBenchmarkProfileBadges();
+}
+
+function updateBenchmarkProfileBadges() {
+  const select = document.getElementById('select-benchmark-profile');
+  const selectedVal = select?.value || 'active';
+  let targetName = 'Aktywny profil';
+
+  if (selectedVal === 'active') {
+    const active = getActiveProfileObj();
+    targetName = active ? `${active.name}` : 'Aktywny';
+  } else if (profilesState?.profiles) {
+    const found = profilesState.profiles.find(p => p.id === selectedVal);
+    if (found) targetName = found.name;
+  }
+
+  const recomBadge = document.getElementById('recom-target-profile-badge');
+  if (recomBadge) recomBadge.textContent = `Profil: ${targetName}`;
+}
+
+async function applyOptimalBenchmarkSettings() {
+  if (!window.api?.applyOptimalConfig) return;
+
+  const btnBig = document.getElementById('btn-apply-optimal-settings-big');
+  const btnSm = document.getElementById('btn-apply-optimal-settings');
+
+  const recom = benchmarkUIState.recommendations;
+  if (!recom) {
+    showToast('Najpierw załaduj lub uruchom test wydajności!');
+    return;
+  }
+
+  const payload = {
+    ram: recom.ram.optimal,
+    jvmPreset: recom.jvmPreset.optimal,
+    renderDistance: recom.renderDistance.optimal,
+    simulationDistance: recom.simulationDistance.optimal,
+    chunkBuilderThreads: recom.sodium.threads
+  };
+
+  const targetProfileId = document.getElementById('select-benchmark-profile')?.value || 'active';
+
+  try {
+    if (btnBig) { btnBig.disabled = true; btnBig.textContent = 'Stosowanie optymalizacji...'; }
+    if (btnSm) { btnSm.disabled = true; btnSm.textContent = 'Stosowanie...'; }
+
+    const res = await window.api.applyOptimalConfig(payload, targetProfileId);
+    if (res?.success) {
+      const profName = res.profileName || 'wybrany profil';
+      showToast(`⚡ Zastosowano profil: Ultra FPS dla "${profName}"! Minecraft i Sodium zostały zoptymalizowane.`);
+      try { window.uiSounds?.playClick?.(); } catch (_) {}
+
+      if (btnBig) { btnBig.textContent = 'Zastosowano Pomyślnie! ✓'; }
+      if (btnSm) { btnSm.textContent = 'Zastosowano ✓'; }
+
+      // Odśwież konfigurację ogólną, pamięć RAM w suwakach i porównanie
+      try { await loadConfig(); } catch (_) {}
+      try { await loadProfiles(); } catch (_) {}
+      await loadBenchmarkHardwareSpecs();
+
+      setTimeout(() => {
+        if (btnBig) { btnBig.disabled = false; btnBig.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg><span>Zastosuj Optymalne Ustawienia w 1 Kliknięcie</span>'; }
+        if (btnSm) { btnSm.disabled = false; btnSm.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg><span>Zastosuj (1-Click)</span>'; }
+      }, 3000);
+    } else {
+      showToast(`Błąd stosowania ustawień: ${res?.error || 'Nieznany błąd'}`);
+      if (btnBig) { btnBig.disabled = false; btnBig.textContent = 'Spróbuj ponownie'; }
+      if (btnSm) { btnSm.disabled = false; btnSm.textContent = 'Spróbuj'; }
+    }
+  } catch (err) {
+    showToast(`Błąd: ${err.message}`);
+    if (btnBig) btnBig.disabled = false;
+    if (btnSm) btnSm.disabled = false;
+  }
+}
+
+function setupBenchmarkListeners() {
+  document.getElementById('btn-run-benchmark-hero')?.addEventListener('click', startBenchmarkTest);
+  document.getElementById('btn-run-benchmark-main')?.addEventListener('click', startBenchmarkTest);
+  document.getElementById('btn-apply-optimal-settings')?.addEventListener('click', applyOptimalBenchmarkSettings);
+  document.getElementById('btn-apply-optimal-settings-big')?.addEventListener('click', applyOptimalBenchmarkSettings);
+  document.getElementById('select-benchmark-profile')?.addEventListener('change', async (e) => {
+    const val = e.target.value;
+    updateBenchmarkProfileBadges();
+    if (val && val !== 'active') {
+      try {
+        await window.api.selectProfile(val);
+        await loadProfiles();
+        const found = profilesState?.profiles?.find(p => p.id === val);
+        const profName = found ? found.name : val;
+        showToast(`🎯 Ustawiono profil: ${profName}`);
+      } catch (err) {
+        console.warn('Błąd zmiany profilu:', err);
+      }
+    }
+    await loadBenchmarkHardwareSpecs();
+  });
 }
 
 // Run init
