@@ -1804,13 +1804,53 @@ function renderModBrowseResults(hitsToRender, append = false) {
 }
 
 /**
- * Logika i Eventy Modala Instalatora Modpacków
+ * Pomocnicze funkcje formatowania dla pobierania modpacków (w stylu Modrintha)
+ */
+function formatSpeed(bps) {
+  if (!bps || bps <= 0) return '0.0 MB/s';
+  if (bps >= 1024 * 1024) return (bps / (1024 * 1024)).toFixed(1) + ' MB/s';
+  if (bps >= 1024) return (bps / 1024).toFixed(0) + ' KB/s';
+  return bps + ' B/s';
+}
+
+function formatByteSize(bytes) {
+  if (!bytes || bytes <= 0) return '0 B';
+  if (bytes >= 1024 * 1024 * 1024) return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
+  if (bytes >= 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  if (bytes >= 1024) return (bytes / 1024).toFixed(0) + ' KB';
+  return bytes + ' B';
+}
+
+function formatEtaTime(sec) {
+  if (!sec || sec <= 0) return 'Obliczanie...';
+  if (sec < 60) return `~${sec} sek.`;
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return s > 0 ? `~${m}m ${s}s` : `~${m} min.`;
+}
+
+function compareMcVersions(a, b) {
+  const pa = a.split('.').map(x => parseInt(x, 10) || 0);
+  const pb = b.split('.').map(x => parseInt(x, 10) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const na = pa[i] || 0;
+    const nb = pb[i] || 0;
+    if (na !== nb) return nb - na;
+  }
+  return b.localeCompare(a);
+}
+
+/**
+ * Logika i Eventy Modala Instalatora Modpacków (Modrinth)
  */
 function setupModpackModalEvents() {
   const modal = document.getElementById('modpack-install-modal');
   const closeBtn = document.getElementById('btn-close-modpack-modal');
   const cancelBtn = document.getElementById('btn-cancel-modpack-install');
   const confirmBtn = document.getElementById('btn-confirm-modpack-install');
+  const mcSelect = document.getElementById('modpack-modal-mc-select');
+  const versionSelect = document.getElementById('modpack-modal-version-select');
+  const nameInput = document.getElementById('modpack-modal-profile-name');
 
   function closeModal() {
     if (modal) modal.classList.remove('active');
@@ -1820,25 +1860,62 @@ function setupModpackModalEvents() {
   closeBtn?.addEventListener('click', closeModal);
   cancelBtn?.addEventListener('click', closeModal);
 
+  // Zmiana wersji Minecraft -> przeładowanie wydań modpacka i odświeżenie nazwy profilu
+  mcSelect?.addEventListener('change', () => {
+    if (!currentModpackModalData || !currentModpackModalData.mcMap) return;
+    const selectedMc = mcSelect.value;
+    updateModpackReleasesForSelectedMc(selectedMc);
+  });
+
+  // Zmiana wydania modpacka
+  versionSelect?.addEventListener('change', () => {
+    if (!currentModpackModalData || !currentModpackModalData.versions) return;
+    const selectedVerId = versionSelect.value;
+    const relObj = currentModpackModalData.versions.find(v => v.id === selectedVerId);
+    if (relObj) {
+      const releaseTypeEl = document.getElementById('modpack-modal-release-type');
+      if (releaseTypeEl) {
+        releaseTypeEl.textContent = relObj.version_type === 'release' ? 'Stabilne' : `Wydanie ${relObj.version_type}`;
+        releaseTypeEl.style.color = relObj.version_type === 'release' ? 'var(--emerald)' : 'var(--accent)';
+      }
+    }
+  });
+
   confirmBtn?.addEventListener('click', async () => {
     if (!currentModpackModalData) return;
-    const versionSelect = document.getElementById('modpack-modal-version-select');
-    const nameInput = document.getElementById('modpack-modal-profile-name');
+    const selectedVersionId = versionSelect?.value || null;
+    const selectedMc = mcSelect?.value || '1.21.1';
+    const profileName = nameInput?.value.trim() || `[Modpack] ${currentModpackModalData.title} (${selectedMc})`;
+
     const configSection = document.getElementById('modpack-install-config-section');
     const progressSection = document.getElementById('modpack-install-progress-section');
     const progressStatus = document.getElementById('modpack-progress-status');
     const progressPct = document.getElementById('modpack-progress-pct');
     const progressFill = document.getElementById('modpack-progress-fill');
     const progressFile = document.getElementById('modpack-progress-file');
-
-    const selectedVersionId = versionSelect?.value || null;
-    const profileName = nameInput?.value.trim() || currentModpackModalData.title;
+    const statSpeed = document.getElementById('modpack-stat-speed');
+    const statSize = document.getElementById('modpack-stat-size');
+    const statEta = document.getElementById('modpack-stat-eta');
+    const statFiles = document.getElementById('modpack-stat-files');
 
     if (configSection) configSection.style.display = 'none';
     if (progressSection) progressSection.style.display = 'flex';
-    if (closeBtn) closeBtn.style.display = 'none'; // nie zamykaj w trakcie pobierania
+    if (closeBtn) closeBtn.style.display = 'none';
 
-    // Subskrypcja postępu pobierania
+    // Reset wartości
+    if (progressFill) {
+      progressFill.style.width = '0%';
+      progressFill.style.background = 'linear-gradient(90deg, #8B5CF6, #EC4899, #06B6D4)';
+    }
+    if (progressPct) progressPct.textContent = '0%';
+    if (progressStatus) progressStatus.textContent = 'Inicjalizacja pobierania paczki...';
+    if (statSpeed) statSpeed.textContent = '0.0 MB/s';
+    if (statSize) statSize.textContent = '0 B / 0 B';
+    if (statEta) statEta.textContent = 'Obliczanie...';
+    if (statFiles) statFiles.textContent = '0 / 0 plików';
+    if (progressFile) progressFile.textContent = 'Przygotowywanie profilu gry...';
+
+    // Subskrypcja na bieżąco postępu pobierania
     const removeProgressListener = window.api.onModpackProgress((p) => {
       if (p.percent !== undefined) {
         if (progressFill) progressFill.style.width = `${p.percent}%`;
@@ -1847,8 +1924,20 @@ function setupModpackModalEvents() {
       if (p.message && progressStatus) {
         progressStatus.textContent = p.message;
       }
-      if (p.file && progressFile) {
-        progressFile.textContent = p.file;
+      if (p.currentFile && progressFile) {
+        progressFile.textContent = p.currentFile;
+      }
+      if (p.speedBytesPerSec !== undefined && statSpeed) {
+        statSpeed.textContent = formatSpeed(p.speedBytesPerSec);
+      }
+      if (p.downloadedBytes !== undefined && p.totalBytes !== undefined && statSize) {
+        statSize.textContent = `${formatByteSize(p.downloadedBytes)} / ${formatByteSize(p.totalBytes)}`;
+      }
+      if (p.etaSeconds !== undefined && statEta) {
+        statEta.textContent = formatEtaTime(p.etaSeconds);
+      }
+      if (p.completedFiles !== undefined && p.totalFiles !== undefined && statFiles) {
+        statFiles.textContent = `${p.completedFiles} / ${p.totalFiles} plików`;
       }
     });
 
@@ -1865,7 +1954,7 @@ function setupModpackModalEvents() {
       if (closeBtn) closeBtn.style.display = 'flex';
 
       await loadProfiles();
-      showToast(`Pomyślnie zainstalowano paczkę: ${res.name} (${res.modCount} modów)!`);
+      showToast(`Pomyślnie zainstalowano paczkę: ${res.name} (${res.modCount} modów)! Profil aktywny.`);
     } catch (err) {
       removeProgressListener();
       if (closeBtn) closeBtn.style.display = 'flex';
@@ -1881,32 +1970,83 @@ function setupModpackModalEvents() {
   });
 }
 
+function updateModpackReleasesForSelectedMc(selectedMc) {
+  if (!currentModpackModalData || !currentModpackModalData.mcMap) return;
+  const versionSelect = document.getElementById('modpack-modal-version-select');
+  const releaseTypeEl = document.getElementById('modpack-modal-release-type');
+  const detailsEl = document.getElementById('modpack-modal-details');
+  const nameInput = document.getElementById('modpack-modal-profile-name');
+  const confirmBtn = document.getElementById('btn-confirm-modpack-install');
+
+  const releases = currentModpackModalData.mcMap.get(selectedMc) || [];
+  if (!versionSelect) return;
+
+  versionSelect.innerHTML = '';
+  releases.forEach((rel) => {
+    const opt = document.createElement('option');
+    opt.value = rel.id;
+    const isRelease = rel.version_type === 'release';
+    const typeLabel = isRelease ? 'Wydanie stabilne' : `Wydanie ${rel.version_type}`;
+    const loaderStr = rel.loaders?.join(', ') || 'Fabric';
+    opt.textContent = `${rel.name || rel.version_number} (${typeLabel} • ${loaderStr})`;
+    versionSelect.appendChild(opt);
+  });
+
+  if (releases.length > 0) {
+    versionSelect.selectedIndex = 0;
+    const topRel = releases[0];
+    if (releaseTypeEl) {
+      releaseTypeEl.textContent = topRel.version_type === 'release' ? 'Wydanie stabilne' : `Wydanie ${topRel.version_type}`;
+      releaseTypeEl.style.color = topRel.version_type === 'release' ? 'var(--emerald)' : 'var(--accent)';
+    }
+    if (detailsEl) {
+      detailsEl.innerHTML = `<span>Minecraft <b>${selectedMc}</b></span> • <span>${topRel.loaders?.join(', ') || 'Fabric'} Loader</span> • <span style="color: var(--text-muted);">${releases.length} wydań</span>`;
+    }
+    if (confirmBtn) confirmBtn.disabled = false;
+  } else {
+    versionSelect.innerHTML = `<option value="">Brak dostępnych wydań pod ${selectedMc}</option>`;
+    if (confirmBtn) confirmBtn.disabled = true;
+  }
+
+  if (nameInput) {
+    nameInput.value = `[Modpack] ${currentModpackModalData.title} (${selectedMc})`;
+  }
+}
+
 async function openModpackInstallModal({ id, slug, title, author, iconUrl }) {
   const modal = document.getElementById('modpack-install-modal');
   const iconEl = document.getElementById('modpack-modal-icon');
   const nameEl = document.getElementById('modpack-modal-name');
   const authorEl = document.getElementById('modpack-modal-author');
   const detailsEl = document.getElementById('modpack-modal-details');
+  const mcSelect = document.getElementById('modpack-modal-mc-select');
   const versionSelect = document.getElementById('modpack-modal-version-select');
+  const mcCountEl = document.getElementById('modpack-modal-mc-count');
+  const releaseTypeEl = document.getElementById('modpack-modal-release-type');
   const nameInput = document.getElementById('modpack-modal-profile-name');
   const configSection = document.getElementById('modpack-install-config-section');
   const progressSection = document.getElementById('modpack-install-progress-section');
   const confirmBtn = document.getElementById('btn-confirm-modpack-install');
 
-  currentModpackModalData = { id, slug, title, author, iconUrl };
+  currentModpackModalData = { id, slug, title, author, iconUrl, versions: [], mcMap: new Map() };
 
   if (iconEl) iconEl.src = iconUrl || 'assets/logo.svg';
   if (nameEl) nameEl.textContent = title;
   if (authorEl) authorEl.textContent = author ? `Autor: ${author}` : 'Modpack społeczności';
-  if (detailsEl) detailsEl.textContent = 'Pobieranie dostępnych wersji...';
+  if (detailsEl) detailsEl.textContent = 'Pobieranie dostępnych wersji z Modrinth...';
   if (nameInput) nameInput.value = `[Modpack] ${title}`;
+  if (mcCountEl) mcCountEl.textContent = '';
+  if (releaseTypeEl) releaseTypeEl.textContent = '';
 
   if (configSection) configSection.style.display = 'block';
   if (progressSection) progressSection.style.display = 'none';
   if (confirmBtn) confirmBtn.disabled = true;
 
+  if (mcSelect) {
+    mcSelect.innerHTML = `<option value="">Wczytywanie wersji gry Minecraft...</option>`;
+  }
   if (versionSelect) {
-    versionSelect.innerHTML = `<option value="">Pobieranie wersji modpacka...</option>`;
+    versionSelect.innerHTML = `<option value="">Wczytywanie wydań modpacka...</option>`;
   }
 
   if (modal) modal.classList.add('active');
@@ -1914,32 +2054,54 @@ async function openModpackInstallModal({ id, slug, title, author, iconUrl }) {
   try {
     const versions = await window.api.getModrinthProjectVersions(slug || id);
     if (!versions || versions.length === 0) {
-      if (detailsEl) detailsEl.textContent = 'Brak dostępnych wersji.';
-      if (versionSelect) versionSelect.innerHTML = `<option value="">Brak wersji do pobrania</option>`;
+      if (detailsEl) detailsEl.textContent = 'Brak dostępnych wydań tego modpacka.';
+      if (mcSelect) mcSelect.innerHTML = `<option value="">Brak wersji do pobrania</option>`;
       return;
     }
 
-    if (versionSelect) {
-      versionSelect.innerHTML = '';
-      versions.forEach((v, idx) => {
-        const opt = document.createElement('option');
-        opt.value = v.id;
-        const mcVers = (v.game_versions || []).slice(0, 2).join(', ');
-        const loaders = (v.loaders || []).join(', ');
-        opt.textContent = `${v.name || v.version_number} (MC: ${mcVers || 'Inne'} • ${loaders || 'Fabric'})`;
-        versionSelect.appendChild(opt);
-      });
-      versionSelect.selectedIndex = 0;
+    currentModpackModalData.versions = versions;
+
+    // Pogrupowanie wydań według wersji Minecrafta (game_versions)
+    const mcMap = new Map();
+    for (const v of versions) {
+      const gvs = v.game_versions || [];
+      for (const gv of gvs) {
+        if (!mcMap.has(gv)) mcMap.set(gv, []);
+        mcMap.get(gv).push(v);
+      }
+    }
+    currentModpackModalData.mcMap = mcMap;
+
+    const uniqueMcs = Array.from(mcMap.keys()).sort(compareMcVersions);
+    if (mcCountEl) {
+      mcCountEl.textContent = `${uniqueMcs.length} wersji gry`;
     }
 
-    const firstVer = versions[0];
-    const mcStr = (firstVer.game_versions || []).join(', ');
-    const loaderStr = (firstVer.loaders || []).join(', ') || 'Fabric';
-    if (detailsEl) detailsEl.textContent = `Minecraft: ${mcStr} • Silnik: ${loaderStr}`;
-    if (confirmBtn) confirmBtn.disabled = false;
+    const activeMcVer = (getActiveProfileObj()?.mcVersion || currentSelectedVersionId || '1.21.11').replace(/^(fabric|quilt)-/, '');
+
+    if (mcSelect) {
+      mcSelect.innerHTML = '';
+      uniqueMcs.forEach((mc) => {
+        const opt = document.createElement('option');
+        opt.value = mc;
+        const count = mcMap.get(mc)?.length || 0;
+        const isMatch = mc === activeMcVer;
+        opt.textContent = `Minecraft ${mc}${isMatch ? ' (Twój profil)' : ''} [${count} wydań]`;
+        mcSelect.appendChild(opt);
+      });
+
+      // Wybierz pasującą wersję jeśli istnieje w paczce, lub najnowszą
+      const bestMcIdx = uniqueMcs.findIndex(mc => mc === activeMcVer);
+      mcSelect.selectedIndex = bestMcIdx >= 0 ? bestMcIdx : 0;
+    }
+
+    // Załaduj wydania dla wybranej wersji MC
+    const initialMc = mcSelect ? mcSelect.value : uniqueMcs[0];
+    updateModpackReleasesForSelectedMc(initialMc);
+
   } catch (err) {
     console.error('Błąd pobierania wersji modpacka:', err);
-    if (detailsEl) detailsEl.textContent = 'Nie udało się wczytać listy wersji.';
+    if (detailsEl) detailsEl.textContent = 'Nie udało się wczytać listy wersji paczki.';
   }
 }
 

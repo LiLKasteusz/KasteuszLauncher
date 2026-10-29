@@ -2097,10 +2097,10 @@
        MODAL: INSTALACJA MODPACKA (#modpack-install-modal)
        ====================================================================== -->
   <div class="modal-overlay" id="modpack-install-modal">
-    <div class="modal-card">
+    <div class="modal-card modal-lg">
       <div class="modal-header">
         <div>
-          <span class="section-kicker">Instalator Paczek Modów</span>
+          <span class="section-kicker">Instalator Paczek Modów Modrinth</span>
           <h2 class="modal-title" id="modpack-install-modal-title">Instalacja Modpacka</h2>
         </div>
         <button class="modal-close" id="btn-close-modpack-modal">✕</button>
@@ -2108,50 +2108,92 @@
 
       <!-- Modpack Card Preview -->
       <div style="display: flex; gap: 14px; align-items: center; padding: 14px; border-radius: var(--radius-md); background: var(--surface-2); border: 1px solid var(--border-subtle); margin-bottom: 14px;">
-        <img id="modpack-modal-icon" src="assets/logo.svg" alt="Modpack" style="width: 52px; height: 52px; border-radius: 12px; object-fit: cover; flex-shrink: 0;">
+        <img id="modpack-modal-icon" src="assets/logo.svg" alt="Modpack" style="width: 52px; height: 52px; border-radius: 12px; object-fit: cover; flex-shrink: 0; background: rgba(0,0,0,0.3);">
         <div style="min-width: 0; flex: 1;">
           <div id="modpack-modal-name" style="font-size: 15px; font-weight: 700; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Modpack Name</div>
           <div id="modpack-modal-author" style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">Autor: ModpackAuthor</div>
           <div id="modpack-modal-details" style="font-size: 11.5px; color: var(--accent); margin-top: 4px; display: flex; align-items: center; gap: 6px;">
-            <span>Minecraft 1.21.1</span> • <span>Fabric Loader</span>
+            <span>Wczytywanie szczegółów wersji...</span>
           </div>
         </div>
       </div>
 
-      <!-- Step 1: Config Section -->
+      <!-- Step 1: Config Section (Wybór wersji MC i modpacka) -->
       <div id="modpack-install-config-section">
-        <div style="margin-bottom: 12px;">
-          <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 6px; color: var(--text-secondary);">Wersja modpacka</label>
-          <select class="ui-select" id="modpack-modal-version-select" style="width: 100%;">
-            <option value="">Wczytywanie wersji...</option>
-          </select>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+          <div>
+            <label style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: 600; margin-bottom: 6px; color: var(--text-secondary);">
+              <span>Wersja Minecraft</span>
+              <span id="modpack-modal-mc-count" style="font-size: 10.5px; color: var(--accent); font-weight: 500;"></span>
+            </label>
+            <select class="ui-select" id="modpack-modal-mc-select" style="width: 100%;">
+              <option value="">Wczytywanie wersji gry...</option>
+            </select>
+          </div>
+
+          <div>
+            <label style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: 600; margin-bottom: 6px; color: var(--text-secondary);">
+              <span>Wydanie Modpacka</span>
+              <span id="modpack-modal-release-type" style="font-size: 10.5px; color: var(--emerald); font-weight: 500;"></span>
+            </label>
+            <select class="ui-select" id="modpack-modal-version-select" style="width: 100%;">
+              <option value="">Najpierw wybierz wersję gry</option>
+            </select>
+          </div>
         </div>
 
         <div style="margin-bottom: 16px;">
-          <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 6px; color: var(--text-secondary);">Nazwa profilu gry</label>
-          <input type="text" class="ui-input" id="modpack-modal-profile-name" style="width: 100%;" placeholder="[Modpack] Nazwa Modpacka">
-          <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Paczka modów zostanie zainstalowana w czystym, odizolowanym profilu.</div>
+          <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 6px; color: var(--text-secondary);">Nazwa nowego profilu (izolowanego)</label>
+          <input type="text" class="ui-input" id="modpack-modal-profile-name" style="width: 100%;" placeholder="[Modpack] Nazwa Modpacka (1.21.1)">
+          <div style="font-size: 11px; color: var(--text-muted); margin-top: 5px; display: flex; align-items: center; gap: 6px;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            <span>Modpack zainstaluje się w osobnym profilu gry i nie nadpisze Twoich światów ani ustawień.</span>
+          </div>
         </div>
 
         <div style="display: flex; justify-content: flex-end; gap: 8px;">
           <button type="button" class="btn-secondary" id="btn-cancel-modpack-install">Anuluj</button>
           <button type="button" class="btn-primary" id="btn-confirm-modpack-install">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            <span>Pobierz i Zainstaluj</span>
+            <span>Pobierz i Zainstaluj Paczkę</span>
           </button>
         </div>
       </div>
 
-      <!-- Step 2: Live Progress Section -->
-      <div id="modpack-install-progress-section" style="display: none; flex-direction: column; gap: 12px; padding: 10px 0;">
-        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13px;">
-          <span id="modpack-progress-status" style="font-weight: 600; color: #fff;">Pobieranie plików modpacka...</span>
-          <span id="modpack-progress-pct" class="tnum" style="font-weight: 700; color: var(--accent);">0%</span>
+      <!-- Step 2: Live Progress Section (W stylu Modrintha: prędkość, czas, bajty) -->
+      <div id="modpack-install-progress-section" style="display: none; flex-direction: column; gap: 14px; padding: 10px 0;">
+        <div style="display: flex; justify-content: space-between; align-items: baseline;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span class="spinner-ring" style="width: 15px; height: 15px;"></span>
+            <span id="modpack-progress-status" style="font-weight: 700; color: #fff; font-size: 14px;">Pobieranie plików modpacka...</span>
+          </div>
+          <span id="modpack-progress-pct" class="tnum" style="font-weight: 800; font-size: 19px; color: var(--accent);">0%</span>
         </div>
-        <div style="width: 100%; height: 8px; border-radius: 4px; background: rgba(255,255,255,0.08); overflow: hidden;">
-          <div id="modpack-progress-fill" style="width: 0%; height: 100%; background: linear-gradient(90deg, #A855F7, #EC4899); border-radius: 4px; transition: width 0.15s ease;"></div>
+
+        <div style="width: 100%; height: 10px; border-radius: 6px; background: rgba(255,255,255,0.07); overflow: hidden; position: relative; border: 1px solid rgba(255,255,255,0.06);">
+          <div id="modpack-progress-fill" style="width: 0%; height: 100%; background: linear-gradient(90deg, #8B5CF6, #EC4899, #06B6D4); border-radius: 6px; transition: width 0.18s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 0 16px rgba(139, 92, 246, 0.5);"></div>
         </div>
-        <div id="modpack-progress-file" class="tnum" style="font-size: 11px; color: var(--text-muted); font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Inicjalizacja...</div>
+
+        <!-- Statystyki pobierania Modrinth: Prędkość | Rozmiar | Pozostały czas -->
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 12px; border-radius: var(--radius-md); background: rgba(0,0,0,0.28); border: 1px solid var(--border-subtle);">
+          <div style="display: flex; flex-direction: column; gap: 2px;">
+            <span style="font-size: 10.5px; text-transform: uppercase; color: var(--text-muted); font-weight: 600; letter-spacing: 0.05em;">Prędkość</span>
+            <span id="modpack-stat-speed" class="tnum" style="font-size: 13.5px; font-weight: 700; color: #38BDF8;">0.0 MB/s</span>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 2px;">
+            <span style="font-size: 10.5px; text-transform: uppercase; color: var(--text-muted); font-weight: 600; letter-spacing: 0.05em;">Pobrano</span>
+            <span id="modpack-stat-size" class="tnum" style="font-size: 13.5px; font-weight: 700; color: #F472B6;">0 B / 0 B</span>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 2px;">
+            <span style="font-size: 10.5px; text-transform: uppercase; color: var(--text-muted); font-weight: 600; letter-spacing: 0.05em;">Pozostały czas</span>
+            <span id="modpack-stat-eta" class="tnum" style="font-size: 13.5px; font-weight: 700; color: #A7F3D0;">Obliczanie...</span>
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11.5px; color: var(--text-secondary);">
+          <span id="modpack-progress-file" class="tnum" style="font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 72%;">Inicjalizacja...</span>
+          <span id="modpack-stat-files" class="tnum" style="font-weight: 600; color: var(--text-primary); white-space: nowrap;">0 / 0 plików</span>
+        </div>
       </div>
     </div>
   </div>

@@ -763,7 +763,18 @@ async function installModrinthModpack({ projectId, slug, versionId, profileName,
   if (!idOrSlug) throw new Error('Brak identyfikatora modpacka.');
 
   if (typeof onProgress === 'function') {
-    onProgress({ stage: 'fetching_meta', percent: 5, message: 'Pobieranie informacji o wersji modpacka...' });
+    onProgress({
+      stage: 'fetching_meta',
+      percent: 3,
+      message: 'Pobieranie szczegółów wybranej wersji modpacka...',
+      currentFile: idOrSlug,
+      completedFiles: 0,
+      totalFiles: 0,
+      downloadedBytes: 0,
+      totalBytes: 0,
+      speedBytesPerSec: 0,
+      etaSeconds: 0
+    });
   }
 
   // 1. Pobierz wersję modpacka
@@ -793,16 +804,76 @@ async function installModrinthModpack({ projectId, slug, versionId, profileName,
     throw new Error('Brak pliku instalacyjnego .mrpack dla wybranej wersji modpacka.');
   }
 
+  const mrpackTotalSize = mrpackFile.size || 0;
+  let mrpackDownloadedBytes = 0;
+  const mrpackStartTime = Date.now();
+
   if (typeof onProgress === 'function') {
-    onProgress({ stage: 'downloading_mrpack', percent: 15, message: `Pobieranie archiwum modpacka (${mrpackFile.filename})...` });
+    onProgress({
+      stage: 'downloading_mrpack',
+      percent: 6,
+      message: `Pobieranie paczki .mrpack (${mrpackFile.filename})...`,
+      currentFile: mrpackFile.filename,
+      completedFiles: 0,
+      totalFiles: 1,
+      downloadedBytes: 0,
+      totalBytes: mrpackTotalSize,
+      speedBytesPerSec: 0,
+      etaSeconds: 0
+    });
   }
 
-  // 3. Pobierz plik .mrpack do pamięci
+  // 3. Pobierz plik .mrpack ze streamingiem i pomiarem prędkości
   const mrpackRes = await fetch(mrpackFile.url, {
     headers: { 'User-Agent': 'KasteuszLauncher/1.0.0 (contact@szkolnesmp.com.pl)' }
   });
   if (!mrpackRes.ok) throw new Error(`Błąd pobierania .mrpack: ${mrpackRes.statusText}`);
-  const mrpackBuf = Buffer.from(await mrpackRes.arrayBuffer());
+
+  let mrpackBuf = null;
+  if (mrpackRes.body && typeof mrpackRes.body.getReader === 'function') {
+    const reader = mrpackRes.body.getReader();
+    const chunks = [];
+    let lastMrpackReport = 0;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value && value.length > 0) {
+        chunks.push(value);
+        mrpackDownloadedBytes += value.length;
+
+        const now = Date.now();
+        if (now - lastMrpackReport > 120) {
+          lastMrpackReport = now;
+          const elapsed = Math.max(0.1, (now - mrpackStartTime) / 1000);
+          const spd = mrpackDownloadedBytes / elapsed;
+          const rem = Math.max(0, mrpackTotalSize - mrpackDownloadedBytes);
+          const eta = spd > 1024 ? Math.round(rem / spd) : 0;
+          const pct = mrpackTotalSize > 0
+            ? 6 + Math.round((mrpackDownloadedBytes / mrpackTotalSize) * 16)
+            : 15;
+
+          if (typeof onProgress === 'function') {
+            onProgress({
+              stage: 'downloading_mrpack',
+              percent: pct,
+              message: `Pobieranie paczki .mrpack (${mrpackFile.filename})...`,
+              currentFile: mrpackFile.filename,
+              completedFiles: 0,
+              totalFiles: 1,
+              downloadedBytes: mrpackDownloadedBytes,
+              totalBytes: mrpackTotalSize,
+              speedBytesPerSec: Math.round(spd),
+              etaSeconds: eta
+            });
+          }
+        }
+      }
+    }
+    mrpackBuf = Buffer.concat(chunks);
+  } else {
+    mrpackBuf = Buffer.from(await mrpackRes.arrayBuffer());
+  }
 
   if (!AdmZip) {
     throw new Error('Biblioteka archiwów (AdmZip) nie jest dostępna.');
@@ -815,7 +886,7 @@ async function installModrinthModpack({ projectId, slug, versionId, profileName,
   }
 
   const index = JSON.parse(indexEntry.getData().toString('utf8'));
-  const mcVersion = index.dependencies?.minecraft || targetVersion.game_versions?.[0] || '1.21.1';
+  const mcVersion = targetVersion.game_versions?.[0] || index.dependencies?.minecraft || '1.21.1';
 
   // Rozpoznaj loader gry
   let loader = 'fabric';
@@ -846,7 +917,18 @@ async function installModrinthModpack({ projectId, slug, versionId, profileName,
   }
 
   if (typeof onProgress === 'function') {
-    onProgress({ stage: 'extracting_overrides', percent: 25, message: 'Wypakowywanie konfiguracji, shaderów i zasobów...' });
+    onProgress({
+      stage: 'extracting_overrides',
+      percent: 24,
+      message: 'Wypakowywanie konfiguracji, shaderów i opcji...',
+      currentFile: 'overrides/',
+      completedFiles: 0,
+      totalFiles: 1,
+      downloadedBytes: mrpackDownloadedBytes,
+      totalBytes: mrpackTotalSize,
+      speedBytesPerSec: 0,
+      etaSeconds: 0
+    });
   }
 
   // 5. Wypakuj overrides/ oraz client-overrides/
@@ -874,17 +956,55 @@ async function installModrinthModpack({ projectId, slug, versionId, profileName,
   // 6. Pobierz mody klienta zdefiniowane w modrinth.index.json
   const clientFiles = (index.files || []).filter(f => !f.env || f.env.client !== 'unsupported');
   const totalFiles = clientFiles.length;
-  let downloadedCount = 0;
+  const totalModBytes = clientFiles.reduce((acc, f) => acc + (f.fileSize || 0), 0);
 
-  if (typeof onProgress === 'function') {
+  let totalBytesDownloaded = 0;
+  let completedFiles = 0;
+  let lastBytes = 0;
+  let lastSampleTime = Date.now();
+  let lastIpcEmitTime = 0;
+  const speedSamples = [];
+
+  function emitModProgress(currentFileName = '', force = false) {
+    if (typeof onProgress !== 'function') return;
+    const now = Date.now();
+    if (!force && now - lastIpcEmitTime < 120) return;
+    lastIpcEmitTime = now;
+
+    const dt = (now - lastSampleTime) / 1000;
+    if (dt >= 0.25) {
+      const instSpeed = (totalBytesDownloaded - lastBytes) / Math.max(0.001, dt);
+      lastSampleTime = now;
+      lastBytes = totalBytesDownloaded;
+      speedSamples.push(instSpeed);
+      if (speedSamples.length > 5) speedSamples.shift();
+    }
+    const avgSpeed = speedSamples.length > 0
+      ? speedSamples.reduce((a, b) => a + b, 0) / speedSamples.length
+      : 0;
+
+    const remainingBytes = Math.max(0, totalModBytes - totalBytesDownloaded);
+    const etaSeconds = avgSpeed > 1024 ? Math.round(remainingBytes / avgSpeed) : 0;
+    const progressSpan = totalModBytes > 0
+      ? Math.round((totalBytesDownloaded / totalModBytes) * 67)
+      : Math.round((completedFiles / Math.max(1, totalFiles)) * 67);
+    const pct = Math.min(92, 25 + progressSpan);
+
     onProgress({
       stage: 'downloading_mods',
-      current: 0,
-      total: totalFiles,
-      percent: 30,
-      message: `Pobieranie modów (0 / ${totalFiles})...`
+      percent: pct,
+      completedFiles,
+      totalFiles,
+      downloadedBytes: totalBytesDownloaded,
+      totalBytes: totalModBytes,
+      speedBytesPerSec: Math.round(avgSpeed),
+      etaSeconds,
+      currentFile: currentFileName,
+      message: `Pobieranie modów: ${completedFiles} / ${totalFiles}`
     });
   }
+
+  emitModProgress('Inicjalizacja pobierania modów...', true);
 
   // Pula współbieżnych pobrań (5 równoległych strumieni)
   const CONCURRENCY = 5;
@@ -898,6 +1018,7 @@ async function installModrinthModpack({ projectId, slug, versionId, profileName,
       const fileUrl = fileObj.downloads?.[0];
       if (!fileUrl) continue;
 
+      const fileName = path.basename(fileObj.path);
       const destPath = path.join(instanceDir, fileObj.path);
       const parentDir = path.dirname(destPath);
       if (!fs.existsSync(parentDir)) {
@@ -909,25 +1030,31 @@ async function installModrinthModpack({ projectId, slug, versionId, profileName,
           headers: { 'User-Agent': 'KasteuszLauncher/1.0.0 (contact@szkolnesmp.com.pl)' }
         });
         if (fileRes.ok) {
-          const buf = Buffer.from(await fileRes.arrayBuffer());
-          fs.writeFileSync(destPath, buf);
+          if (fileRes.body && typeof fileRes.body.getReader === 'function') {
+            const reader = fileRes.body.getReader();
+            const chunks = [];
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              if (value && value.length > 0) {
+                chunks.push(value);
+                totalBytesDownloaded += value.length;
+                emitModProgress(fileName, false);
+              }
+            }
+            fs.writeFileSync(destPath, Buffer.concat(chunks));
+          } else {
+            const buf = Buffer.from(await fileRes.arrayBuffer());
+            totalBytesDownloaded += buf.length;
+            fs.writeFileSync(destPath, buf);
+          }
         }
       } catch (err) {
         console.warn(`[Modpack] Błąd pobierania ${fileObj.path}:`, err.message);
       }
 
-      downloadedCount++;
-      const pct = 30 + Math.round((downloadedCount / Math.max(1, totalFiles)) * 60);
-      if (typeof onProgress === 'function') {
-        onProgress({
-          stage: 'downloading_mods',
-          current: downloadedCount,
-          total: totalFiles,
-          percent: pct,
-          file: path.basename(fileObj.path),
-          message: `Pobieranie: ${path.basename(fileObj.path)} (${downloadedCount}/${totalFiles})`
-        });
-      }
+      completedFiles++;
+      emitModProgress(fileName, true);
     }
   }
 
@@ -936,7 +1063,18 @@ async function installModrinthModpack({ projectId, slug, versionId, profileName,
 
   // 7. Instalacja loadera gry jeśli to Fabric lub Quilt
   if (typeof onProgress === 'function') {
-    onProgress({ stage: 'installing_loader', percent: 92, message: `Konfiguracja silnika ${loader} dla Minecraft ${mcVersion}...` });
+    onProgress({
+      stage: 'installing_loader',
+      percent: 94,
+      message: `Konfiguracja silnika ${loader} dla Minecraft ${mcVersion}...`,
+      currentFile: `${loader}-${mcVersion}`,
+      completedFiles: totalFiles,
+      totalFiles,
+      downloadedBytes: totalModBytes,
+      totalBytes: totalModBytes,
+      speedBytesPerSec: 0,
+      etaSeconds: 0
+    });
   }
 
   try {
@@ -966,13 +1104,24 @@ async function installModrinthModpack({ projectId, slug, versionId, profileName,
   profiles.setActiveProfile(createdProfile.id);
 
   if (typeof onProgress === 'function') {
-    onProgress({ stage: 'completed', percent: 100, message: 'Modpack zainstalowany pomyślnie!' });
+    onProgress({
+      stage: 'completed',
+      percent: 100,
+      message: 'Modpack zainstalowany pomyślnie!',
+      currentFile: 'Gotowe',
+      completedFiles: totalFiles,
+      totalFiles,
+      downloadedBytes: totalModBytes,
+      totalBytes: totalModBytes,
+      speedBytesPerSec: 0,
+      etaSeconds: 0
+    });
   }
 
   return {
     success: true,
     profile: createdProfile,
-    modCount: downloadedCount,
+    modCount: completedFiles,
     name: finalProfileName
   };
 }
