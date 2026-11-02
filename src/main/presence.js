@@ -283,7 +283,7 @@ async function broadcastAnnouncement(message) {
   await fetch(`https://ntfy.sh/${ANNOUNCEMENT_TOPIC}`, {
     method: 'POST',
     headers: {
-      'Title': '👑 Ogłoszenie Właściciela Kasteusza',
+      'Title': 'Ogloszenie Wlasciciela Kasteusza',
       'Priority': 'urgent',
       'Tags': 'crown,loudspeaker'
     },
