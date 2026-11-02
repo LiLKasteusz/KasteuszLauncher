@@ -68,11 +68,12 @@ function getDetailedSystemSpecs() {
 
   const gpuInfo = detectGpu();
 
-  let javaPath = config.getConfig()?.javaPath || 'java';
+  let javaPath = 'java';
   let javaVersion = '21.0.6 (Temurin LTS)';
   try {
-    const javaBin = launcher.resolveJavaExecutable ? launcher.resolveJavaExecutable() : 'java';
-    const jOut = execSync(`"${javaBin}" -version 2>&1`, { encoding: 'utf8' });
+    const javaManager = require('./javaManager');
+    const javaBin = javaManager.resolveConsoleJava ? javaManager.resolveConsoleJava(21) : (launcher.resolveJavaExecutable ? launcher.resolveJavaExecutable() : 'java');
+    const jOut = execSync(`"${javaBin}" -version 2>&1`, { timeout: 3000, encoding: 'utf8' });
     const match = jOut.match(/(?:version|openjdk)\s+"?([0-9._]+)/i);
     if (match) javaVersion = match[1];
     javaPath = javaBin;

@@ -17,22 +17,13 @@ function ensureDirectories() {
 }
 
 function detectDefaultJava() {
-  const commonPaths = [
-    '/usr/bin/java',
-    '/usr/lib/jvm/default/bin/java',
-    '/usr/lib/jvm/java-21-openjdk/bin/java',
-    '/usr/lib/jvm/java-17-openjdk/bin/java',
-    'java'
-  ];
-  for (const p of commonPaths) {
-    if (fs.existsSync(p)) return p;
-  }
-  return 'java';
+  // Pusty ciąg znaków oznacza automatyczne wykrywanie i dopasowywanie przez JavaManager
+  return '';
 }
 
 const DEFAULT_CONFIG = {
   selectedVersion: '1.21.4',
-  javaPath: detectDefaultJava(),
+  javaPath: '',
   memoryMin: 2,
   memoryMax: 4,
   gameDirectory: DEFAULT_GAME_DIR,
@@ -44,6 +35,7 @@ const DEFAULT_CONFIG = {
   fpsBoostMode: true,
   fpsPreset: 'ultra',
   optimizeGameOptions: true,
+  launcherStyle: 'style1',
   themeAccent: 'purple',
   selectedCape: 'none',
   ambientGlow: true,
@@ -73,6 +65,16 @@ function getConfig() {
   try {
     if (fs.existsSync(CONFIG_FILE)) {
       const data = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+      // Jeśli w konfiguracji zapisano przestarzałą generyczną nazwę lub nieistniejącą ścieżkę, zresetuj do auto-detect
+      if (
+        data.javaPath === 'java.exe' ||
+        data.javaPath === 'javaw.exe' ||
+        data.javaPath === 'java' ||
+        data.javaPath === '/usr/bin/java' ||
+        (data.javaPath && !fs.existsSync(data.javaPath))
+      ) {
+        data.javaPath = '';
+      }
       return { ...DEFAULT_CONFIG, ...data };
     }
   } catch (err) {

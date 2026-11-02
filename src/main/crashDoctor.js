@@ -241,7 +241,19 @@ async function diagnose(profileId = 'active', consoleText = null) {
     }
   }
 
-  if (/Incompatible mods found!|net\.fabricmc\.loader\.impl\.FormattedException/i.test(combinedText)) {
+  if (/Incompatible mods found!|net\.fabricmc\.loader\.impl\.FormattedException|Some of your mods are incompatible/i.test(combinedText)) {
+    const currentMcVer = activeProfile?.mcVersion || '1.21.11';
+    
+    // 1. Sprawdź zalecenia zamiany / aktualizacji wersji
+    const replaceMatches = [...combinedText.matchAll(/Replace mod '(?<name>[^']+)' \((?<id>[^)]+)\) (?<oldVer>[^\s]+) with version (?<targetVer>[^\s]+) or later/gi)];
+    
+    // 2. Sprawdź błędy złej wersji gry Minecraft
+    const wrongMcMatches = [...combinedText.matchAll(/Mod '(?<name>[^']+)' \((?<id>[^)]+)\) (?<ver>[^\s]+) requires (?<req>.+?) of 'Minecraft' \(minecraft\), but only the wrong version is present: (?<wrongVer>[^!\r\n]+)/gi)];
+
+    // 3. Sprawdź konflikty wersji między modami
+    const conflictMatches = [...combinedText.matchAll(/Mod '(?<modA>[^']+)' \((?<idA>[^)]+)\) (?<verA>[^\s]+) is incompatible with any version before (?<reqVer>[^\s]+) of mod '(?<modB>[^']+)' \((?<idB>[^)]+)\), yet a conflicting version is present: (?<badVer>[^!\r\n]+)/gi)];
+
+    // 4. Sprawdź brakujące biblioteki
     const missingMods = new Set();
     const solutionMatches = combinedText.matchAll(/-\s*Install\s+([a-zA-Z0-9_\-]+)/gi);
     for (const m of solutionMatches) {
@@ -256,24 +268,99 @@ async function diagnose(profileId = 'active', consoleText = null) {
       if (name) missingMods.add(name);
     }
 
-    if (missingMods.size > 0) {
-      const missingList = [...missingMods];
+    if (replaceMatches.length > 0 || wrongMcMatches.length > 0 || conflictMatches.length > 0 || missingMods.size > 0) {
       diagnosis.hasCrash = true;
-      diagnosis.errorType = 'MISSING_DEPENDENCIES';
       diagnosis.severity = 'critical';
-      diagnosis.title = `Brakujące biblioteki Fabric (${missingList.length} modów)`;
-      diagnosis.summary = `Fabric Loader zatrzymał start gry, ponieważ Twoje mody wymagają dodatkowych bibliotek: ${missingList.join(', ')}.`;
-      diagnosis.solution = `Zainstaluj brakujące biblioteki (${missingList.join(', ')}) jednym kliknięciem.`;
 
-      diagnosis.suggestedActions.unshift({
-        id: 'install_missing_dependencies',
-        label: `Zainstaluj brakujące biblioteki (${missingList.join(', ')})`,
-        type: 'primary',
-        payload: {
-          missingMods: missingList,
-          mcVersion: activeProfile?.mcVersion || '1.21.11'
+      const reasons = [];
+      let isFabricApiIssue = false;
+
+      for (const rm of replaceMatches) {
+        const { name, id, oldVer, targetVer } = rm.groups;
+        if (id === 'fabric-api' || id === 'fabric') isFabricApiIssue = true;
+        reasons.push(`Mod '${name}' (${oldVer}) wymaga aktualizacji do wersji ${targetVer}+ dla Minecraft ${currentMcVer}.`);
+      }
+
+      for (const wm of wrongMcMatches) {
+        const { name, id, ver, wrongVer } = wm.groups;
+        if (id === 'fabric-api' || id === 'fabric') isFabricApiIssue = true;
+        reasons.push(`Mod '${name}' (${ver}) nie jest zgodny z uruchamianą wersją Minecrafta (${wrongVer.trim()}).`);
+      }
+
+      for (const cm of conflictMatches) {
+        const { modA, modB, reqVer, badVer, idB } = cm.groups;
+        if (idB === 'fabric-api' || idB === 'fabric') isFabricApiIssue = true;
+        reasons.push(`Mod '${modA}' wymaga nowszej wersji biblioteki '${modB}' (${reqVer}+), a zainstalowano starszą (${badVer}).`);
+      }
+
+      for (const miss of missingMods) {
+        reasons.push(`Brakująca biblioteka: '${miss}'.`);
+      }
+
+      if (isFabricApiIssue) {
+        diagnosis.errorType = 'FABRIC_API_MISMATCH';
+        diagnosis.title = `Niekompatybilny Fabric API dla wersji ${currentMcVer}`;
+        diagnosis.summary = `Fabric Loader zatrzymał grę z powodu konfliktu biblioteki Fabric API z wersją Minecrafta lub modyfikacjami (np. Sodium):\n• ` + reasons.join('\n• ');
+        diagnosis.solution = `Zaktualizuj Fabric API do oficjalnej wersji dla Minecraft ${currentMcVer} (1-Click).`;
+
+        const culpritFile = findModFileByModId(instanceDir, 'fabric-api') || findModFileByModId(instanceDir, 'fabric');
+        diagnosis.culpritMod = 'fabric-api';
+        diagnosis.culpritFile = culpritFile;
+
+        diagnosis.suggestedActions.unshift({
+          id: 'fix_fabric_api',
+          label: `Zaktualizuj Fabric API dla ${currentMcVer} (1-Click)`,
+          type: 'primary',
+          payload: { mcVersion: currentMcVer }
+        });
+
+        if (culpritFile) {
+          diagnosis.suggestedActions.push({
+            id: 'disable_mod',
+            label: `Wyłącz zły plik (${culpritFile})`,
+            type: 'danger',
+            payload: { filename: culpritFile }
+          });
         }
-      });
+      } else {
+        diagnosis.errorType = 'INCOMPATIBLE_MODS';
+        diagnosis.title = 'Niekompatybilne modyfikacje Fabric';
+        diagnosis.summary = `Fabric Loader zatrzymał start gry z powodu niekompatybilnych wersji:
+• ` + reasons.join('\n• ');
+        diagnosis.solution = `Zaktualizuj lub wyłącz niekompatybilne modyfikacje, aby uruchomić Minecraft ${currentMcVer}.`;
+
+        for (const rm of replaceMatches) {
+          const { id, name } = rm.groups;
+          const culpritFile = findModFileByModId(instanceDir, id);
+          diagnosis.suggestedActions.unshift({
+            id: 'fix_mod_version',
+            label: `Pobierz właściwą wersję ${name} dla ${currentMcVer}`,
+            type: 'primary',
+            payload: { modId: id, mcVersion: currentMcVer }
+          });
+          if (culpritFile) {
+            diagnosis.suggestedActions.push({
+              id: 'disable_mod',
+              label: `Wyłącz ${culpritFile}`,
+              type: 'danger',
+              payload: { filename: culpritFile }
+            });
+          }
+        }
+      }
+
+      if (missingMods.size > 0) {
+        const missingList = [...missingMods];
+        diagnosis.suggestedActions.push({
+          id: 'install_missing_dependencies',
+          label: `Zainstaluj brakujące biblioteki (${missingList.join(', ')})`,
+          type: 'primary',
+          payload: {
+            missingMods: missingList,
+            mcVersion: currentMcVer
+          }
+        });
+      }
     }
   }
 
@@ -476,6 +563,63 @@ async function executeFix(actionId, payload = {}) {
         };
       }
 
+      case 'fix_fabric_api':
+      case 'install_fabric_api': {
+        const mcVer = payload.mcVersion || '1.21.11';
+        const modsDir = path.join(instanceDir, 'mods');
+        if (!fs.existsSync(modsDir)) fs.mkdirSync(modsDir, { recursive: true });
+
+        const files = fs.readdirSync(modsDir);
+        for (const f of files) {
+          const flow = f.toLowerCase();
+          if ((flow.startsWith('fabric-api') || flow.includes('fabric_api') || flow.includes('fabricapi')) && (f.endsWith('.jar') || f.endsWith('.jar.disabled'))) {
+            try { fs.unlinkSync(path.join(modsDir, f)); } catch (_) {}
+          }
+        }
+
+        const dlRes = await mods.installModrinthMod({
+          slug: 'fabric-api',
+          gameVersion: mcVer,
+          loader: 'fabric'
+        });
+
+        return {
+          success: true,
+          message: `Pomyślnie zaktualizowano Fabric API do wersji dla Minecraft ${mcVer} (${dlRes.filename})!`,
+          details: dlRes
+        };
+      }
+
+      case 'fix_mod_version': {
+        const modId = payload.modId;
+        const mcVer = payload.mcVersion || '1.21.11';
+        if (!modId) throw new Error('Brak identyfikatora modyfikacji.');
+        const modsDir = path.join(instanceDir, 'mods');
+
+        if (fs.existsSync(modsDir)) {
+          const files = fs.readdirSync(modsDir);
+          const cleanId = modId.toLowerCase().replace(/[^a-z0-9]/g, '');
+          for (const f of files) {
+            const cleanF = f.toLowerCase().replace(/[^a-z0-9]/g, '');
+            if (cleanF.includes(cleanId) && (f.endsWith('.jar') || f.endsWith('.jar.disabled'))) {
+              try { fs.unlinkSync(path.join(modsDir, f)); } catch (_) {}
+            }
+          }
+        }
+
+        const dlRes = await mods.installModrinthMod({
+          slug: modId,
+          gameVersion: mcVer,
+          loader: 'fabric'
+        });
+
+        return {
+          success: true,
+          message: `Pomyślnie zaktualizowano mod "${modId}" do wersji dla Minecraft ${mcVer} (${dlRes.filename})!`,
+          details: dlRes
+        };
+      }
+
       case 'disable_duplicates': {
         const files = payload.files || [];
         let disabledCount = 0;
@@ -505,29 +649,26 @@ async function executeFix(actionId, payload = {}) {
       }
 
       case 'switch_java_21': {
-        const candidates = [
-          path.join(os.homedir(), '.jdks', 'jdk-21.0.6+7', 'bin', 'java'),
-          '/usr/lib/jvm/java-21-openjdk-amd64/bin/java'
-        ];
-        let foundJava = null;
-        for (const c of candidates) {
-          if (fs.existsSync(c)) {
-            foundJava = c;
-            break;
+        try {
+          const javaManager = require('./javaManager');
+          const foundJava = await javaManager.ensureJava(21);
+          if (foundJava) {
+            config.saveConfig({ javaPath: foundJava });
+            return {
+              success: true,
+              message: `Pomyślnie ustawiono Java 21 LTS (${foundJava}) jako domyślne środowisko!`
+            };
           }
-        }
-        if (foundJava) {
-          config.saveConfig({ javaPath: foundJava });
-          return {
-            success: true,
-            message: `Ustawiono Java 21 LTS (${foundJava}) jako domyślne środowisko!`
-          };
-        } else {
+        } catch (jErr) {
           return {
             success: false,
-            error: 'Nie znaleziono automatycznie pliku Java 21. Wybierz go ręcznie w Ustawieniach.'
+            error: `Błąd podczas instalacji/wykrywania Java 21: ${jErr.message}`
           };
         }
+        return {
+          success: false,
+          error: 'Nie znaleziono ani nie udało się pobrać Java 21. Wybierz plik ręcznie w Ustawieniach.'
+        };
       }
 
       case 'disable_shaders': {

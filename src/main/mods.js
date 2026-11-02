@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { shell, dialog } = require('electron');
 const config = require('./config');
 const profiles = require('./profiles');
@@ -450,7 +451,9 @@ async function installForge(minecraftVersion = '1.20.1', requestedForgeVersion =
   }
 
   const launcher = require('./launcher');
-  const javaExec = launcher.resolveJavaExecutable ? launcher.resolveJavaExecutable() : 'java';
+  const javaManager = require('./javaManager');
+  const reqMajor = javaManager.getRequiredJavaMajor(minecraftVersion);
+  const javaExec = javaManager.resolveConsoleJava ? javaManager.resolveConsoleJava(reqMajor) : (launcher.resolveJavaExecutable ? launcher.resolveJavaExecutable() : 'java');
 
   await new Promise((resolve, reject) => {
     const cp = require('child_process').spawn(javaExec, ['-jar', tempInstallerJar, '--installClient', rootDir], {
@@ -632,13 +635,9 @@ function getCandidateMcVersions(rawVersion) {
   const clean = String(rawVersion || '1.21.11').replace(/^(fabric|quilt)-/, '').trim();
   const candidates = [clean];
   const parts = clean.split('.');
-  if (parts.length >= 2) {
-    const majorMinor = `${parts[0]}.${parts[1]}`;
-    if (!candidates.includes(majorMinor)) candidates.push(majorMinor);
-    if (parts.length === 3 && parseInt(parts[2], 10) > 1) {
-      const dotOne = `${parts[0]}.${parts[1]}.1`;
-      if (!candidates.includes(dotOne)) candidates.push(dotOne);
-    }
+  // Only add major.minor if the version explicitly ends in .0 (e.g. 1.21.0 -> 1.21)
+  if (parts.length === 3 && parts[2] === '0') {
+    candidates.push(`${parts[0]}.${parts[1]}`);
   }
   return candidates;
 }
@@ -661,6 +660,10 @@ async function searchModrinth({
       facets.push(['project_type:modpack']);
     } else if (projectType === 'mod') {
       facets.push(['project_type:mod']);
+    } else if (projectType === 'shader' || projectType === 'shaderpacks') {
+      facets.push(['project_type:shader']);
+    } else if (projectType === 'resourcepack' || projectType === 'resourcepacks') {
+      facets.push(['project_type:resourcepack']);
     } else {
       facets.push(['project_type:mod', 'project_type:modpack']);
     }
@@ -725,54 +728,113 @@ async function getModrinthProjectVersions(idOrSlug) {
   }
 }
 
-async function installModrinthMod({ projectId, slug, gameVersion = '1.21.11', loader = 'fabric' }) {
+async function installModrinthMod({ projectId, slug, gameVersion = '1.21.11', loader = 'fabric', versionId = null }) {
   const modsDir = getModsDirectory();
   const idOrSlug = slug || projectId;
-  const candidates = getCandidateMcVersions(gameVersion);
 
-  let versions = [];
+  let targetVersion = null;
+
+  if (versionId) {
+    try {
+      const res = await fetch(`https://api.modrinth.com/v2/version/${versionId}`, {
+        headers: { 'User-Agent': 'KasteuszLauncher/1.0.0 (contact@szkolnesmp.com.pl)' }
+      });
+      if (res.ok) {
+        targetVersion = await res.json();
+      }
+    } catch (e) {
+      console.warn(`Błąd pobierania wersji po id ${versionId}:`, e.message);
+    }
+  }
+
+  const cleanVer = String(gameVersion || '1.21.11').replace(/^(fabric|quilt)-/, '').trim();
   const loadersToTry = loader === 'quilt' ? ['quilt', 'fabric'] : [loader || 'fabric'];
 
-  try {
-    const res = await fetch(
-      `https://api.modrinth.com/v2/project/${idOrSlug}/version?loaders=${encodeURIComponent(JSON.stringify(loadersToTry))}&game_versions=${encodeURIComponent(JSON.stringify(candidates))}`,
-      { headers: { 'User-Agent': 'KasteuszLauncher/1.0.0 (contact@szkolnesmp.com.pl)' } }
-    );
-    if (res.ok) {
-      versions = await res.json();
+  if (!targetVersion) {
+    // 1. Najpierw szukaj wersji dokładnie dopasowanej do wersji gry i silnika
+    try {
+      const res = await fetch(
+        `https://api.modrinth.com/v2/project/${idOrSlug}/version?loaders=${encodeURIComponent(JSON.stringify(loadersToTry))}&game_versions=${encodeURIComponent(JSON.stringify([cleanVer]))}`,
+        { headers: { 'User-Agent': 'KasteuszLauncher/2.5.0 (contact@szkolnesmp.com.pl)' } }
+      );
+      if (res.ok) {
+        const exactVersions = await res.json();
+        if (Array.isArray(exactVersions) && exactVersions.length > 0) {
+          targetVersion = exactVersions.find(v => v.version_type === 'release') || exactVersions[0];
+        }
+      }
+    } catch (err) {
+      console.warn(`Błąd wyszukiwania wersji pod ${cleanVer}:`, err.message);
     }
-  } catch (err) {
-    console.warn(`Nie znaleziono wersji pod ${candidates.join(',')}, szukam ogólnej...`, err);
-  }
 
-  if (!versions || versions.length === 0) {
-    const res = await fetch(
-      `https://api.modrinth.com/v2/project/${idOrSlug}/version?loaders=${encodeURIComponent(JSON.stringify(loadersToTry))}`,
-      { headers: { 'User-Agent': 'KasteuszLauncher/1.0.0 (contact@szkolnesmp.com.pl)' } }
-    );
-    if (res.ok) {
-      versions = await res.json();
+    // 2. Jeśli wersja kończy się na .0 (np. 1.21.0), sprawdź też wersję nadrzędną 1.21
+    if (!targetVersion) {
+      const parts = cleanVer.split('.');
+      if (parts.length === 3 && parts[2] === '0') {
+        const mm = `${parts[0]}.${parts[1]}`;
+        try {
+          const res = await fetch(
+            `https://api.modrinth.com/v2/project/${idOrSlug}/version?loaders=${encodeURIComponent(JSON.stringify(loadersToTry))}&game_versions=${encodeURIComponent(JSON.stringify([mm]))}`,
+            { headers: { 'User-Agent': 'KasteuszLauncher/2.5.0 (contact@szkolnesmp.com.pl)' } }
+          );
+          if (res.ok) {
+            const mmVersions = await res.json();
+            if (Array.isArray(mmVersions) && mmVersions.length > 0) {
+              targetVersion = mmVersions.find(v => v.version_type === 'release') || mmVersions[0];
+            }
+          }
+        } catch (_) {}
+      }
+    }
+
+    // 3. Sprawdź, czy któraś z wersji loadera zawiera cleanVer w game_versions
+    if (!targetVersion) {
+      try {
+        const res = await fetch(
+          `https://api.modrinth.com/v2/project/${idOrSlug}/version?loaders=${encodeURIComponent(JSON.stringify(loadersToTry))}`,
+          { headers: { 'User-Agent': 'KasteuszLauncher/2.5.0 (contact@szkolnesmp.com.pl)' } }
+        );
+        if (res.ok) {
+          const allVersions = await res.json();
+          if (Array.isArray(allVersions)) {
+            const matching = allVersions.find(v => Array.isArray(v.game_versions) && v.game_versions.includes(cleanVer));
+            if (matching) targetVersion = matching;
+          }
+        }
+      } catch (_) {}
+    }
+
+    // 4. Jeśli brak wersji kompatybilnej — NIGDY nie pobieraj losowej wersji z innego Minecrafta!
+    if (!targetVersion) {
+      throw new Error(`Mod "${idOrSlug}" nie posiada wersji kompatybilnej z Minecraft ${cleanVer} dla silnika ${loader}. Wybierz wersję ręcznie w szczegółach lub zmień wersję profilu.`);
     }
   }
-
-  if (!versions || versions.length === 0) {
-    const res = await fetch(
-      `https://api.modrinth.com/v2/project/${idOrSlug}/version`,
-      { headers: { 'User-Agent': 'KasteuszLauncher/1.0.0 (contact@szkolnesmp.com.pl)' } }
-    );
-    if (res.ok) {
-      versions = await res.json();
-    }
-  }
-
-  if (!versions || versions.length === 0) {
-    throw new Error(`Nie znaleziono wersji moda ${idOrSlug} do pobrania.`);
-  }
-
-  const targetVersion = versions[0];
   const primaryFile = (targetVersion.files && targetVersion.files.find(f => f.primary)) || targetVersion.files?.[0];
   if (!primaryFile || !primaryFile.url) {
     throw new Error(`Brak pliku do pobrania dla moda ${idOrSlug}.`);
+  }
+
+  // Usuń starsze / niekompatybilne wersje tego samego moda przed zapisem nowego
+  const modSlug = String(slug || idOrSlug || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const filePrefix = primaryFile.filename.split(/[-_]\d+/)[0]?.toLowerCase();
+
+  if (fs.existsSync(modsDir)) {
+    const existing = fs.readdirSync(modsDir);
+    for (const f of existing) {
+      if ((f.endsWith('.jar') || f.endsWith('.jar.disabled')) && f !== primaryFile.filename) {
+        const flow = f.toLowerCase();
+        const matchesSlug = modSlug && modSlug.length >= 3 && flow.replace(/[^a-z0-9]/g, '').startsWith(modSlug);
+        const matchesPrefix = filePrefix && filePrefix.length >= 3 && flow.startsWith(filePrefix);
+        if (matchesSlug || matchesPrefix) {
+          try {
+            fs.unlinkSync(path.join(modsDir, f));
+            console.log(`[Mods] Usunięto starszą wersję moda "${f}" przed instalacją nowej`);
+          } catch (unErr) {
+            console.warn(`[Mods] Błąd usuwania starej wersji ${f}:`, unErr.message);
+          }
+        }
+      }
+    }
   }
 
   const destPath = path.join(modsDir, primaryFile.filename);
@@ -784,35 +846,86 @@ async function installModrinthMod({ projectId, slug, gameVersion = '1.21.11', lo
   const installedDependencies = [];
   if (Array.isArray(targetVersion.dependencies)) {
     for (const dep of targetVersion.dependencies) {
-      if (dep.dependency_type === 'required' && dep.version_id) {
-        try {
-          const depVerRes = await fetch(`https://api.modrinth.com/v2/version/${dep.version_id}`, {
-            headers: { 'User-Agent': 'KasteuszLauncher/1.0.0 (contact@szkolnesmp.com.pl)' }
-          });
-          if (depVerRes.ok) {
-            const depVer = await depVerRes.json();
-            const depFile = (depVer.files && depVer.files.find(f => f.primary)) || depVer.files?.[0];
-            if (depFile) {
-              const depDest = path.join(modsDir, depFile.filename);
-              if (!fs.existsSync(depDest)) {
-                const depBufRes = await fetch(depFile.url);
-                if (depBufRes.ok) {
-                  const depBuf = await depBufRes.arrayBuffer();
-                  fs.writeFileSync(depDest, Buffer.from(depBuf));
-                  installedDependencies.push(depFile.filename);
+      if (dep.dependency_type === 'required') {
+        const depProjId = dep.project_id;
+        if (depProjId) {
+          try {
+            const depRes = await fetch(
+              `https://api.modrinth.com/v2/project/${depProjId}/version?loaders=${encodeURIComponent(JSON.stringify(loadersToTry))}&game_versions=${encodeURIComponent(JSON.stringify([cleanVer]))}`,
+              { headers: { 'User-Agent': 'KasteuszLauncher/2.5.0 (contact@szkolnesmp.com.pl)' } }
+            );
+            if (depRes.ok) {
+              const depVersions = await depRes.json();
+              if (Array.isArray(depVersions) && depVersions.length > 0) {
+                const depTarget = depVersions.find(v => v.version_type === 'release') || depVersions[0];
+                const depFile = (depTarget.files && depTarget.files.find(f => f.primary)) || depTarget.files?.[0];
+                if (depFile && depFile.url) {
+                  const depDest = path.join(modsDir, depFile.filename);
+                  if (!fs.existsSync(depDest)) {
+                    const depPrefix = depFile.filename.split(/[-_]\d+/)[0]?.toLowerCase();
+                    if (depPrefix && depPrefix.length >= 3) {
+                      for (const f of fs.readdirSync(modsDir)) {
+                        if ((f.endsWith('.jar') || f.endsWith('.jar.disabled')) && f !== depFile.filename && f.toLowerCase().startsWith(depPrefix)) {
+                          try { fs.unlinkSync(path.join(modsDir, f)); } catch (_) {}
+                        }
+                      }
+                    }
+                    const depBufRes = await fetch(depFile.url);
+                    if (depBufRes.ok) {
+                      fs.writeFileSync(depDest, Buffer.from(await depBufRes.arrayBuffer()));
+                      installedDependencies.push(depFile.filename);
+                    }
+                  }
                 }
               }
             }
+          } catch (depErr) {
+            console.warn(`[Mods] Błąd pobierania zależności ${depProjId}:`, depErr.message);
           }
-        } catch (depErr) {
-          console.warn('Nie udało się pobrać zależności:', dep, depErr);
+        } else if (dep.version_id) {
+          try {
+            const depVerRes = await fetch(`https://api.modrinth.com/v2/version/${dep.version_id}`, {
+              headers: { 'User-Agent': 'KasteuszLauncher/2.5.0 (contact@szkolnesmp.com.pl)' }
+            });
+            if (depVerRes.ok) {
+              const depVer = await depVerRes.json();
+              let chosenDepVer = depVer;
+              if (depVer.project_id && (!depVer.game_versions || !depVer.game_versions.includes(cleanVer))) {
+                try {
+                  const cleanDepRes = await fetch(
+                    `https://api.modrinth.com/v2/project/${depVer.project_id}/version?loaders=${encodeURIComponent(JSON.stringify(loadersToTry))}&game_versions=${encodeURIComponent(JSON.stringify([cleanVer]))}`,
+                    { headers: { 'User-Agent': 'KasteuszLauncher/2.5.0 (contact@szkolnesmp.com.pl)' } }
+                  );
+                  if (cleanDepRes.ok) {
+                    const cleanList = await cleanDepRes.json();
+                    if (Array.isArray(cleanList) && cleanList.length > 0) {
+                      chosenDepVer = cleanList.find(v => v.version_type === 'release') || cleanList[0];
+                    }
+                  }
+                } catch (_) {}
+              }
+
+              const depFile = (chosenDepVer.files && chosenDepVer.files.find(f => f.primary)) || chosenDepVer.files?.[0];
+              if (depFile && depFile.url) {
+                const depDest = path.join(modsDir, depFile.filename);
+                if (!fs.existsSync(depDest)) {
+                  const depBufRes = await fetch(depFile.url);
+                  if (depBufRes.ok) {
+                    fs.writeFileSync(depDest, Buffer.from(await depBufRes.arrayBuffer()));
+                    installedDependencies.push(depFile.filename);
+                  }
+                }
+              }
+            }
+          } catch (depErr) {
+            console.warn('Nie udało się pobrać zależności po version_id:', depErr.message);
+          }
         }
       }
     }
   }
 
   try {
-    const cleanVer = candidates[0] || '1.21.11';
     if (loader === 'quilt') {
       await installQuilt(cleanVer);
     } else {
@@ -821,6 +934,8 @@ async function installModrinthMod({ projectId, slug, gameVersion = '1.21.11', lo
   } catch (fErr) {
     console.warn('Loader check warning:', fErr.message);
   }
+
+  archiveMetaCache.clear();
 
   return {
     success: true,
@@ -945,6 +1060,24 @@ async function installModrinthModpack({ projectId, slug, versionId, profileName,
     mrpackBuf = Buffer.from(await mrpackRes.arrayBuffer());
   }
 
+  return await installMrpackFromBuffer(mrpackBuf, {
+    profileName,
+    fallbackName: idOrSlug,
+    targetVersion,
+    mrpackDownloadedBytes,
+    mrpackTotalSize,
+    onProgress
+  });
+}
+
+async function installMrpackFromBuffer(mrpackBuf, {
+  profileName = null,
+  fallbackName = 'Paczka Modów',
+  targetVersion = null,
+  mrpackDownloadedBytes = 0,
+  mrpackTotalSize = 0,
+  onProgress = null
+} = {}) {
   if (!AdmZip) {
     throw new Error('Biblioteka archiwów (AdmZip) nie jest dostępna.');
   }
@@ -956,10 +1089,18 @@ async function installModrinthModpack({ projectId, slug, versionId, profileName,
   }
 
   const index = JSON.parse(indexEntry.getData().toString('utf8'));
-  const mcVersion = targetVersion.game_versions?.[0] || index.dependencies?.minecraft || '1.21.1';
+  let kasteuszMeta = null;
+  const kasteuszEntry = zip.getEntry('kasteusz.profile.json');
+  if (kasteuszEntry) {
+    try {
+      kasteuszMeta = JSON.parse(kasteuszEntry.getData().toString('utf8'));
+    } catch (_) {}
+  }
 
-  let loader = 'fabric';
-  let forgeVersion = null;
+  const mcVersion = targetVersion?.game_versions?.[0] || index.dependencies?.minecraft || kasteuszMeta?.mcVersion || '1.21.1';
+
+  let loader = kasteuszMeta?.loader || 'fabric';
+  let forgeVersion = kasteuszMeta?.forgeVersion || null;
   if (index.dependencies?.['quilt-loader']) {
     loader = 'quilt';
   } else if (index.dependencies?.['fabric-loader']) {
@@ -970,16 +1111,18 @@ async function installModrinthModpack({ projectId, slug, versionId, profileName,
   } else if (index.dependencies?.['neoforge']) {
     loader = 'forge';
     forgeVersion = index.dependencies['neoforge'];
-  } else if (targetVersion.loaders?.includes('forge')) {
+  } else if (targetVersion?.loaders?.includes('forge')) {
     loader = 'forge';
-  } else if (targetVersion.loaders?.includes('neoforge')) {
+  } else if (targetVersion?.loaders?.includes('neoforge')) {
     loader = 'forge';
-  } else if (targetVersion.loaders?.includes('quilt')) {
+  } else if (targetVersion?.loaders?.includes('quilt')) {
     loader = 'quilt';
+  } else if (index.dependencies && Object.keys(index.dependencies).length === 1 && index.dependencies.minecraft && kasteuszMeta?.loader === 'vanilla') {
+    loader = 'vanilla';
   }
 
-  const rawPackTitle = profileName || index.name || targetVersion.name || idOrSlug;
-  const finalProfileName = rawPackTitle.startsWith('[Modpack]') ? rawPackTitle : `[Modpack] ${rawPackTitle}`;
+  const rawPackTitle = profileName || index.name || targetVersion?.name || fallbackName;
+  const finalProfileName = rawPackTitle.startsWith('[Modpack]') || kasteuszMeta ? rawPackTitle : `[Modpack] ${rawPackTitle}`;
   const customVersionId = loader === 'forge' && forgeVersion ? `${mcVersion}-forge-${forgeVersion}` : null;
 
   const profilesResult = profiles.createProfile({
@@ -988,7 +1131,9 @@ async function installModrinthModpack({ projectId, slug, versionId, profileName,
     loader,
     customVersionId,
     forgeVersion,
-    icon: 'crown',
+    memoryMax: kasteuszMeta?.memoryMax || null,
+    jvmPreset: kasteuszMeta?.jvmPreset || null,
+    icon: kasteuszMeta?.icon || 'crown',
     isolated: true
   });
 
@@ -1221,6 +1366,7 @@ function getPacksList(type = 'resourcepacks') {
 
     for (const filename of entries) {
       if (filename.startsWith('.')) continue;
+      if (filename === 'KasteuszOfflineSkin.zip' || filename === 'KasteuszClient-Menu.zip') continue;
       const fullPath = path.join(dir, filename);
       let stats;
       try {
@@ -1341,6 +1487,462 @@ function openPacksFolder(type = 'resourcepacks') {
   return dir;
 }
 
+async function installModrinthPack({
+  projectId,
+  slug,
+  packType = 'shaderpacks',
+  gameVersion = '1.21.11',
+  loader = 'fabric'
+} = {}) {
+  const normalizedType = packType === 'shaderpacks' ? 'shaderpacks' : 'resourcepacks';
+  const targetDir = getPacksDirectory(normalizedType);
+  const idOrSlug = slug || projectId;
+  if (!idOrSlug) throw new Error('Brak identyfikatora paczki na Modrinth.');
+
+  const candidates = getCandidateMcVersions(gameVersion);
+  const ua = { 'User-Agent': 'KasteuszLauncher/2.5.0 (https://szkolnesmp.com.pl)' };
+
+  let versions = [];
+  try {
+    const res = await fetch(
+      `https://api.modrinth.com/v2/project/${encodeURIComponent(idOrSlug)}/version?game_versions=${encodeURIComponent(JSON.stringify(candidates))}`,
+      { headers: ua }
+    );
+    if (res.ok) versions = await res.json();
+  } catch (_) {}
+
+  if (!Array.isArray(versions) || versions.length === 0) {
+    const res = await fetch(
+      `https://api.modrinth.com/v2/project/${encodeURIComponent(idOrSlug)}/version`,
+      { headers: ua }
+    );
+    if (res.ok) versions = await res.json();
+  }
+
+  if (!Array.isArray(versions) || versions.length === 0) {
+    throw new Error(`Brak plików do pobrania dla ${idOrSlug}.`);
+  }
+
+  const chosen = versions[0];
+  const file = (chosen.files && chosen.files.find(f => f.primary)) || chosen.files?.[0];
+  if (!file || !file.url) {
+    throw new Error(`Nie znaleziono archiwum .zip dla ${idOrSlug}.`);
+  }
+
+  const destPath = path.join(targetDir, file.filename);
+  const dlRes = await fetch(file.url, { headers: ua });
+  if (!dlRes.ok) {
+    throw new Error(`Błąd pobierania paczki (${dlRes.status}).`);
+  }
+  const buf = Buffer.from(await dlRes.arrayBuffer());
+  fs.writeFileSync(destPath, buf);
+
+  const instanceDir = profiles.getActiveInstanceDirectory();
+  const autoInstalledMods = [];
+
+  if (normalizedType === 'shaderpacks') {
+    // Auto-set active shader in iris.properties so user sees it right away
+    try {
+      const cfgDir = path.join(instanceDir, 'config');
+      fs.mkdirSync(cfgDir, { recursive: true });
+      const irisPropPath = path.join(cfgDir, 'iris.properties');
+      let lines = fs.existsSync(irisPropPath) ? fs.readFileSync(irisPropPath, 'utf8').split('\n') : [];
+      const setProp = (k, v) => {
+        const idx = lines.findIndex(l => l.startsWith(`${k}=`));
+        if (idx >= 0) lines[idx] = `${k}=${v}`;
+        else lines.push(`${k}=${v}`);
+      };
+      setProp('shaderPack', file.filename);
+      setProp('enableShaders', 'true');
+      fs.writeFileSync(irisPropPath, lines.filter(Boolean).join('\n') + '\n', 'utf8');
+    } catch (_) {}
+
+    // Ensure Iris & Sodium are installed if profile uses Fabric or Quilt
+    if (loader === 'fabric' || loader === 'quilt') {
+      const modsDir = getModsDirectory();
+      const existingLower = fs.existsSync(modsDir)
+        ? fs.readdirSync(modsDir).map(f => f.toLowerCase())
+        : [];
+      const hasIris = existingLower.some(f => f.includes('iris') && f.endsWith('.jar'));
+      const hasSodium = existingLower.some(f => f.includes('sodium') && f.endsWith('.jar'));
+
+      if (!hasSodium) {
+        try {
+          const sRes = await installModrinthMod({ slug: 'sodium', gameVersion, loader });
+          if (sRes?.filename) autoInstalledMods.push('Sodium');
+        } catch (_) {}
+      }
+      if (!hasIris) {
+        try {
+          const iRes = await installModrinthMod({ slug: 'iris', gameVersion, loader });
+          if (iRes?.filename) autoInstalledMods.push('Iris Shaders');
+        } catch (_) {}
+      }
+    }
+  } else {
+    // Enable downloaded resourcepack in options.txt automatically
+    try {
+      const optionsPath = path.join(instanceDir, 'options.txt');
+      const entryName = `file/${file.filename}`;
+      let lines = fs.existsSync(optionsPath) ? fs.readFileSync(optionsPath, 'utf8').split('\n') : [];
+      const rpIdx = lines.findIndex(l => l.startsWith('resourcePacks:'));
+      if (rpIdx >= 0) {
+        let list = [];
+        try { list = JSON.parse(lines[rpIdx].replace(/^resourcePacks:/, '').trim()); } catch (_) { list = ['vanilla']; }
+        if (!Array.isArray(list)) list = ['vanilla'];
+        if (!list.includes(entryName)) {
+          list.push(entryName);
+          lines[rpIdx] = `resourcePacks:${JSON.stringify(list)}`;
+          fs.writeFileSync(optionsPath, lines.filter(Boolean).join('\n') + '\n', 'utf8');
+        }
+      } else {
+        lines.push(`resourcePacks:["vanilla",${JSON.stringify(entryName)}]`);
+        fs.writeFileSync(optionsPath, lines.filter(Boolean).join('\n') + '\n', 'utf8');
+      }
+    } catch (_) {}
+  }
+
+  return {
+    success: true,
+    filename: file.filename,
+    versionNumber: chosen.version_number,
+    autoInstalledMods,
+    packs: getPacksList(normalizedType)
+  };
+}
+
+async function updateInstalledMods({ gameVersion = '1.21.11', loader = 'fabric' } = {}) {
+  const modsDir = getModsDirectory();
+  if (!fs.existsSync(modsDir)) {
+    return { checkedCount: 0, updatedCount: 0, updatedMods: [], mods: [] };
+  }
+
+  const entries = fs.readdirSync(modsDir).filter(f => f.endsWith('.jar') || f.endsWith('.jar.disabled'));
+  if (entries.length === 0) {
+    return { checkedCount: 0, updatedCount: 0, updatedMods: [], mods: getInstalledMods() };
+  }
+
+  const hashToLocal = new Map();
+  for (const filename of entries) {
+    const fullPath = path.join(modsDir, filename);
+    try {
+      const stat = fs.statSync(fullPath);
+      if (stat.isDirectory()) continue;
+      const buf = fs.readFileSync(fullPath);
+      const sha1 = crypto.createHash('sha1').update(buf).digest('hex');
+      hashToLocal.set(sha1, {
+        filename,
+        fullPath,
+        disabled: filename.endsWith('.disabled')
+      });
+    } catch (_) {}
+  }
+
+  const hashes = Array.from(hashToLocal.keys());
+  if (hashes.length === 0) {
+    return { checkedCount: 0, updatedCount: 0, updatedMods: [], mods: getInstalledMods() };
+  }
+
+  const loaders = loader === 'quilt' ? ['quilt', 'fabric'] : [loader || 'fabric'];
+  const candidates = getCandidateMcVersions(gameVersion);
+  const ua = {
+    'User-Agent': 'KasteuszLauncher/2.5.0 (https://szkolnesmp.com.pl)',
+    'Content-Type': 'application/json'
+  };
+
+  const res = await fetch('https://api.modrinth.com/v2/version_files/update', {
+    method: 'POST',
+    headers: ua,
+    body: JSON.stringify({
+      hashes,
+      algorithm: 'sha1',
+      loaders,
+      game_versions: candidates
+    })
+  });
+
+  if (!res.ok) {
+    throw new Error(`Błąd sprawdzania aktualizacji na Modrinth (${res.status}).`);
+  }
+
+  const updatesMap = await res.json();
+  const updatedMods = [];
+
+  for (const [oldSha1, latestVer] of Object.entries(updatesMap || {})) {
+    const localInfo = hashToLocal.get(oldSha1);
+    if (!localInfo || !latestVer || !Array.isArray(latestVer.files)) continue;
+
+    const primaryFile = latestVer.files.find(f => f.primary) || latestVer.files[0];
+    if (!primaryFile || !primaryFile.url) continue;
+
+    const newSha1 = primaryFile.hashes?.sha1;
+    if (newSha1 && newSha1.toLowerCase() === oldSha1.toLowerCase()) {
+      continue; // Already on newest compatible version
+    }
+
+    try {
+      const dlRes = await fetch(primaryFile.url, {
+        headers: { 'User-Agent': 'KasteuszLauncher/2.5.0 (https://szkolnesmp.com.pl)' }
+      });
+      if (!dlRes.ok) continue;
+      const newBuf = Buffer.from(await dlRes.arrayBuffer());
+
+      const targetFileName = localInfo.disabled ? `${primaryFile.filename}.disabled` : primaryFile.filename;
+      const newPath = path.join(modsDir, targetFileName);
+      fs.writeFileSync(newPath, newBuf);
+
+      if (path.resolve(newPath) !== path.resolve(localInfo.fullPath) && fs.existsSync(localInfo.fullPath)) {
+        try { fs.unlinkSync(localInfo.fullPath); } catch (_) {}
+      }
+
+      updatedMods.push({
+        oldFile: localInfo.filename,
+        newFile: targetFileName,
+        version: latestVer.version_number || latestVer.name || ''
+      });
+    } catch (err) {
+      console.warn(`[ModUpdate] Nie udało się zaktualizować ${localInfo.filename}:`, err.message);
+    }
+  }
+
+  archiveMetaCache.clear();
+  return {
+    checkedCount: hashes.length,
+    updatedCount: updatedMods.length,
+    updatedMods,
+    mods: getInstalledMods()
+  };
+}
+
+async function exportProfileToMrpack(parentWindow, profileId = null) {
+  if (!AdmZip) {
+    throw new Error('Biblioteka archiwów (AdmZip) nie jest dostępna.');
+  }
+
+  const state = profiles.getProfilesState();
+  const targetProf = (profileId && state.profiles.find(p => p.id === profileId))
+    || state.profiles.find(p => p.id === state.activeProfileId)
+    || state.profiles[0];
+
+  if (!targetProf) {
+    throw new Error('Nie znaleziono profilu do wyeksportowania.');
+  }
+
+  const safeFileBase = String(targetProf.name || 'Paczka-Kasteusz')
+    .replace(/^\[Modpack\]\s*/i, '')
+    .replace(/[^a-zA-Z0-9ąćęłńóśźżĄĆĘŁŃÓŚŹŻ _.-]/g, '')
+    .trim()
+    .replace(/\s+/g, '-') || 'Paczka-Kasteusz';
+
+  const saveDialog = await dialog.showSaveDialog(parentWindow, {
+    title: `Eksportuj paczkę profilu „${targetProf.name}” dla znajomych`,
+    defaultPath: `${safeFileBase}.mrpack`,
+    filters: [
+      { name: 'Paczka modów Kasteusz / Modrinth (.mrpack)', extensions: ['mrpack'] }
+    ]
+  });
+
+  if (saveDialog.canceled || !saveDialog.filePath) {
+    return { canceled: true };
+  }
+
+  const outPath = saveDialog.filePath.endsWith('.mrpack')
+    ? saveDialog.filePath
+    : `${saveDialog.filePath}.mrpack`;
+
+  const instanceDir = profiles.resolveProfileInstanceDir(targetProf);
+  const candidateFiles = [];
+
+  const collectFolderFiles = (subFolder, allowedExt) => {
+    const fullDir = path.join(instanceDir, subFolder);
+    if (!fs.existsSync(fullDir)) return;
+    for (const entry of fs.readdirSync(fullDir)) {
+      if (entry.startsWith('.') || entry.endsWith('.disabled')) continue;
+      if (entry === 'KasteuszOfflineSkin.zip' || entry === 'KasteuszClient-Menu.zip') continue;
+      if (allowedExt && !entry.toLowerCase().endsWith(allowedExt)) continue;
+      const fullPath = path.join(fullDir, entry);
+      try {
+        const st = fs.statSync(fullPath);
+        if (!st.isFile()) continue;
+        const buf = fs.readFileSync(fullPath);
+        const sha1 = crypto.createHash('sha1').update(buf).digest('hex');
+        const sha512 = crypto.createHash('sha512').update(buf).digest('hex');
+        candidateFiles.push({
+          relPath: `${subFolder}/${entry}`,
+          fullPath,
+          buf,
+          size: st.size,
+          sha1,
+          sha512
+        });
+      } catch (_) {}
+    }
+  };
+
+  if (targetProf.loader !== 'vanilla') {
+    collectFolderFiles('mods', '.jar');
+  }
+  collectFolderFiles('shaderpacks', '.zip');
+  collectFolderFiles('resourcepacks', '.zip');
+
+  // Batch lookup on Modrinth so known mods/shaders take 0 bytes in the .mrpack!
+  let modrinthMap = {};
+  if (candidateFiles.length > 0) {
+    try {
+      const res = await fetch('https://api.modrinth.com/v2/version_files', {
+        method: 'POST',
+        headers: {
+          'User-Agent': 'KasteuszLauncher/2.5.0 (https://szkolnesmp.com.pl)',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          hashes: candidateFiles.map(f => f.sha1),
+          algorithm: 'sha1'
+        })
+      });
+      if (res.ok) {
+        modrinthMap = await res.json();
+      }
+    } catch (_) {}
+  }
+
+  const zip = new AdmZip();
+  const indexFiles = [];
+  let modrinthLinkedCount = 0;
+  let embeddedFilesCount = 0;
+
+  for (const item of candidateFiles) {
+    const matchedVer = modrinthMap?.[item.sha1];
+    const matchedFile = matchedVer?.files?.find(f => f.hashes?.sha1 === item.sha1) || matchedVer?.files?.[0];
+
+    if (matchedFile && matchedFile.url) {
+      indexFiles.push({
+        path: item.relPath,
+        hashes: {
+          sha1: matchedFile.hashes?.sha1 || item.sha1,
+          sha512: matchedFile.hashes?.sha512 || item.sha512
+        },
+        env: { client: 'required', server: 'optional' },
+        downloads: [matchedFile.url],
+        fileSize: matchedFile.size || item.size
+      });
+      modrinthLinkedCount++;
+    } else {
+      zip.addFile(`overrides/${item.relPath}`, item.buf);
+      embeddedFilesCount++;
+    }
+  }
+
+  // Include lightweight config/ files, options.txt, and servers.dat
+  const addConfigDirRecursive = (dirPath, relPrefix) => {
+    if (!fs.existsSync(dirPath)) return;
+    for (const name of fs.readdirSync(dirPath)) {
+      if (name.startsWith('.') || /cache|crash|logs|backups/i.test(name)) continue;
+      const fp = path.join(dirPath, name);
+      const rel = `${relPrefix}/${name}`;
+      try {
+        const st = fs.statSync(fp);
+        if (st.isDirectory()) {
+          addConfigDirRecursive(fp, rel);
+        } else if (st.isFile() && st.size <= 2 * 1024 * 1024) {
+          zip.addFile(`overrides/${rel}`, fs.readFileSync(fp));
+        }
+      } catch (_) {}
+    }
+  };
+  addConfigDirRecursive(path.join(instanceDir, 'config'), 'config');
+
+  for (const singleFile of ['options.txt', 'servers.dat']) {
+    const fp = path.join(instanceDir, singleFile);
+    if (fs.existsSync(fp)) {
+      try {
+        const st = fs.statSync(fp);
+        if (st.isFile() && st.size <= 1024 * 1024) {
+          zip.addFile(`overrides/${singleFile}`, fs.readFileSync(fp));
+        }
+      } catch (_) {}
+    }
+  }
+
+  const dependencies = {
+    minecraft: targetProf.mcVersion || '1.21.11'
+  };
+  if (targetProf.loader === 'fabric') {
+    dependencies['fabric-loader'] = '*';
+  } else if (targetProf.loader === 'quilt') {
+    dependencies['quilt-loader'] = '*';
+  } else if (targetProf.loader === 'forge') {
+    dependencies.forge = targetProf.forgeVersion || '*';
+  }
+
+  const cleanPackName = String(targetProf.name || 'Paczka Kasteusz').replace(/^\[Modpack\]\s*/i, '');
+  const mrpackIndex = {
+    formatVersion: 1,
+    game: 'minecraft',
+    versionId: '1.0.0',
+    name: cleanPackName,
+    summary: `Paczka wyeksportowana z Kasteusz Launcher (${cleanPackName})`,
+    files: indexFiles,
+    dependencies
+  };
+
+  const kasteuszMeta = {
+    exportedBy: 'Kasteusz Launcher',
+    exportedAt: new Date().toISOString(),
+    mcVersion: targetProf.mcVersion,
+    loader: targetProf.loader,
+    forgeVersion: targetProf.forgeVersion || null,
+    memoryMax: targetProf.memoryMax || null,
+    jvmPreset: targetProf.jvmPreset || null,
+    icon: targetProf.icon || 'bolt'
+  };
+
+  zip.addFile('modrinth.index.json', Buffer.from(JSON.stringify(mrpackIndex, null, 2), 'utf8'));
+  zip.addFile('kasteusz.profile.json', Buffer.from(JSON.stringify(kasteuszMeta, null, 2), 'utf8'));
+  zip.writeZip(outPath);
+
+  const finalStat = fs.statSync(outPath);
+  return {
+    success: true,
+    filePath: outPath,
+    profileName: cleanPackName,
+    modrinthLinkedCount,
+    embeddedFilesCount,
+    sizeFormatted: formatBytes(finalStat.size)
+  };
+}
+
+async function importMrpackFromFile(parentWindow, explicitPath = null, onProgress = null) {
+  let filePath = explicitPath;
+  if (!filePath) {
+    const openDialog = await dialog.showOpenDialog(parentWindow, {
+      title: 'Wybierz paczkę .mrpack od znajomego lub z Modrinth',
+      filters: [
+        { name: 'Paczka modów (.mrpack)', extensions: ['mrpack'] }
+      ],
+      properties: ['openFile']
+    });
+    if (openDialog.canceled || openDialog.filePaths.length === 0) {
+      return { canceled: true };
+    }
+    filePath = openDialog.filePaths[0];
+  }
+
+  if (!fs.existsSync(filePath)) {
+    throw new Error('Wybrany plik .mrpack nie istnieje.');
+  }
+
+  const mrpackBuf = fs.readFileSync(filePath);
+  const fallbackName = path.basename(filePath, '.mrpack');
+
+  return await installMrpackFromBuffer(mrpackBuf, {
+    fallbackName,
+    mrpackDownloadedBytes: mrpackBuf.length,
+    mrpackTotalSize: mrpackBuf.length,
+    onProgress
+  });
+}
+
 module.exports = {
   getModsDirectory,
   getInstalledMods,
@@ -1357,6 +1959,10 @@ module.exports = {
   getModrinthProjectVersions,
   installModrinthMod,
   installModrinthModpack,
+  installModrinthPack,
+  updateInstalledMods,
+  exportProfileToMrpack,
+  importMrpackFromFile,
   getPacksDirectory,
   getPacksList,
   selectAndAddPacks,

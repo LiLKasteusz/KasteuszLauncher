@@ -9,12 +9,15 @@ const mods = require('./mods');
 const profiles = require('./profiles');
 const friends = require('./friends');
 const serverHost = require('./server');
+const serverPlugins = require('./serverPlugins');
 const discord = require('./discord');
 const stats = require('./stats');
 const spotify = require('./spotify');
 const screenshots = require('./screenshots');
+const updater = require('./updater');
 
 let mainWindow = null;
+let isRestartingApp = false;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -61,6 +64,7 @@ function createWindow() {
 
 app.whenReady().then(() => {
   createWindow();
+  updater.initUpdater(mainWindow);
   discord.initDiscordRPC();
 
   const registerShortcut = (key, action) => {
@@ -92,16 +96,38 @@ app.whenReady().then(() => {
 
 app.on('will-quit', () => {
   globalShortcut.unregisterAll();
+  try { serverHost.stopServer(); } catch (_) {}
   try {
     fs.writeFileSync(CURRENT_TRACK_PATH, JSON.stringify({ active: false, isPlaying: false, timestamp: Date.now() }), 'utf8');
   } catch (e) {}
 });
 
 app.on('window-all-closed', () => {
+  if (isRestartingApp) return;
   discord.destroyDiscordRPC();
   if (process.platform !== 'darwin') {
     app.quit();
   }
+});
+
+ipcMain.handle('app:restart', async () => {
+  isRestartingApp = true;
+  try {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.destroy();
+    }
+    mainWindow = null;
+  } catch (err) {
+    console.error('[MAIN] Błąd zamykania okna przy restarcie:', err);
+  }
+  setTimeout(() => {
+    try {
+      createWindow();
+    } finally {
+      isRestartingApp = false;
+    }
+  }, 550);
+  return { success: true };
 });
 
 ipcMain.on('window:minimize', () => {
@@ -152,15 +178,19 @@ ipcMain.handle('auth:set-username', async (_e, newUsername) => {
   return acc;
 });
 
-ipcMain.handle('auth:set-custom-skin', async (_e, skinUrl) => {
-  return await auth.setAccountCustomSkin(skinUrl);
+ipcMain.handle('auth:set-custom-skin', async (_e, skinUrl, variant) => {
+  return await auth.setAccountCustomSkin(skinUrl, variant);
+});
+
+ipcMain.handle('auth:set-mojang-cape', async (_e, capeIdOrUrl) => {
+  return await auth.setOfficialMojangCape(capeIdOrUrl);
 });
 
 ipcMain.handle('auth:get-skin-url', async (_e, username) => {
   return await auth.getSkinUrlForUsername(username);
 });
 
-ipcMain.handle('auth:select-skin-file', async () => {
+ipcMain.handle('auth:select-skin-file', async (_e, variant) => {
   if (!mainWindow) return null;
   const result = await dialog.showOpenDialog(mainWindow, {
     title: 'Wybierz plik skórki Minecraft (.png)',
@@ -174,7 +204,7 @@ ipcMain.handle('auth:select-skin-file', async () => {
     const filePath = result.filePaths[0];
     const fileBuf = require('fs').readFileSync(filePath);
     const dataUrl = `data:image/png;base64,${fileBuf.toString('base64')}`;
-    return await auth.setAccountCustomSkin(dataUrl);
+    return await auth.setAccountCustomSkin(dataUrl, variant);
   }
   return null;
 });
@@ -222,9 +252,16 @@ ipcMain.handle('config:select-directory', async () => {
 
 ipcMain.handle('config:select-java', async () => {
   if (!mainWindow) return null;
+  const isWin = process.platform === 'win32';
   const result = await dialog.showOpenDialog(mainWindow, {
     properties: ['openFile'],
-    title: 'Wskaż plik wykonywalny Java (np. /usr/bin/java)'
+    title: isWin ? 'Wskaż plik wykonywalny Java (javaw.exe / java.exe)' : 'Wskaż plik wykonywalny Java (np. /usr/bin/java)',
+    filters: isWin
+      ? [
+          { name: 'Pliki wykonywalne Java (*.exe)', extensions: ['exe'] },
+          { name: 'Wszystkie pliki', extensions: ['*'] }
+        ]
+      : []
   });
   if (!result.canceled && result.filePaths.length > 0) {
     return result.filePaths[0];
@@ -234,9 +271,10 @@ ipcMain.handle('config:select-java', async () => {
 
 ipcMain.handle('stats:get', async () => {
   const s = stats.getStats();
+  const acc = config.getActiveAccount();
   return {
     ...s,
-    rankTitle: stats.getRankTitle(s.totalPlaytimeMinutes)
+    rankTitle: stats.getRankTitle(s.totalPlaytimeMinutes, acc?.username || acc?.name, acc?.uuid || acc?.id)
   };
 });
 
@@ -361,6 +399,10 @@ ipcMain.handle('mods:install-modrinth', async (_e, params) => {
   return await mods.installModrinthMod(params);
 });
 
+ipcMain.handle('mods:update-all', async (_e, params) => {
+  return await mods.updateInstalledMods(params);
+});
+
 ipcMain.handle('mods:install-modpack', async (event, params) => {
   return await mods.installModrinthModpack({
     ...params,
@@ -372,8 +414,24 @@ ipcMain.handle('mods:install-modpack', async (event, params) => {
   });
 });
 
+ipcMain.handle('profiles:export-mrpack', async (_e, profileId) => {
+  return await mods.exportProfileToMrpack(mainWindow, profileId);
+});
+
+ipcMain.handle('profiles:import-mrpack', async (event, explicitPath) => {
+  return await mods.importMrpackFromFile(mainWindow, explicitPath, (prog) => {
+    try {
+      event.sender.send('mods:modpack-progress', prog);
+    } catch (_) {}
+  });
+});
+
 ipcMain.handle('packs:get-list', async (_e, type) => {
   return mods.getPacksList(type);
+});
+
+ipcMain.handle('packs:install-modrinth', async (_e, params) => {
+  return await mods.installModrinthPack(params);
 });
 
 ipcMain.handle('packs:add-files', async (_e, type) => {
@@ -465,7 +523,19 @@ ipcMain.handle('server:start', async () => {
 });
 
 ipcMain.handle('server:stop', async () => {
-  return serverHost.stopServer();
+  return serverHost.stopServer(mainWindow);
+});
+
+ipcMain.handle('server:open-folder', async () => {
+  return serverHost.openServerFolder();
+});
+
+ipcMain.handle('server:start-tunnel', async (_e, customPort) => {
+  return await serverHost.startPublicTunnel(mainWindow, customPort);
+});
+
+ipcMain.handle('server:stop-tunnel', async () => {
+  return serverHost.stopPublicTunnel(mainWindow);
 });
 
 ipcMain.handle('server:send-cmd', async (_e, cmd) => {
@@ -474,6 +544,34 @@ ipcMain.handle('server:send-cmd', async (_e, cmd) => {
 
 ipcMain.handle('server:get-status', async () => {
   return serverHost.getServerStatus();
+});
+
+ipcMain.handle('server:get-metrics', async () => {
+  return await serverHost.getServerMetrics();
+});
+
+ipcMain.handle('server:get-plugins', async () => {
+  return await serverPlugins.getServerPlugins();
+});
+
+ipcMain.handle('server:search-plugins', async (_e, opts) => {
+  return await serverPlugins.searchServerPlugins(opts);
+});
+
+ipcMain.handle('server:install-plugin', async (_e, opts) => {
+  return await serverPlugins.installServerPlugin({ ...opts, window: mainWindow });
+});
+
+ipcMain.handle('server:toggle-plugin', async (_e, filename) => {
+  return await serverPlugins.toggleServerPlugin(filename);
+});
+
+ipcMain.handle('server:delete-plugin', async (_e, filename) => {
+  return await serverPlugins.deleteServerPlugin(filename);
+});
+
+ipcMain.handle('server:open-plugins-folder', async () => {
+  return serverPlugins.openServerPluginsFolder();
 });
 
 ipcMain.on('system:open-external', (_e, url) => {
@@ -644,3 +742,5 @@ ipcMain.handle('benchmark:get-optimal', async (_e, profileId) => {
 ipcMain.handle('benchmark:apply', async (_e, payload, profileId) => {
   return await benchmark.applyOptimalSettings(payload, profileId);
 });
+
+updater.setupUpdaterIpc();

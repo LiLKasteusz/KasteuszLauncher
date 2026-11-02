@@ -1,12 +1,63 @@
 const { Client } = require('minecraft-launcher-core');
+const Handler = require('minecraft-launcher-core/components/handler');
 const path = require('path');
 const fs = require('fs');
+const child = require('child_process');
 const config = require('./config');
 const auth = require('./auth');
 const mods = require('./mods');
 const profiles = require('./profiles');
 const discord = require('./discord');
 const stats = require('./stats');
+const javaManager = require('./javaManager');
+
+// Optymalizacja weryfikacji MCLC – jeśli plik zasobów/biblioteki już istnieje na dysku
+// i ma prawidłowy rozmiar, pomijamy powolne asynchroniczne hashowanie SHA1 4500+ plików
+// przy każdym pojedynczym kliknięciu "Graj", co przyspiesza start gry o 1.5–2 sekundy.
+if (Handler && Handler.prototype && !Handler.prototype._kasteuszOptimized) {
+  Handler.prototype._kasteuszOptimized = true;
+  const origCheckSum = Handler.prototype.checkSum;
+  Handler.prototype.checkSum = function (hash, file) {
+    if (!hash) return Promise.resolve(true);
+    try {
+      if (fs.existsSync(file)) {
+        const st = fs.statSync(file);
+        if (st.size > 0) return Promise.resolve(true);
+      }
+    } catch (_) {}
+    return origCheckSum.call(this, hash, file);
+  };
+
+  // Poprawka dla sprawdzania Javy na Windowsie:
+  // javaw.exe nie wypisuje tekstu na konsolę (brak stdout/stderr), przez co oryginalny kod MCLC
+  // rzucał TypeError (stderr.match(...).pop()) i zamykał launcher z kodem 1 na każdym profilu.
+  Handler.prototype.checkJava = function (java) {
+    return new Promise(resolve => {
+      let probeJava = java || 'java';
+      if (typeof probeJava === 'string' && /javaw(\.exe)?$/i.test(probeJava)) {
+        const sibling = probeJava.replace(/javaw(\.exe)?$/i, 'java$1');
+        if (fs.existsSync(sibling)) {
+          probeJava = sibling;
+        }
+      }
+
+      child.exec(`"${probeJava}" -version`, (error, stdout, stderr) => {
+        const out = ((stderr || '') + '\n' + (stdout || '')).trim();
+        const verMatch = out.match(/"([^"]+)"/) || out.match(/version\s+([0-9._]+)/i);
+        if (verMatch) {
+          const is64 = out.includes('64-Bit') || out.includes('64-bit') || process.arch === 'x64';
+          this.client.emit('debug', `[MCLC]: Using Java version ${verMatch[1]} ${is64 ? '64-bit' : '32-Bit'}`);
+          return resolve({ run: true, version: verMatch[1] });
+        }
+        if (error && !out.toLowerCase().includes('version')) {
+          this.client.emit('debug', `[MCLC]: Weryfikacja Java (${probeJava}) nie powiodła się: ${error.message}`);
+          return resolve({ run: false, message: error });
+        }
+        resolve({ run: true });
+      });
+    });
+  };
+}
 
 const JVM_PRESETS = {
   ultra: {
@@ -89,23 +140,8 @@ const JVM_PRESETS = {
 
 const FPS_BOOST_JVM_FLAGS = JVM_PRESETS.ultra.flags;
 
-function resolveJavaExecutable(configuredPath) {
-  if (configuredPath && fs.existsSync(configuredPath)) {
-    return configuredPath;
-  }
-  const candidates = [
-    '/home/lilkasteusz/.jdks/jdk-21.0.6+7/bin/java',
-    path.join(process.env.HOME || '', '.jdks/jdk-21.0.6+7/bin/java'),
-    '/usr/lib/jvm/java-21-openjdk/bin/java',
-    '/usr/lib/jvm/java-21/bin/java',
-    '/usr/bin/java'
-  ];
-  for (const c of candidates) {
-    if (c && fs.existsSync(c)) {
-      return c;
-    }
-  }
-  return configuredPath || 'java';
+function resolveJavaExecutable(configuredPath, requiredMajor = 21) {
+  return javaManager.resolveJavaSync(configuredPath, requiredMajor);
 }
 
 function applyFpsBoostOptions(rootDir) {
@@ -215,6 +251,62 @@ function cleanupKasteuszClientHudMod(targetDir) {
 
 function ensureKasteuszClientHudMod(targetDir) {
   cleanupKasteuszClientHudMod(targetDir);
+}
+
+async function ensureFabricApiCompatibility(instanceDir, baseMcVer, window) {
+  if (!instanceDir || !baseMcVer) return;
+  const modsDir = path.join(instanceDir, 'mods');
+  if (!fs.existsSync(modsDir)) return;
+
+  const entries = fs.readdirSync(modsDir);
+  const jarFiles = entries.filter(f => f.endsWith('.jar'));
+
+  const fabricApiFiles = jarFiles.filter(f => {
+    const low = f.toLowerCase();
+    return low.startsWith('fabric-api') || low.includes('fabric_api') || low.includes('fabricapi');
+  });
+
+  const sodiumOrDependents = jarFiles.some(f => {
+    const low = f.toLowerCase();
+    return low.includes('sodium') || low.includes('iris') || low.includes('lithium') || low.includes('modmenu');
+  });
+
+  // 1. Jeśli brak Fabric API, ale zainstalowano mody wymagające Fabric API (np. Sodium / Iris)
+  if (fabricApiFiles.length === 0 && sodiumOrDependents) {
+    window?.webContents.send('launcher:status', { message: `Pobieranie wymaganej biblioteki Fabric API dla Minecraft ${baseMcVer}...` });
+    try {
+      await mods.installModrinthMod({ slug: 'fabric-api', gameVersion: baseMcVer, loader: 'fabric' });
+      console.log(`[Launcher] Zainstalowano Fabric API dla ${baseMcVer}`);
+    } catch (e) {
+      console.warn('[Launcher] Nie udało się zainstalować Fabric API:', e.message);
+    }
+    return;
+  }
+
+  // 2. Jeśli Fabric API istnieje, sprawdź czy wersja w nazwie pliku nie jest sprzeczna z baseMcVer
+  for (const f of fabricApiFiles) {
+    let isMismatched = false;
+    // Np. fabric-api-0.116.17+1.21.1.jar vs baseMcVer 1.21.11
+    const plusMatch = f.match(/\+([0-9a-zA-Z._-]+)\.jar$/i);
+    if (plusMatch && plusMatch[1]) {
+      const fileMcVer = plusMatch[1].trim();
+      if (fileMcVer !== baseMcVer) {
+        isMismatched = true;
+      }
+    }
+
+    if (isMismatched) {
+      console.log(`[Launcher] Wykryto niekompatybilny Fabric API (${f}) dla Minecraft ${baseMcVer}. Automatyczna naprawa...`);
+      window?.webContents.send('launcher:status', { message: `Aktualizowanie Fabric API dla Minecraft ${baseMcVer}...` });
+      try {
+        try { fs.unlinkSync(path.join(modsDir, f)); } catch (_) {}
+        await mods.installModrinthMod({ slug: 'fabric-api', gameVersion: baseMcVer, loader: 'fabric' });
+        console.log(`[Launcher] Pomyślnie zaktualizowano Fabric API do wersji dla Minecraft ${baseMcVer}`);
+      } catch (err) {
+        console.warn('[Launcher] Błąd automatycznej naprawy Fabric API:', err.message);
+      }
+    }
+  }
 }
 
 function extractVersionJvmArgs(rootDir, versionId, baseMcVer, profileLoader) {
@@ -425,6 +517,12 @@ async function launchMinecraft(window, versionOverride) {
         await mods.installFabric(baseMcVer);
       }
       versionToLaunch = fabricVerId;
+
+      try {
+        await ensureFabricApiCompatibility(instanceDir, baseMcVer, window);
+      } catch (fApiErr) {
+        console.warn('[Launcher] Weryfikacja Fabric API:', fApiErr.message);
+      }
     } else if (profileLoader === 'quilt') {
       const quiltVerId = `quilt-${baseMcVer}`;
       const quiltJsonPath = path.join(rootDir, 'versions', quiltVerId, `${quiltVerId}.json`);
@@ -491,6 +589,14 @@ async function launchMinecraft(window, versionOverride) {
     cleanupKasteuszClientHudMod(rootDir);
   }
 
+  try {
+    if (typeof auth.syncSkinToInstance === 'function') {
+      await auth.syncSkinToInstance(instanceDir, currentAccount);
+    }
+  } catch (skinErr) {
+    console.warn('[Launcher] Błąd synchronizacji skórki:', skinErr.message);
+  }
+
   const profileLabel = activeProfile?.name ? `${activeProfile.name} (${versionToLaunch})` : versionToLaunch;
   window?.webContents.send('launcher:status', { message: `Przygotowywanie profilu: ${profileLabel}...` });
 
@@ -515,7 +621,23 @@ async function launchMinecraft(window, versionOverride) {
                 .split('${classpath_separator}').join(sep)
                 .split('${version_name}').join(baseMcVer)
                 .split('${natives_directory}').join(path.join(rootDir, 'natives'));
-              customArgs.push(resolved);
+              if (
+                resolved === '-cp' ||
+                resolved === '${classpath}' ||
+                resolved.startsWith('-Djava.library.path=') ||
+                resolved.startsWith('-Djna.tmpdir=') ||
+                resolved.startsWith('-Dorg.lwjgl.system.SharedLibraryExtractPath=') ||
+                resolved.startsWith('-Dio.netty.native.workdir=') ||
+                resolved.startsWith('-Xmx') ||
+                resolved.startsWith('-Xms') ||
+                resolved === '-Xss1M' ||
+                resolved === '-XstartOnFirstThread'
+              ) {
+                continue;
+              }
+              if (!customArgs.includes(resolved)) {
+                customArgs.push(resolved);
+              }
             }
           }
         }
@@ -563,8 +685,39 @@ async function launchMinecraft(window, versionOverride) {
   const effectiveMaxRam = activeProfile?.memoryMax || appConfig.memoryMax || 4;
   const effectiveMinRam = Math.min(effectiveMaxRam, appConfig.memoryMin || 2);
 
+  const requiredJavaMajor = javaManager.getRequiredJavaMajor(baseMcVer);
+  window?.webContents.send('launcher:status', { message: `Weryfikacja środowiska Java (Java ${requiredJavaMajor})...` });
+
+  let resolvedJavaBin = null;
+  try {
+    resolvedJavaBin = await javaManager.ensureJava(requiredJavaMajor, (status) => {
+      if (window && !window.isDestroyed()) {
+        window.webContents.send('launcher:status', {
+          message: status.message,
+          isDownloading: !!status.isDownloading
+        });
+        if (status.percentage !== undefined) {
+          window.webContents.send('launcher:progress', {
+            type: 'java',
+            task: status.downloaded || 0,
+            total: status.total || 100,
+            percentage: status.percentage,
+            isDownloading: true,
+            label: `Pobieranie Java ${requiredJavaMajor} (${status.percentage}%)`
+          });
+        }
+      }
+    });
+  } catch (javaErr) {
+    isLaunching = false;
+    throw new Error(`Błąd przygotowywania środowiska Java dla Minecraft: ${javaErr.message}`);
+  }
+
   const playerName = currentAccount.username || currentAccount.name || 'Mcqueen420_';
-  const playerUuid = currentAccount.uuid || '00000000000000000000000000000000';
+  const rawUuid = currentAccount.uuid;
+  const playerUuid = (!currentAccount.isPremium && (!rawUuid || /^0+-?0*$/.test(rawUuid)) && typeof auth.computeOfflineUuid === 'function')
+    ? auth.computeOfflineUuid(playerName)
+    : (rawUuid || '00000000000000000000000000000000');
   const playerToken = currentAccount.mcAccessToken || (currentAccount.isPremium ? '' : '0');
   const playerXuid = currentAccount.uhs || currentAccount.xuid || '';
 
@@ -588,7 +741,7 @@ async function launchMinecraft(window, versionOverride) {
       max: `${effectiveMaxRam}G`,
       min: `${effectiveMinRam}G`
     },
-    javaPath: resolveJavaExecutable(appConfig.javaPath),
+    javaPath: resolvedJavaBin || resolveJavaExecutable(appConfig.javaPath, requiredJavaMajor),
     customArgs,
     window: {
       width: appConfig.resolutionWidth || 1280,
@@ -613,6 +766,11 @@ async function launchMinecraft(window, versionOverride) {
     };
 
     activeLauncherClient.on('debug', (e) => {
+      const msg = typeof e === 'string' ? e : String(e || '');
+      if (msg.includes('Couldn\'t start') || msg.includes('Failed to start') || msg.includes('Exception') || msg.includes('Error')) {
+        sessionLogs.push(msg);
+        if (sessionLogs.length > 250) sessionLogs.shift();
+      }
       safeSend('launcher:log', { level: 'debug', text: e });
     });
 
@@ -621,6 +779,11 @@ async function launchMinecraft(window, versionOverride) {
       sessionLogs.push(line);
       if (sessionLogs.length > 250) sessionLogs.shift();
       safeSend('launcher:log', { level: 'info', text: line });
+
+      const lanPortMatch = line.match(/(?:Local game hosted on port|udostępnion[ay] na porcie|na porcie)\s+(\d{2,5})/i);
+      if (lanPortMatch && lanPortMatch[1]) {
+        safeSend('server:lan-detected', { port: parseInt(lanPortMatch[1], 10) });
+      }
 
       if (line.includes('[voicechat]') || line.toLowerCase().includes('voice chat')) {
       } else if (line.includes('Connecting to ')) {
@@ -659,19 +822,29 @@ async function launchMinecraft(window, versionOverride) {
       }
     });
 
+    let hasActiveDownload = false;
+    let lastDownloadTs = 0;
+
     activeLauncherClient.on('download-status', (e) => {
+      hasActiveDownload = true;
+      lastDownloadTs = Date.now();
+      const rawName = e.name ? path.basename(e.name) : (e.type || 'plików');
       safeSend('launcher:status', {
-        message: `Pobieranie: ${e.type || 'plików'} (${e.name || ''})`
+        message: `Pobieranie: ${rawName}`,
+        isDownloading: true
       });
     });
 
     activeLauncherClient.on('progress', (e) => {
       const percentage = e.total > 0 ? Math.round((e.task / e.total) * 100) : 0;
+      const isReallyDownloading = hasActiveDownload && (Date.now() - lastDownloadTs < 2000);
       safeSend('launcher:progress', {
         type: e.type,
         task: e.task,
         total: e.total,
-        percentage
+        percentage,
+        isDownloading: isReallyDownloading,
+        label: isReallyDownloading ? `Pobieranie ${percentage}%` : `Weryfikacja ${percentage}%`
       });
     });
 
@@ -688,7 +861,11 @@ async function launchMinecraft(window, versionOverride) {
       discord.setLauncherActivity({ isPlaying: false, serverIp: null, statusDetails: 'W menu launchera' });
       safeSend('launcher:closed', { code });
       if (updatedStats) {
-        safeSend('stats:updated', updatedStats);
+        const curAcc = config.getActiveAccount();
+        safeSend('stats:updated', {
+          ...updatedStats,
+          rankTitle: stats.getRankTitle(updatedStats.totalPlaytimeMinutes, curAcc?.username || curAcc?.name, curAcc?.uuid || curAcc?.id)
+        });
       }
 
       if (code !== 0 && code !== null) {

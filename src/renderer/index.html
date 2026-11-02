@@ -3,10 +3,25 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>KasteuszLauncher</title>
+  <title>Kasteusz Launcher</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
-<body data-theme="purple">
+<body data-theme="purple" data-ui-style="style1">
+  <script>
+    (function () {
+      try {
+        var savedStyle = localStorage.getItem('kasteusz_launcher_style') || 'style1';
+        if (['style1', 'style2', 'style3'].indexOf(savedStyle) === -1) savedStyle = 'style1';
+        document.documentElement.setAttribute('data-ui-style', savedStyle);
+        document.body.setAttribute('data-ui-style', savedStyle);
+        var savedTheme = localStorage.getItem('kasteusz_theme_accent');
+        if (savedTheme) {
+          document.documentElement.setAttribute('data-theme', savedTheme);
+          document.body.setAttribute('data-theme', savedTheme);
+        }
+      } catch (e) {}
+    })();
+  </script>
 
   <!-- Dynamic Live Wallpaper Canvas -->
   <canvas id="live-wallpaper-canvas"></canvas>
@@ -17,14 +32,20 @@
        ====================================================================== -->
   <header class="topbar">
     <div class="topbar-brand">
-      <img src="assets/logo.svg" alt="Kasteusz" class="logo-icon">
-      <span class="topbar-title">KASTEUSZ</span>
-      <span class="topbar-version-tag tnum">v2.4</span>
+      <img src="assets/logo.svg" alt="Kasteusz Launcher" class="logo-icon">
+      <span class="topbar-title">KASTEUSZ LAUNCHER</span>
+      <span class="topbar-version-tag tnum">v2.5</span>
     </div>
 
     <div class="topbar-telemetry">
       <span class="telemetry-dot"></span>
       <span id="topbar-status-label">Silnik Fabric gotowy</span>
+    </div>
+
+    <div id="topbar-update-pill" class="topbar-update-pill" style="display: none;" title="Dostępna nowa wersja Kasteusz Launcher!">
+      <span class="update-pulse-dot"></span>
+      <span id="topbar-update-text">Aktualizacja v2.5.1</span>
+      <button id="btn-topbar-update-action" class="topbar-update-btn">Pobierz</button>
     </div>
 
     <div class="window-controls no-drag">
@@ -40,6 +61,31 @@
     </div>
   </header>
 
+  <!-- Global Update Notification Banner -->
+  <div id="global-update-banner" class="global-update-banner" style="display: none;">
+    <div class="update-banner-inner">
+      <div class="update-banner-left">
+        <div class="update-banner-icon-badge">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21h5v-5"/>
+          </svg>
+        </div>
+        <div class="update-banner-texts">
+          <span class="update-banner-title" id="update-banner-headline">Dostępna nowa wersja Kasteusz Launcher!</span>
+          <span class="update-banner-subtitle" id="update-banner-subline">Pobierz najnowszą wersję w kilka sekund bez utraty ustawień i światów.</span>
+        </div>
+      </div>
+      <div class="update-banner-actions">
+        <button id="btn-banner-download-update" class="btn-update-cta">Pobierz aktualizację</button>
+        <button id="btn-banner-install-update" class="btn-update-cta restart" style="display: none;">Zrestartuj i zainstaluj</button>
+        <button id="btn-banner-dismiss-update" class="btn-update-close" title="Ukryj powiadomienie">✕</button>
+      </div>
+    </div>
+    <div id="update-download-progress-bar" class="update-download-progress-bar" style="display: none;">
+      <div id="update-progress-bar-fill" class="update-progress-bar-fill" style="width: 0%;"></div>
+    </div>
+  </div>
+
   <!-- ======================================================================
        2. APP SHELL: LEFT SIDEBAR + MAIN WORKSPACE
        ====================================================================== -->
@@ -52,25 +98,25 @@
         <div class="nav-section">
           <div class="nav-section-label">Rozgrywka</div>
 
-          <button class="nav-pill active" data-tab="play">
+          <button class="nav-pill active" data-tab="play" title="Graj">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
               <polygon points="6 3 20 12 6 21 6 3"/>
             </svg>
             <span class="nav-pill-label">Graj</span>
           </button>
 
-          <button class="nav-pill" data-tab="instances">
+          <button class="nav-pill" data-tab="instances" title="Profile gry">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
               <rect x="3" y="3" width="7" height="7" rx="1.5"/>
               <rect x="14" y="3" width="7" height="7" rx="1.5"/>
               <rect x="14" y="14" width="7" height="7" rx="1.5"/>
               <rect x="3" y="14" width="7" height="7" rx="1.5"/>
             </svg>
-            <span class="nav-pill-label">Profile Gry</span>
+            <span class="nav-pill-label" data-s2-short="Profile">Profile Gry</span>
             <span class="nav-pill-badge tnum" id="sidebar-profiles-badge">3</span>
           </button>
 
-          <button class="nav-pill" data-tab="mods">
+          <button class="nav-pill" data-tab="mods" title="Mody i paczki">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
               <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
               <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
@@ -80,21 +126,21 @@
             <span class="nav-pill-badge tnum" id="sidebar-mods-badge">18</span>
           </button>
 
-          <button class="nav-pill" data-tab="packs">
+          <button class="nav-pill" data-tab="packs" title="Zasoby i shadery">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
               <polygon points="12 2 2 7 12 12 22 7 12 2"/>
               <polyline points="2 17 12 22 22 17"/>
               <polyline points="2 12 12 17 22 12"/>
             </svg>
-            <span class="nav-pill-label">Zasoby i Shadery</span>
+            <span class="nav-pill-label" data-s2-short="Shadery">Zasoby i Shadery</span>
           </button>
 
-          <button class="nav-pill" data-tab="benchmark">
+          <button class="nav-pill" data-tab="benchmark" title="Wydajność i FPS">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
               <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
               <circle cx="12" cy="12" r="3"/>
             </svg>
-            <span class="nav-pill-label">Test PC &amp; FPS</span>
+            <span class="nav-pill-label" data-s2-short="Wydajność">Test PC &amp; FPS</span>
             <span class="nav-pill-badge" id="sidebar-benchmark-badge" style="background: var(--emerald-soft); color: var(--emerald); border-color: rgba(16,185,129,0.3);">AI</span>
           </button>
         </div>
@@ -102,37 +148,37 @@
         <div class="nav-section">
           <div class="nav-section-label">Studio i Sieć</div>
 
-          <button class="nav-pill" data-tab="music">
+          <button class="nav-pill" data-tab="music" title="Muzyka">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
               <path d="M9 18V5l12-2v13"/>
               <circle cx="6" cy="18" r="3"/>
               <circle cx="18" cy="16" r="3"/>
             </svg>
-            <span class="nav-pill-label">Muzyka / Spotify</span>
+            <span class="nav-pill-label" data-s2-short="Muzyka">Muzyka / Spotify</span>
             <span class="nav-live-dot" id="sidebar-music-dot"></span>
           </button>
 
-          <button class="nav-pill" data-tab="screenshots">
+          <button class="nav-pill" data-tab="screenshots" title="Zrzuty ekranu">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
               <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
               <circle cx="12" cy="13" r="4"/>
             </svg>
-            <span class="nav-pill-label">Zrzuty Ekranu</span>
+            <span class="nav-pill-label" data-s2-short="Screeny">Zrzuty Ekranu</span>
             <span class="nav-pill-badge tnum" id="sidebar-screenshots-badge" style="display: none;">0</span>
           </button>
 
-          <button class="nav-pill" data-tab="server">
+          <button class="nav-pill" data-tab="server" title="Serwer lokalny">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
               <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/>
               <rect x="2" y="14" width="20" height="8" rx="2" ry="2"/>
               <line x1="6" y1="6" x2="6.01" y2="6"/>
               <line x1="6" y1="18" x2="6.01" y2="18"/>
             </svg>
-            <span class="nav-pill-label">Serwer Lokalny</span>
+            <span class="nav-pill-label" data-s2-short="Serwer">Serwer Lokalny</span>
             <span class="nav-live-dot" id="sidebar-server-dot"></span>
           </button>
 
-          <button class="nav-pill" data-tab="messages">
+          <button class="nav-pill" data-tab="messages" title="Aktualności">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
               <path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/>
               <path d="M18 14h-8"/>
@@ -142,7 +188,7 @@
             <span class="nav-pill-label">Aktualności</span>
           </button>
 
-          <button class="nav-pill" data-tab="settings">
+          <button class="nav-pill" data-tab="settings" title="Ustawienia">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="12" cy="12" r="3"/>
               <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
@@ -180,7 +226,176 @@
            VIEW 1: GRAJ (MAIN DASHBOARD)
            ================================================================== -->
       <section class="tab-view active" id="view-play">
+        <!-- STYL 3: Subtle Kinetic Background Watermark -->
+        <div class="s3-bg-watermark s3-only" aria-hidden="true">
+          <div class="s3-bg-watermark-track">
+            <span>KASTEUSZ LAUNCHER</span><span>•</span><span>MINECRAFT</span><span>•</span><span>KASTEUSZ LAUNCHER</span><span>•</span><span>MINECRAFT</span><span>•</span>
+          </div>
+        </div>
+
         <div class="play-dashboard-grid">
+
+          <!-- STYL 2 (BADLION): Left Command Column -->
+          <div class="s2-left-col s2-only">
+            <div class="s2-card s2-profile-card">
+              <div class="s2-card-head">
+                <span class="s2-kicker">TWÓJ PROFIL</span>
+                <span class="s2-status-tag" id="s2-account-badge">ONLINE</span>
+              </div>
+              <div class="s2-profile-hero">
+                <div class="s2-avatar-box" id="s2-avatar-box" title="Zarządzaj kontem">
+                  <img id="s2-avatar-img" src="assets/default-skin.png" alt="Avatar">
+                </div>
+                <div class="s2-profile-text">
+                  <div class="s2-player-nick" id="s2-player-nick">Gracz</div>
+                  <div class="s2-player-rank" id="s2-player-rank">Gracz</div>
+                </div>
+              </div>
+              <div class="s2-profile-metrics tnum">
+                <div class="s2-metric-cell">
+                  <span class="s2-metric-lbl">CZAS GRY</span>
+                  <span class="s2-metric-val" id="s2-stat-playtime">0h 0m</span>
+                </div>
+                <div class="s2-metric-cell">
+                  <span class="s2-metric-lbl">ODPALENIA</span>
+                  <span class="s2-metric-val" id="s2-stat-launches">0</span>
+                </div>
+                <div class="s2-metric-cell">
+                  <span class="s2-metric-lbl">SILNIK</span>
+                  <span class="s2-metric-val" id="s2-stat-engine">FABRIC</span>
+                </div>
+              </div>
+              <div class="s2-profile-actions">
+                <button type="button" class="s2-mini-btn" id="s2-btn-account">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                  <span>Konto</span>
+                </button>
+                <button type="button" class="s2-mini-btn accent" id="s2-btn-wardrobe">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z"/></svg>
+                  <span>Skórka</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="s2-card s2-modpacks-card">
+              <div class="s2-card-head">
+                <div style="display:flex;align-items:center;gap:6px;">
+                  <span class="s2-kicker">PACZKI I PROFILE</span>
+                  <span class="s2-count-chip tnum" id="s2-profiles-count">0</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:4px;">
+                  <button type="button" class="s2-head-action ghost" id="s2-btn-import-mrpack" title="Wczytaj paczkę .mrpack od znajomego">Wczytaj</button>
+                  <button type="button" class="s2-head-action" id="s2-btn-browse-modpacks" title="Przeglądaj paczki modów na Modrinth">Pobierz</button>
+                </div>
+              </div>
+              <div class="s2-scroll-list" id="s2-modpacks-list"></div>
+            </div>
+
+            <div class="s2-card s2-extras-card">
+              <div class="s2-card-head">
+                <span class="s2-kicker">SKRÓTY</span>
+              </div>
+              <div class="s2-extras-grid">
+                <button type="button" class="s2-extra-tile" id="s2-extra-fps">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                  <span>Wydajność</span>
+                </button>
+                <button type="button" class="s2-extra-tile" id="s2-extra-packs">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+                  <span>Shadery</span>
+                </button>
+                <button type="button" class="s2-extra-tile" id="s2-extra-cosmetics">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                  <span>Garderoba</span>
+                </button>
+                <button type="button" class="s2-extra-tile" id="s2-extra-screens">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                  <span>Screeny</span>
+                </button>
+                <button type="button" class="s2-extra-tile" id="s2-extra-music">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+                  <span>Muzyka</span>
+                </button>
+                <button type="button" class="s2-extra-tile" id="s2-extra-doctor">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                  <span>Naprawa</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- STYL 3 (AUTORSKI): Open Editorial Hero Column -->
+          <div class="s3-editorial-col s3-only">
+            <div class="s3-top-meta tnum">
+              <span class="s3-live-dot"></span>
+              <span id="s3-tech-meta">gotowy do gry • fabric 1.21.11 • 4 GB RAM</span>
+            </div>
+
+            <div class="s3-hero-center">
+              <div class="s3-giant-heading" aria-live="polite">
+                <div class="s3-heading-static">WCHODZISZ</div>
+                <div class="s3-heading-kinetic-row">
+                  <div class="s3-kinetic-word" id="s3-kinetic-word">ZE ZNAJOMYMI.</div>
+                </div>
+                <div class="s3-heading-rule"></div>
+              </div>
+
+              <p class="s3-human-sub">
+                Konto <strong id="s3-sub-nick">Gracz</strong> &bull; wybrany profil: <strong id="s3-sub-profile">Kasteusz Main</strong>
+              </p>
+
+              <div class="s3-launch-row">
+                <button type="button" class="s3-play-cta" id="s3-btn-play">
+                  <span class="s3-play-cta-label" id="s3-btn-play-label">ODPAL GRĘ</span>
+                  <svg class="s3-play-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="5" y1="12" x2="19" y2="12"/>
+                    <polyline points="12 5 19 12 12 19"/>
+                  </svg>
+                  <span class="s3-play-progress" id="s3-launch-progress-fill"></span>
+                </button>
+
+                <div class="s3-profile-picker-wrap">
+                  <button type="button" class="s3-profile-picker-btn" id="s3-profile-btn" title="Zmień aktywny profil lub wersję">
+                    <div class="s3-picker-texts">
+                      <span class="s3-picker-kicker" id="s3-picker-kicker">FABRIC 1.21.11</span>
+                      <span class="s3-picker-name" id="s3-picker-name">Kasteusz Main</span>
+                    </div>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                  </button>
+                  <div class="s3-profile-dropdown" id="s3-profile-dropdown"></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="s3-bottom-strip">
+              <button type="button" class="s3-strip-cell" id="s3-strip-smp" title="Kliknij, żeby skopiować adres serwera">
+                <span class="s3-strip-kicker">SERWER</span>
+                <span class="s3-strip-main">szkolnesmp.com.pl</span>
+                <span class="s3-strip-sub tnum" id="s3-smp-sub">Sprawdzanie...</span>
+              </button>
+
+              <button type="button" class="s3-strip-cell" id="s3-strip-mods" title="Zarządzaj modami i paczkami">
+                <span class="s3-strip-kicker">MODY I PACZKI</span>
+                <span class="s3-strip-main tnum" id="s3-mods-main">0 włączonych</span>
+                <span class="s3-strip-sub">Otwórz listę</span>
+              </button>
+
+              <button type="button" class="s3-strip-cell" id="s3-strip-wardrobe" title="Zmień skina, pelerynę albo skrzydła">
+                <span class="s3-strip-kicker">WYGLĄD</span>
+                <span class="s3-strip-main">Garderoba</span>
+                <span class="s3-strip-sub" id="s3-time-sub">Czas: 0h 0m</span>
+              </button>
+
+              <button type="button" class="s3-strip-cell" id="s3-strip-friends" title="Dodaj znajomego">
+                <span class="s3-strip-kicker">ZNAJOMI</span>
+                <div class="s3-friends-inline">
+                  <div class="s3-friends-heads" id="s3-friends-heads"></div>
+                  <span class="s3-strip-main tnum" id="s3-friends-main">0 osób</span>
+                </div>
+                <span class="s3-strip-sub">Dodaj gracza</span>
+              </button>
+            </div>
+          </div>
 
           <!-- Left / Main Stage Column -->
           <div class="play-stage-col">
@@ -189,12 +404,15 @@
             <div class="hero-stage-card">
               <div class="hero-ambient-glow"></div>
               <div class="hero-pedestal-ring"></div>
+              <div class="s2-hud-corners s2-only" aria-hidden="true">
+                <span></span><span></span><span></span><span></span>
+              </div>
 
               <div class="hero-top-bar">
                 <div class="hero-badges-left">
                   <div class="glass-pill">
                     <span class="pill-dot"></span>
-                    <span>Kasteusz Client</span>
+                    <span>Kasteusz Launcher</span>
                   </div>
                   <div class="glass-pill tnum" id="hero-playtime-pill">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
@@ -319,6 +537,24 @@
           <!-- Right Social & Official Server Rail -->
           <div class="play-side-rail">
 
+            <!-- STYL 2 (BADLION): Live Active Mods Toggles Card -->
+            <div class="s2-card s2-mods-card s2-only">
+              <div class="s2-card-head">
+                <div style="display:flex;align-items:center;gap:6px;">
+                  <span class="s2-kicker">WGRANE MODY</span>
+                  <span class="s2-count-chip tnum" id="s2-mods-count-pill">0/0</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:5px;">
+                  <button type="button" class="s2-head-action" id="s2-btn-open-modrinth">Modrinth</button>
+                  <button type="button" class="s2-head-action ghost" id="s2-btn-all-mods">Wszystkie</button>
+                </div>
+              </div>
+              <div class="s2-mod-search-wrap">
+                <input type="text" class="s2-mod-search-input" id="s2-quick-mod-filter" placeholder="Szukaj moda...">
+              </div>
+              <div class="s2-scroll-list" id="s2-quick-mods-list"></div>
+            </div>
+
             <!-- Official Server Status Card -->
             <div class="official-server-card" id="official-server-card">
               <div class="server-card-top">
@@ -402,6 +638,14 @@
               <span style="font-size: 12px; color: var(--text-secondary);">Każdy profil może mieć własny silnik (Fabric / Quilt / Vanilla), wersję gry, RAM i osobne mody.</span>
             </div>
             <div class="view-actions">
+              <button class="btn-secondary" id="btn-export-active-mrpack" title="Zapisz aktywny profil (mody, shadery, opcje) jako plik .mrpack dla znajomych">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                <span>Eksportuj paczkę</span>
+              </button>
+              <button class="btn-secondary" id="btn-import-mrpack" title="Wczytaj paczkę .mrpack od znajomego lub z dysku">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                <span>Wczytaj paczkę</span>
+              </button>
               <button class="btn-primary" id="btn-open-create-profile">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                 <span>Utwórz Własny Profil</span>
@@ -458,6 +702,10 @@
               <button class="btn-secondary" id="btn-open-mods-folder">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
                 <span>Folder mods</span>
+              </button>
+              <button class="btn-secondary" id="btn-update-all-mods" title="Sprawdź na Modrinth nowsze wersje wgranych modów i pobierz aktualizacje">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                <span>Aktualizuj mody</span>
               </button>
               <button class="btn-secondary" id="btn-install-fabric">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
@@ -544,7 +792,7 @@
               </select>
 
               <label class="ver-lock-pill" title="Ogranicz wyniki do kompatybilnych z profilem">
-                <input type="checkbox" class="ui-switch" id="mod-browse-ver-lock">
+                <input type="checkbox" class="ui-switch" id="mod-browse-ver-lock" checked>
                 <span>Tylko wersja profilu</span>
               </label>
             </div>
@@ -601,44 +849,104 @@
           <div class="view-title-group">
             <span class="section-kicker">Oprawa Wizualna</span>
             <h1 class="view-title">Pakiety Zasobów i Shadery</h1>
-            <p class="view-subtitle">Zarządzaj teksturami oraz paczkami shaderów Iris z automatycznym podglądem ikon .png.</p>
+            <p class="view-subtitle">Zarządzaj wgranymi teksturami i shaderami lub pobieraj je prosto z Modrinth pod swój profil.</p>
           </div>
 
-          <div class="segmented-control">
-            <button class="seg-btn active" id="packs-subtab-resourcepacks" data-pack-type="resourcepacks">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-              <span>Pakiety Zasobów</span>
-            </button>
-            <button class="seg-btn" id="packs-subtab-shaderpacks" data-pack-type="shaderpacks">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/></svg>
-              <span>Shadery (Iris)</span>
-            </button>
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+            <div class="segmented-control">
+              <button class="seg-btn active" id="packs-subtab-resourcepacks" data-pack-type="resourcepacks">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                <span>Pakiety Zasobów</span>
+              </button>
+              <button class="seg-btn" id="packs-subtab-shaderpacks" data-pack-type="shaderpacks">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/></svg>
+                <span>Shadery (Iris)</span>
+              </button>
+            </div>
+
+            <div class="segmented-control">
+              <button class="seg-btn active" id="packs-mode-installed">
+                <span>Wgrane</span>
+              </button>
+              <button class="seg-btn" id="packs-mode-modrinth">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <span>Pobierz z Modrinth</span>
+              </button>
+            </div>
           </div>
         </div>
 
-        <div class="packs-dropzone" id="packs-dropzone">
-          <div class="dropzone-left">
-            <div class="dropzone-icon">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <div id="packs-view-installed-wrap">
+          <div class="packs-dropzone" id="packs-dropzone">
+            <div class="dropzone-left">
+              <div class="dropzone-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              </div>
+              <div>
+                <div class="setting-title" id="packs-dropzone-title">Przeciągnij i upuść pakiety zasobów (.zip)</div>
+                <div class="setting-desc">Launcher automatycznie odczyta miniaturkę pack.png oraz opis z pliku pack.mcmeta.</div>
+              </div>
             </div>
-            <div>
-              <div class="setting-title" id="packs-dropzone-title">Przeciągnij i upuść pakiety zasobów (.zip)</div>
-              <div class="setting-desc">Launcher automatycznie odczyta miniaturkę pack.png oraz opis z pliku pack.mcmeta.</div>
+            <div class="view-actions">
+              <button class="btn-secondary" id="btn-open-packs-folder">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                <span>Otwórz folder</span>
+              </button>
+              <button class="btn-primary" id="btn-add-packs">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                <span>Dodaj paczkę .zip</span>
+              </button>
             </div>
           </div>
-          <div class="view-actions">
-            <button class="btn-secondary" id="btn-open-packs-folder">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-              <span>Otwórz folder</span>
-            </button>
-            <button class="btn-primary" id="btn-add-packs">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              <span>Dodaj paczkę .zip</span>
+
+          <div class="packs-grid" id="packs-list-container" style="margin-top: 12px;"></div>
+        </div>
+
+        <div id="packs-view-modrinth-wrap" style="display: none;">
+          <div class="modrinth-filter-panel">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; flex-wrap: wrap;">
+              <span class="setting-desc" id="packs-modrinth-hint">Przeglądasz pakiety zasobów z Modrinth. Pobrane shadery na Fabric/Quilt automatycznie dogrywają Iris + Sodium, jeśli ich brakuje.</span>
+              <span id="packs-modrinth-hits-count" class="tnum" style="font-size: 12px; font-weight: 600; color: var(--text-primary);">Wczytywanie...</span>
+            </div>
+
+            <div class="modrinth-search-row">
+              <div class="search-box">
+                <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" class="ui-input" id="packs-modrinth-search-input" placeholder="Szukaj paczek zasobów (np. Faithful, Bare Bones, Fresh Animations)..." autocomplete="off" spellcheck="false">
+                <button class="search-clear-btn" id="packs-modrinth-search-clear" title="Wyczyść">✕</button>
+              </div>
+
+              <button class="btn-primary" id="btn-packs-modrinth-search" style="padding: 0 16px; height: 38px; font-size: 13px; font-weight: 600; white-space: nowrap;">
+                <span>Szukaj</span>
+              </button>
+
+              <select class="ui-select" id="packs-modrinth-sort-select">
+                <option value="downloads">Najpopularniejsze</option>
+                <option value="relevance">Najtrafniejsze</option>
+                <option value="updated">Ostatnio aktualizowane</option>
+                <option value="newest">Najnowsze</option>
+              </select>
+
+              <label class="ver-lock-pill" title="Pokaż tylko paczki oznaczone pod wersję aktywnego profilu">
+                <input type="checkbox" class="ui-switch" id="packs-modrinth-ver-lock">
+                <span>Tylko wersja profilu</span>
+              </label>
+            </div>
+          </div>
+
+          <div id="packs-modrinth-loading" style="display: none; padding: 32px; align-items: center; justify-content: center; gap: 10px; color: var(--text-secondary);">
+            <div class="spinner-ring"></div>
+            <span>Pobieranie katalogu z Modrinth...</span>
+          </div>
+
+          <div class="modrinth-results-grid" id="packs-modrinth-results"></div>
+
+          <div id="packs-modrinth-pagination-wrap" style="display: none; justify-content: center; padding: 20px 0 14px 0;">
+            <button class="btn-secondary" id="btn-packs-modrinth-load-more" style="min-width: 210px; padding: 10px 22px; font-weight: 600;">
+              <span>Załaduj więcej (+30)</span>
             </button>
           </div>
         </div>
-
-        <div class="packs-grid" id="packs-list-container"></div>
       </section>
 
       <!-- ==================================================================
@@ -1152,11 +1460,15 @@
       <section class="tab-view" id="view-server">
         <div class="view-header">
           <div class="view-title-group">
-            <span class="section-kicker">Dedykowany Host PC</span>
-            <h1 class="view-title">Lokalny Serwer Minecraft 1.21.11</h1>
-            <p class="view-subtitle">Postaw prywatny serwer bezpośrednio na swoim komputerze z podglądem konsoli na żywo.</p>
+            <span class="section-kicker">Własny Serwer i Wspólna Gra</span>
+            <h1 class="view-title" id="server-view-title">Serwer Lokalny (Paper 1.21.11)</h1>
+            <p class="view-subtitle">Postaw serwer na wybranej wersji gry i wygeneruj publiczny adres dla znajomych bez Hamachi i Radmina.</p>
           </div>
           <div class="view-actions">
+            <button class="btn-secondary" id="btn-open-server-folder" title="Otwórz folder serwera (świat, pluginy, mody, server.properties)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+              <span>Folder serwera</span>
+            </button>
             <button class="btn-emerald" id="btn-toggle-server">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
               <span id="server-btn-label">Uruchom Serwer</span>
@@ -1164,10 +1476,95 @@
           </div>
         </div>
 
+        <!-- Live Server & System Resource Telemetry -->
+        <div class="server-telemetry-grid" id="server-telemetry-grid">
+          <div class="server-metric-card" id="srv-card-cpu">
+            <div class="srv-metric-head">
+              <span class="srv-metric-label">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg>
+                Procesor (CPU)
+              </span>
+              <span class="srv-metric-badge tnum" id="srv-metric-cpu-badge">Wyłączony</span>
+            </div>
+            <div class="srv-metric-val tnum" id="srv-metric-cpu-val">0.0%</div>
+            <div class="srv-metric-track">
+              <div class="srv-metric-ghost-fill" id="srv-metric-cpu-sysbar" style="width: 0%;"></div>
+              <div class="srv-metric-fill" id="srv-metric-cpu-bar" style="width: 0%;"></div>
+            </div>
+            <div class="srv-metric-sub tnum" id="srv-metric-cpu-sub">Cały PC: 0.0%</div>
+          </div>
+
+          <div class="server-metric-card" id="srv-card-ram">
+            <div class="srv-metric-head">
+              <span class="srv-metric-label">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 19v-3"/><path d="M10 19v-3"/><path d="M14 19v-3"/><path d="M18 19v-3"/><path d="M8 11V9"/><path d="M16 11V9"/><path d="M12 11V9"/><path d="M2 15h20"/><path d="M2 7a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2z"/></svg>
+                Pamięć RAM
+              </span>
+              <span class="srv-metric-badge tnum" id="srv-metric-ram-badge">Limit 4 GB</span>
+            </div>
+            <div class="srv-metric-val tnum" id="srv-metric-ram-val">0.00 / 4.0 GB</div>
+            <div class="srv-metric-track">
+              <div class="srv-metric-fill" id="srv-metric-ram-bar" style="width: 0%;"></div>
+            </div>
+            <div class="srv-metric-sub tnum" id="srv-metric-ram-sub">Wolny RAM PC: -- GB</div>
+          </div>
+
+          <div class="server-metric-card" id="srv-card-players">
+            <div class="srv-metric-head">
+              <span class="srv-metric-label">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                Gracze Online
+              </span>
+              <span class="srv-metric-badge tnum" id="srv-metric-players-badge">Offline</span>
+            </div>
+            <div class="srv-metric-val tnum" id="srv-metric-players-val">0 / 12</div>
+            <div class="srv-metric-track">
+              <div class="srv-metric-fill is-emerald" id="srv-metric-players-bar" style="width: 0%;"></div>
+            </div>
+            <div class="srv-metric-sub" id="srv-metric-players-sub">Serwer wyłączony</div>
+          </div>
+
+          <div class="server-metric-card" id="srv-card-uptime">
+            <div class="srv-metric-head">
+              <span class="srv-metric-label">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                Czas Pracy i Dysk
+              </span>
+              <span class="srv-metric-badge tnum" id="srv-metric-uptime-badge">Offline</span>
+            </div>
+            <div class="srv-metric-val tnum" id="srv-metric-uptime-val">00:00:00</div>
+            <div class="srv-metric-track">
+              <div class="srv-metric-fill is-emerald" id="srv-metric-uptime-bar" style="width: 0%;"></div>
+            </div>
+            <div class="srv-metric-sub tnum" id="srv-metric-uptime-sub">Świat: 0 MB • Pliki: 0 MB</div>
+          </div>
+        </div>
+
+        <!-- Public Tunnel Banner (No Hamachi / Radmin + LAN world support) -->
+        <div class="server-tunnel-card" id="server-tunnel-card">
+          <div class="server-tunnel-left">
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <span class="section-kicker" style="margin: 0; color: var(--emerald);">Publiczny adres dla znajomych (bez Hamachi / Radmina)</span>
+              <span class="mod-tag tnum" id="server-tunnel-badge">Wyłączony</span>
+            </div>
+            <div class="server-ip-mono tnum" id="server-tunnel-ip-display" style="margin-top: 3px;">Włącz serwer lub kliknij „Otwórz tunel”, aby uzyskać publiczne IP</div>
+            <div class="setting-desc" id="server-tunnel-desc">Działa zarówno z powyższym serwerem, jak i ze światem Singleplayer („Udostępnij w LAN” — wpisz port obok).</div>
+          </div>
+
+          <div class="server-tunnel-actions">
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span style="font-size: 11px; color: var(--text-muted); white-space: nowrap;">Port:</span>
+              <input type="number" class="ui-input tnum" id="server-tunnel-port-input" value="25565" style="width: 84px; height: 34px; padding: 0 8px;" title="Port lokalnego serwera lub świata Udostępnij w LAN">
+            </div>
+            <button class="btn-secondary" id="btn-copy-tunnel-ip" disabled>Kopiuj adres</button>
+            <button class="btn-primary" id="btn-toggle-tunnel">Otwórz tunel</button>
+          </div>
+        </div>
+
         <div class="server-ip-grid">
           <div class="server-ip-card">
             <div>
-              <div class="section-kicker">Adres LAN / VPN dla znajomych</div>
+              <div class="section-kicker">Adres w domowym Wi-Fi / LAN</div>
               <div class="server-ip-mono tnum" id="server-local-ip-display">127.0.0.1:25565</div>
             </div>
             <button class="btn-secondary" id="btn-copy-local-ip">Kopiuj IP</button>
@@ -1175,8 +1572,8 @@
 
           <div class="server-ip-card">
             <div>
-              <div class="section-kicker">Połączenie lokalne (Ten PC)</div>
-              <div class="server-ip-mono tnum">localhost:25565</div>
+              <div class="section-kicker">Połączenie dla Ciebie (Ten PC)</div>
+              <div class="server-ip-mono tnum" id="server-localhost-ip-display">localhost:25565</div>
             </div>
             <button class="btn-secondary" id="btn-copy-localhost-ip">Kopiuj adres</button>
           </div>
@@ -1184,16 +1581,47 @@
 
         <div class="server-cfg-grid">
           <div class="cfg-field">
+            <label class="cfg-label">Silnik Serwera</label>
+            <select class="ui-select" id="server-cfg-engine">
+              <option value="paper" selected>Paper (Szybki + Pluginy)</option>
+              <option value="purpur">Purpur (Wydajny fork Paper)</option>
+              <option value="fabric">Fabric Server (Mody .jar)</option>
+              <option value="vanilla">Vanilla (Czysty Mojang)</option>
+            </select>
+          </div>
+          <div class="cfg-field">
+            <label class="cfg-label">Wersja Minecraft</label>
+            <select class="ui-select tnum" id="server-cfg-version">
+              <option value="1.21.11" selected>1.21.11</option>
+              <option value="1.21.10">1.21.10</option>
+              <option value="1.21.8">1.21.8</option>
+              <option value="1.21.5">1.21.5</option>
+              <option value="1.21.4">1.21.4</option>
+              <option value="1.21.1">1.21.1</option>
+              <option value="1.20.6">1.20.6</option>
+              <option value="1.20.4">1.20.4</option>
+              <option value="1.20.1">1.20.1</option>
+              <option value="1.19.4">1.19.4</option>
+              <option value="1.19.2">1.19.2</option>
+              <option value="1.18.2">1.18.2</option>
+              <option value="1.17.1">1.17.1</option>
+              <option value="1.16.5">1.16.5</option>
+              <option value="1.12.2">1.12.2</option>
+              <option value="1.8.8">1.8.8</option>
+            </select>
+          </div>
+          <div class="cfg-field">
             <label class="cfg-label">Pamięć RAM (GB)</label>
             <select class="ui-select tnum" id="server-cfg-ram">
               <option value="2">2 GB RAM</option>
               <option value="4" selected>4 GB RAM</option>
               <option value="6">6 GB RAM</option>
               <option value="8">8 GB RAM</option>
+              <option value="10">10 GB RAM</option>
             </select>
           </div>
           <div class="cfg-field">
-            <label class="cfg-label">Port TCP/UDP</label>
+            <label class="cfg-label">Port TCP</label>
             <input type="number" class="ui-input tnum" id="server-cfg-port" value="25565">
           </div>
           <div class="cfg-field">
@@ -1201,6 +1629,13 @@
             <select class="ui-select" id="server-cfg-online-mode">
               <option value="false" selected>Wyłączona (Premium + Non-Premium)</option>
               <option value="true">Tylko Premium (Microsoft)</option>
+            </select>
+          </div>
+          <div class="cfg-field">
+            <label class="cfg-label">Tunel Publiczny przy Starcie</label>
+            <select class="ui-select" id="server-cfg-auto-tunnel">
+              <option value="true" selected>Włącz automatycznie (bez Hamachi)</option>
+              <option value="false">Wyłączony (tylko domowe LAN)</option>
             </select>
           </div>
           <div class="cfg-field">
@@ -1229,6 +1664,74 @@
           </div>
         </div>
 
+        <!-- Server Plugins & Addons Manager (Paper / Purpur / Spigot / Modrinth) -->
+        <div class="server-plugins-card" id="server-plugins-card">
+          <div class="server-plugins-header">
+            <div class="server-plugins-title-wrap">
+              <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--accent-hover);"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+                <h3 class="server-plugins-title">Pluginy i Dodatki do Serwera</h3>
+                <span class="mod-tag tnum" id="server-plugins-count-badge">0 zainstalowanych</span>
+              </div>
+              <p class="server-plugins-desc" id="server-plugins-subdesc">
+                Pobieraj oficjalne pluginy z Modrinth w 1 kliknięcie (Geyser do gry z Bedrock, ViaVersion, EssentialsX, SkinsRestorer, Chunky, WorldEdit).
+              </p>
+            </div>
+
+            <div class="server-plugins-top-actions">
+              <div class="ui-segmented-control" id="server-plugins-tabs">
+                <button class="ui-segment-btn active" data-tab="browse" id="srv-tab-browse">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                  <span>Szukaj w Modrinth</span>
+                </button>
+                <button class="ui-segment-btn" data-tab="installed" id="srv-tab-installed">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                  <span>Zainstalowane (<span id="srv-installed-count">0</span>)</span>
+                </button>
+              </div>
+              <button class="btn-secondary" id="btn-open-plugins-folder" title="Otwórz folder plugins na dysku">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                <span>Folder plugins</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Vanilla Warning Banner (if engine is vanilla) -->
+          <div class="server-plugins-vanilla-warn" id="server-plugins-vanilla-warn" style="display: none;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #FBBF24; flex-shrink: 0;"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            <span>Silnik <strong>Vanilla</strong> nie obsługuje pluginów. Aby instalować wtyczki, zmień silnik w ustawieniach powyżej na <strong>Paper</strong> lub <strong>Purpur</strong>.</span>
+          </div>
+
+          <!-- Search & Filter Controls -->
+          <div class="server-plugins-search-bar" id="server-plugins-search-bar">
+            <div class="server-plugins-input-wrap">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input type="text" class="ui-input" id="server-plugins-search-input" placeholder="Wpisz nazwę pluginu (np. Geyser, ViaVersion, Essentials, SkinsRestorer, Chunky)...">
+              <button class="server-plugins-clear-btn" id="btn-clear-plugins-search" style="display: none;" title="Wyczyść szukanie">✕</button>
+            </div>
+            <div class="server-plugins-chips">
+              <button class="srv-chip active" data-filter="all">Wszystkie</button>
+              <button class="srv-chip" data-filter="crossplay">Crossplay (Bedrock)</button>
+              <button class="srv-chip" data-filter="admin">Administracja</button>
+              <button class="srv-chip" data-filter="world">Świat i Optymalizacja</button>
+            </div>
+          </div>
+
+          <!-- View: Browse Modrinth -->
+          <div class="server-plugins-tab-pane active" id="server-plugins-browse-pane">
+            <div class="server-plugins-grid" id="server-plugins-browse-grid">
+              <!-- Rendered via JS -->
+            </div>
+          </div>
+
+          <!-- View: Installed Plugins -->
+          <div class="server-plugins-tab-pane" id="server-plugins-installed-pane" style="display: none;">
+            <div class="server-plugins-list" id="server-plugins-installed-list">
+              <!-- Rendered via JS -->
+            </div>
+          </div>
+        </div>
+
         <div class="terminal-card">
           <div class="terminal-header">
             <div style="display: flex; align-items: center; gap: 8px;">
@@ -1248,38 +1751,85 @@
       </section>
 
       <!-- ==================================================================
-           VIEW 7: AKTUALNOŚCI I CHANGELOG (#view-messages)
+           VIEW 7: AKTUALNOŚCI I DZIENNIK ZDARZEŃ (#view-messages)
            ================================================================== -->
       <section class="tab-view" id="view-messages">
         <div class="view-header">
           <div class="view-title-group">
-            <span class="section-kicker">Komunikaty Systemowe</span>
-            <h1 class="view-title">Aktualności i Dziennik Zmian</h1>
-            <p class="view-subtitle">Najnowsze aktualizacje ekosystemu KasteuszLauncher, KasteuszVisuals 2 oraz Szkolne SMP.</p>
+            <span class="section-kicker">Historia Aktualizacji</span>
+            <h1 class="view-title">Dziennik Zdarzeń i Zmian</h1>
+            <p class="view-subtitle">Pełna lista zmian, nowych funkcji i poprawek wprowadzonych w Kasteusz Launcher.</p>
           </div>
         </div>
 
         <div class="news-stack">
           <article class="news-card">
             <div class="news-card-meta">
-              <span class="news-badge">Aktualizacja v2.4 — Obsidian UI</span>
-              <span class="setting-desc tnum">Październik 2026</span>
+              <span class="news-badge emerald">Aktualizacja v2.5 • Skiny, Serwer i Paczki</span>
+              <span class="setting-desc tnum">Listopad 2026</span>
             </div>
-            <h3 style="font-size: 15px;">Kompletny Redesign Interfejsu + Live Lyrics &amp; Menedżer Zasobów</h3>
-            <p class="setting-desc" style="font-size: 12.5px; color: var(--text-secondary);">
-              Wprowadziliśmy nową architekturę Dark Obsidian Glass: boczny panel nawigacji, bezpośredni odczyt ikon i wersji z plików .jar oraz paczek .zip (Resource Packs i Shaders), a także wbudowane Studio Muzyczne z synchronizowanym tekstem piosenek (LRCLIB Live).
-            </p>
+            <h3 class="news-card-title">Prawdziwa zmiana skina w grze, serwer bez Hamachi, eksport paczek i Modrinth dla shaderów</h3>
+            <ul class="news-changelog-list">
+              <li><strong>Prawdziwa zmiana skina w samej grze (Microsoft + Offline):</strong> Wybrana w Garderobie skórka (z pliku .png, presetu lub po nicku gracza) oraz model ramion (Klasyczny 4px / Smukły 3px) wysyłają się teraz prosto na serwery Microsoft/Mojang dla kont Premium oraz zapisują się lokalnie do gry dla kont Offline (obsługa CustomSkinLoader oraz paczki zasobów dla czystej Vanilli).</li>
+              <li><strong>Granie ze znajomymi bez Hamachi / Radmina + wybór wersji serwera:</strong> W zakładce Serwer Lokalny dodano wybór silnika (Paper, Purpur, Fabric Server, Vanilla) i wersji gry (od 1.8.8 do 1.21.11) oraz wbudowany tunel publiczny generujący gotowy adres IP dla znajomych spoza Twojej sieci (działa też dla światów Singleplayer „Udostępnij w LAN”).</li>
+              <li><strong>Eksport i wczytywanie własnych paczek (.mrpack):</strong> Możesz wyeksportować swój profil (mody z Modrinth jako lekkie linki + własne pliki .jar, shadery, opcje i configi) do jednego pliku .mrpack, wysłać go znajomemu i wczytać w Kasteusz Launcherze jednym przyciskiem lub metodą przeciągnij i upuść.</li>
+              <li><strong>Pobieranie Shaderów i Texturepacków z Modrinth + aktualizacja modów:</strong> W zakładce Zasoby i Shadery doszła wyszukiwarka Modrinth (przy pobieraniu shadera na Fabric/Quilt launcher sam dogrywa Iris i Sodium, jeśli ich nie masz), a w zakładce Mody dodano przycisk sprawdzający i pobierający nowsze wersje wgranych modów.</li>
+            </ul>
           </article>
 
           <article class="news-card">
             <div class="news-card-meta">
-              <span class="news-badge emerald">KasteuszVisuals 2 • Minecraft 1.21.11</span>
-              <span class="setting-desc tnum">Mod Klienta</span>
+              <span class="news-badge">Aktualizacja v2.4 • Wygląd i Układ</span>
+              <span class="setting-desc tnum">Listopad 2026</span>
             </div>
-            <h3 style="font-size: 15px;">Kosy CS2 3D, Inspect [F] oraz Menu Muzyki pod klawiszem [M]</h3>
-            <p class="setting-desc" style="font-size: 12.5px; color: var(--text-secondary);">
-              W grze dostępne jest pełne sterowanie muzyką pod klawiszem [M], dynamiczny HUD z tekstem piosenki oraz 8 modeli kos 3D (Butterfly, M9 Bayonet, Karambit, Skeleton, Stiletto, Kunai, Xenohunter, Katana) z płynnymi animacjami pod przytrzymaniem [F].
-            </p>
+            <h3 class="news-card-title">Trzy style wyglądu Kasteusz Launcher z automatycznym restartem okna</h3>
+            <ul class="news-changelog-list">
+              <li><strong>Przełącznik wyglądu w Ustawieniach:</strong> W zakładce Ustawienia → Grafika i Personalizacja dodano wybór trzech układów launchera (Styl 1, Styl 2, Styl 3). Po kliknięciu wybranego stylu konfiguracja zapisuje się automatycznie, a launcher sam się zamyka i uruchamia ponownie w nowym układzie.</li>
+              <li><strong>Styl 1 (Klasyczny):</strong> Dotychczasowy układ z pełnym bocznym paskiem zakładek po lewej stronie, sceną postaci 3D na środku oraz kartą serwera i listą znajomych po prawej.</li>
+              <li><strong>Styl 2 (Układ w stylu Badlion):</strong> Poziomy pasek nawigacji u góry (dopasowany również do pomniejszonego okna, tak aby zakładki Aktualności i Ustawienia były zawsze widoczne) oraz układ trzech kolumn na ekranie głównym: karta Twojego konta, lista paczek/profili i szybkie skróty po lewej, postać 3D z przyciskiem GRAJ na środku oraz lista wgranych modów z przełącznikami WŁ/WYŁ na żywo, status serwera i znajomi po prawej.</li>
+              <li><strong>Styl 3 (Nowy układ z animacją napisów):</strong> Wąski pasek samych ikon po lewej stronie, otwarta scena postaci 3D bez ramek po prawej, animowane napisy na ekranie startowym, wybór profilu obok przycisku ODPAL GRĘ oraz dolny pasek szybkiego dostępu do serwera, modów, garderoby i znajomych.</li>
+              <li><strong>Spójna nazwa i nowe logo:</strong> Ujednolicono oznaczenie Kasteusz Launcher we wszystkich trzech stylach oraz odświeżono ikonę launchera przy zachowaniu pełnej obsługi motywów kolorystycznych i animowanego tła.</li>
+            </ul>
+          </article>
+
+          <article class="news-card">
+            <div class="news-card-meta">
+              <span class="news-badge emerald">Aktualizacja v2.3 • Paczki i Silniki</span>
+              <span class="setting-desc tnum">Październik 2026</span>
+            </div>
+            <h3 class="news-card-title">Instalator paczek modów z Modrinth, obsługa Forge i pełna izolacja profili</h3>
+            <ul class="news-changelog-list">
+              <li><strong>Pobieranie paczek modów (.mrpack):</strong> Wyszukiwarka paczek z Modrinth bezpośrednio w launcherze z możliwością wyboru konkretnej wersji gry oraz podglądem pobierania na żywo (prędkość MB/s, pobrane dane, liczba plików i czas instalacji).</li>
+              <li><strong>Osobne katalogi dla każdego profilu:</strong> Każdy profil przechowuje własne mody, światy, paczki zasobów, shadery, ustawienia options.txt oraz własny limit pamięci RAM, dzięki czemu różne wersje i paczki nie nadpisują sobie plików.</li>
+              <li><strong>Wsparcie dla Fabric, Forge, Quilt i Vanilla:</strong> Dodano uruchamianie profili i paczek na silniku Forge (wraz z poprawką argumentów startowych JVM dla starszych i nowszych wersji Forge) obok Fabric, Quilt i czystej wersji gry.</li>
+              <li><strong>Poprawka wczytywania świata na 1.20.1 i czysty rozruch:</strong> Naprawiono błąd zawieszania się ładowania świata na 100% przy większych paczkach modów na wersji 1.20.1 oraz usunięto automatyczne dogrywanie starego wbudowanego moda HUD przy starcie Minecrafta.</li>
+            </ul>
+          </article>
+
+          <article class="news-card">
+            <div class="news-card-meta">
+              <span class="news-badge">Aktualizacja v2.2 • Narzędzia i Diagnostyka</span>
+              <span class="setting-desc tnum">Październik 2026</span>
+            </div>
+            <h3 class="news-card-title">Naprawa błędów gry, test sprzętu pod FPS, menedżer zasobów i zrzuty ekranu</h3>
+            <ul class="news-changelog-list">
+              <li><strong>Naprawa Błędów (diagnoza crashy):</strong> Automatyczne sprawdzanie logów i raportów crashy po wyłączeniu gry — wykrywa brakujące biblioteki (np. Fabric API, Indium), złą wersję Javy, brak pamięci RAM lub konflikty między modami i pozwala jednym kliknięciem pobrać brakującą zależność albo wyłączyć wadliwy plik .jar.</li>
+              <li><strong>Test PC i optymalizacja ustawień:</strong> Sprawdzanie procesora, karty graficznej oraz ilości pamięci RAM z automatycznym doborem przydziału RAM-u, flag startowych Javy i ustawień wydajności dla wybranego profilu.</li>
+              <li><strong>Zasoby, Shadery i Galeria screenów:</strong> Dodano osobną zakładkę do zarządzania paczkami zasobów i shaderami (.zip) z odczytem ikon oraz galerię zrzutów ekranu z gry (F2) z podglądem, kopiowaniem obrazu do schowka, otwieraniem folderu i usuwaniem.</li>
+            </ul>
+          </article>
+
+          <article class="news-card">
+            <div class="news-card-meta">
+              <span class="news-badge emerald">Aktualizacja v2.1 • Muzyka, Garderoba i Sieć</span>
+              <span class="setting-desc tnum">Październik 2026</span>
+            </div>
+            <h3 class="news-card-title">Odtwarzacz muzyki ze Spotify, Garderoba 3D, logowanie i serwer lokalny</h3>
+            <ul class="news-changelog-list">
+              <li><strong>Muzyka w tle i konto Spotify:</strong> Wbudowany odtwarzacz ze stacjami radiowymi oraz logowaniem do Spotify (działającym bez włączonej aplikacji Spotify na komputerze), wyszukiwarką piosenek, playlistami, globalnymi skrótami klawiszowymi i synchronizowanym tekstem utworów na żywo.</li>
+              <li><strong>Garderoba 3D i zarządzanie kontami:</strong> Interaktywny podgląd postaci 3D na ekranie startowym, wgrywanie własnych skinów z pliku .png lub pobieranie po nicku gracza, pelerynki, Elytra i dodatki 3D, a także obsługa kont Microsoft Premium oraz trybu Offline z szybkim przełączaniem profili graczy.</li>
+              <li><strong>Serwer lokalny, Szkolne SMP i Discord RPC:</strong> Zakładka do stawiania własnego serwera Paper/Vanilla z konsolą komend na żywo, widżet statusu oficjalnego serwera szkolnesmp.com.pl z liczbą graczy, lista znajomych oraz wyświetlanie aktualnej gry na Discordzie.</li>
+            </ul>
           </article>
         </div>
       </section>
@@ -1414,7 +1964,75 @@
               </div>
               <div>
                 <div class="setting-title">Grafika i Personalizacja</div>
-                <div class="setting-desc">Motyw akcentu, animowane tło Canvas 60 FPS oraz dźwięki UI</div>
+                <div class="setting-desc">Wygląd interfejsu, motyw akcentu, animowane tło Canvas 60 FPS oraz dźwięki UI</div>
+              </div>
+            </div>
+
+            <div class="setting-row-col">
+              <div class="ram-header-line">
+                <span class="setting-title">Wygląd launchera</span>
+                <span class="style-restart-pill">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                  Restartuje launcher
+                </span>
+              </div>
+              <div class="launcher-style-grid" id="launcher-style-grid">
+                <button type="button" class="launcher-style-card active" data-launcher-style="style1">
+                  <div class="lsc-preview lsc-prev-s1">
+                    <div class="lsc-prev-sidebar"></div>
+                    <div class="lsc-prev-main">
+                      <div class="lsc-prev-stage"></div>
+                      <div class="lsc-prev-bar"></div>
+                    </div>
+                    <div class="lsc-prev-rail"></div>
+                  </div>
+                  <div class="lsc-meta">
+                    <div class="lsc-title-row">
+                      <span class="lsc-name">Styl 1</span>
+                      <span class="lsc-badge">Domyślny</span>
+                    </div>
+                    <span class="lsc-desc">Obecny układ z bocznym menu, kartą postaci i panelem po prawej</span>
+                  </div>
+                </button>
+
+                <button type="button" class="launcher-style-card" data-launcher-style="style2">
+                  <div class="lsc-preview lsc-prev-s2">
+                    <div class="lsc-prev-topnav"></div>
+                    <div class="lsc-prev-s2-body">
+                      <div class="lsc-prev-col"></div>
+                      <div class="lsc-prev-center">
+                        <div class="lsc-prev-hud"></div>
+                        <div class="lsc-prev-play"></div>
+                      </div>
+                      <div class="lsc-prev-col"></div>
+                    </div>
+                  </div>
+                  <div class="lsc-meta">
+                    <div class="lsc-title-row">
+                      <span class="lsc-name">Styl 2</span>
+                      <span class="lsc-badge s2">Badlion</span>
+                    </div>
+                    <span class="lsc-desc">Górne menu, profil gracza, paczki, lista modów na żywo i skróty</span>
+                  </div>
+                </button>
+
+                <button type="button" class="launcher-style-card" data-launcher-style="style3">
+                  <div class="lsc-preview lsc-prev-s3">
+                    <div class="lsc-prev-dock"></div>
+                    <div class="lsc-prev-editorial">
+                      <div class="lsc-prev-typo"></div>
+                      <div class="lsc-prev-cta"></div>
+                    </div>
+                    <div class="lsc-prev-figure"></div>
+                  </div>
+                  <div class="lsc-meta">
+                    <div class="lsc-title-row">
+                      <span class="lsc-name">Styl 3</span>
+                      <span class="lsc-badge s3">Autorski</span>
+                    </div>
+                    <span class="lsc-desc">Wąski pasek ikon, otwarta scena bez ramek i duże animowane napisy</span>
+                  </div>
+                </button>
               </div>
             </div>
 
@@ -1546,7 +2164,60 @@
             </div>
           </div>
 
-          <!-- Category 5: Diagnostic Logs Console -->
+          <!-- Category 5: Automatyczne Aktualizacje Launchera -->
+          <div class="settings-card full-span">
+            <div class="settings-card-header">
+              <div class="settings-card-icon" style="color: #818CF8;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21h5v-5"/>
+                </svg>
+              </div>
+              <div style="flex: 1;">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+                  <div class="setting-title">Automatyczne Aktualizacje Launchera (GitHub Releases)</div>
+                  <span class="update-status-pill up-to-date" id="settings-update-status-pill">Najnowsza wersja</span>
+                </div>
+                <div class="setting-desc">Pobieraj nowe wydania dla Windows (.exe) i Linux (.AppImage) bez konieczności ponownego wysyłania instalatora</div>
+              </div>
+            </div>
+
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--border-subtle); flex-wrap: wrap;">
+              <div>
+                <div style="font-size: 13px; font-weight: 600; color: #EEF2FF;">
+                  Bieżąca wersja: <span class="tnum" id="settings-current-version" style="color: #A5B4FC; font-family: var(--font-mono);">v2.5.0</span>
+                </div>
+                <div style="font-size: 11.5px; color: var(--text-muted); margin-top: 2px;" id="settings-update-message">
+                  Sprawdzono automatycznie w tle.
+                </div>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <button class="btn-secondary" id="btn-settings-check-update">Sprawdź aktualizacje</button>
+                <button class="btn-update-cta" id="btn-settings-download-update" style="display: none;">Pobierz aktualizację</button>
+                <button class="btn-update-cta restart" id="btn-settings-install-update" style="display: none;">Zrestartuj i zastosuj</button>
+              </div>
+            </div>
+
+            <div id="settings-update-progress-row" style="display: none; padding-top: 10px;">
+              <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 5px;">
+                <span id="settings-update-progress-label">Pobieranie nowej wersji...</span>
+                <span id="settings-update-progress-pct" class="tnum" style="font-weight: 700; color: #818CF8;">0%</span>
+              </div>
+              <div style="width: 100%; height: 5px; background: rgba(255,255,255,0.08); border-radius: 999px; overflow: hidden;">
+                <div id="settings-update-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #6366F1, #10B981); transition: width 0.2s;"></div>
+              </div>
+            </div>
+
+            <div class="setting-row-col" style="margin-top: 12px;">
+              <span class="setting-title">Źródło wydań GitHub (Właściciel / Repozytorium)</span>
+              <div class="input-with-btn">
+                <input type="text" class="ui-input tnum" id="setting-github-repo" placeholder="np. filipeczek1/KasteuszLauncher" value="filipeczek1/KasteuszLauncher">
+                <button class="btn-secondary" id="btn-save-github-repo">Zapisz</button>
+              </div>
+              <span class="setting-desc">Podaj repozytorium GitHub, z którego launcher ma automatycznie pobierać nowe wersje gry i instalatory.</span>
+            </div>
+          </div>
+
+          <!-- Category 6: Diagnostic Logs Console -->
           <div class="settings-card full-span">
             <div style="display: flex; align-items: center; justify-content: space-between;">
               <div>
@@ -1792,20 +2463,40 @@
 
       <!-- Skins Tab -->
       <div class="wardrobe-tab-content" id="wardrobe-content-skins">
-        <span class="section-kicker">Pobierz skórkę dowolnego gracza Premium</span>
+        <div class="wardrobe-skin-sync-banner" id="wardrobe-skin-sync-banner">
+          <div style="display: flex; flex-direction: column; gap: 2px;">
+            <span class="setting-title" id="wardrobe-skin-sync-title" style="font-size: 12.5px;">Synchronizacja skórki z grą</span>
+            <span class="setting-desc" id="wardrobe-skin-sync-desc">Każda zmiana skórki zapisuje się od razu w samej grze (Microsoft API dla kont Premium lub CustomSkinLoader / paczka dla Offline).</span>
+          </div>
+          <button type="button" class="btn-secondary" id="btn-wardrobe-install-csl" style="display: none; white-space: nowrap; height: 30px; font-size: 11.5px;">Dograj CustomSkinLoader</button>
+        </div>
+
+        <div>
+          <span class="section-kicker" style="display: block; margin-bottom: 6px;">Model ramion postaci w grze</span>
+          <div class="segmented-control" style="width: 100%; display: grid; grid-template-columns: 1fr 1fr;">
+            <button type="button" class="seg-btn active" id="skin-variant-classic" data-variant="CLASSIC" style="justify-content: center;">
+              <span>Klasyczny (Steve • 4px)</span>
+            </button>
+            <button type="button" class="seg-btn" id="skin-variant-slim" data-variant="SLIM" style="justify-content: center;">
+              <span>Smukły (Alex • 3px)</span>
+            </button>
+          </div>
+        </div>
+
+        <span class="section-kicker">Pobierz skórkę dowolnego gracza</span>
         <div class="input-with-btn">
           <input type="text" class="ui-input" id="wardrobe-nick-input" placeholder="Wpisz nick gracza (np. Technoblade)...">
-          <button class="btn-primary" id="btn-wardrobe-fetch-nick">Załóż skin</button>
+          <button class="btn-primary" id="btn-wardrobe-fetch-nick">Załóż w grze</button>
         </div>
 
         <span class="section-kicker">Szybkie Presety</span>
         <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
-          <button class="btn-secondary skin-preset-btn" id="btn-preset-mcqueen">Domyślny Kasteusz</button>
+          <button class="btn-secondary skin-preset-btn" id="btn-preset-mcqueen">👑 Zygzak McQueen #95</button>
           <button class="btn-secondary skin-preset-btn" id="btn-preset-steve">Klasyczny Steve</button>
           <button class="btn-secondary skin-preset-btn" id="btn-preset-alex">Klasyczna Alex</button>
         </div>
 
-        <button class="btn-secondary" id="btn-wardrobe-upload-skin">Wybierz własny plik skórki (.png) z dysku</button>
+        <button class="btn-secondary" id="btn-wardrobe-upload-skin">Wgraj własny plik skórki (.png) do gry</button>
       </div>
 
       <!-- 3D Cosmetics Tab -->
@@ -1896,7 +2587,7 @@
                 <span class="setting-title">Fabric Loader</span>
                 <span class="loader-pill fabric">Zalecany</span>
               </div>
-              <span class="setting-desc">Pełna obsługa modów .jar, Sodium, Iris, Modrinth i KasteuszVisuals.</span>
+              <span class="setting-desc">Pełna obsługa modów .jar, Sodium, Iris oraz paczek z Modrinth.</span>
             </button>
             <button type="button" class="loader-option-card" data-loader="quilt">
               <div style="display: flex; align-items: center; justify-content: space-between;">
@@ -2103,6 +2794,77 @@
   </div>
 
   <!-- ======================================================================
+       MODAL: WYBÓR WERSJI MODA (#mod-version-modal)
+       ====================================================================== -->
+  <div class="modal-overlay" id="mod-version-modal">
+    <div class="modal-card modal-lg">
+      <div class="modal-header">
+        <div>
+          <span class="section-kicker">Katalog Modrinth</span>
+          <h2 class="modal-title" id="mod-version-modal-title">Wybierz wersję moda</h2>
+        </div>
+        <button class="modal-close" id="btn-close-mod-version-modal">✕</button>
+      </div>
+
+      <!-- Mod Card Preview -->
+      <div style="display: flex; gap: 14px; align-items: center; padding: 14px; border-radius: var(--radius-md); background: var(--surface-2); border: 1px solid var(--border-subtle); margin-bottom: 14px;">
+        <img id="mod-version-modal-icon" src="assets/logo.svg" alt="Mod" style="width: 50px; height: 50px; border-radius: 12px; object-fit: cover; flex-shrink: 0; background: rgba(0,0,0,0.3);">
+        <div style="min-width: 0; flex: 1;">
+          <div id="mod-version-modal-name" style="font-size: 15px; font-weight: 700; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Mod Name</div>
+          <div id="mod-version-modal-author" style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">Autor: ModAuthor</div>
+          <div id="mod-version-modal-target-hint" style="font-size: 11.5px; color: var(--accent); margin-top: 4px; display: flex; align-items: center; gap: 6px;">
+            <span>Twój profil: Fabric 1.21.11</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Filters inside Modal -->
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+        <div>
+          <label style="display: block; font-size: 11.5px; font-weight: 600; color: var(--text-secondary); margin-bottom: 5px;">Wersja Minecraft</label>
+          <select class="ui-select" id="mod-version-filter-mc" style="width: 100%;">
+            <option value="all">Wszystkie wersje gry</option>
+          </select>
+        </div>
+        <div>
+          <label style="display: block; font-size: 11.5px; font-weight: 600; color: var(--text-secondary); margin-bottom: 5px;">Silnik / Loader</label>
+          <select class="ui-select" id="mod-version-filter-loader" style="width: 100%;">
+            <option value="all">Wszystkie loadery</option>
+            <option value="fabric">Fabric</option>
+            <option value="quilt">Quilt</option>
+            <option value="neoforge">NeoForge</option>
+            <option value="forge">Forge</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Loading State -->
+      <div id="mod-version-loading" style="display: none; padding: 30px; text-align: center; color: var(--text-secondary);">
+        <div class="spinner-ring" style="margin: 0 auto 10px auto;"></div>
+        <span>Wczytywanie listy wydań moda z Modrinth...</span>
+      </div>
+
+      <!-- Releases List Container -->
+      <div id="mod-version-list" style="max-height: 280px; min-height: 120px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; padding-right: 4px;">
+        <!-- Elementy wydań wstawiane dynamicznie -->
+      </div>
+
+      <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
+        <div id="mod-version-selected-info" style="font-size: 12px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+          Wybierz wersję z listy powyżej.
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn-secondary" id="btn-cancel-mod-version">Anuluj</button>
+          <button class="btn-primary" id="btn-confirm-mod-version-install" disabled>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <span>Zainstaluj wersję</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================================
        MODAL: INSTALACJA MODPACKA (#modpack-install-modal)
        ====================================================================== -->
   <div class="modal-overlay" id="modpack-install-modal">
@@ -2204,6 +2966,15 @@
           <span id="modpack-stat-files" class="tnum" style="font-weight: 600; color: var(--text-primary); white-space: nowrap;">0 / 0 plików</span>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- Launcher Style Restart Overlay -->
+  <div class="style-restart-overlay" id="style-restart-overlay" style="display: none;">
+    <div class="style-restart-box">
+      <div class="spinner-ring style-restart-spinner"></div>
+      <div class="style-restart-title" id="style-restart-title">Przełączanie na Styl 2...</div>
+      <div class="style-restart-sub">Zapisywanie motywu • Ponowne uruchamianie launchera</div>
     </div>
   </div>
 

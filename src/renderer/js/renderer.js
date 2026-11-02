@@ -1,7 +1,10 @@
 let skinViewer = null;
 let pendingSkinUrl = null;
+let pendingSkinVariant = null;
 let pendingCapeIdOrUrl = null;
 let currentAccount = null;
+let currentSkinVariant = 'CLASSIC';
+let currentAvatarHeadDataUrl = null;
 let currentConfig = null;
 let availableVersions = [];
 let isGameLaunching = false;
@@ -11,6 +14,22 @@ let currentCosmetics = {
   halo: false
 };
 let haloMeshGroup = null;
+
+function isOwnerAccount(account = currentAccount) {
+  if (!account) return false;
+  const name = String(account.username || account.name || '').trim().toLowerCase();
+  const uuid = String(account.uuid || account.id || '').replace(/-/g, '').toLowerCase();
+  return (
+    name === 'mcqueen420_' ||
+    name === 'mcqueen420' ||
+    name === 'kasteusz' ||
+    uuid === 'c78190c60bda425e9feea980e541479'
+  );
+}
+
+function getDefaultSkinForAccount(account = currentAccount) {
+  return isOwnerAccount(account) ? 'assets/mcqueen-skin.png' : 'assets/default-skin.png';
+}
 
 const elements = {
   navPills: document.querySelectorAll('.nav-pill'),
@@ -136,6 +155,7 @@ async function initApp() {
     setupNavigation();
     setupWardrobeListeners();
     setupThemesListeners();
+    setupLauncherStylesListeners();
     setupSettingsListeners();
     setupModsListeners();
     setupProfilesListeners();
@@ -148,6 +168,7 @@ async function initApp() {
     setupScreenshotsListeners();
     setupCrashDoctorListeners();
     setupBenchmarkListeners();
+    setupUpdaterUI();
   } catch (listenerErr) {
     console.error('Błąd rejestracji listenerów UI:', listenerErr);
   }
@@ -191,13 +212,10 @@ function setupWindowControls() {
 
   document.addEventListener('click', (e) => {
     const target = e.target;
-    if (target) {
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.closest('.search-box')) {
-        window.api?.focusWindow?.();
-        const input = target.tagName === 'INPUT' ? target : target.closest('.search-box')?.querySelector('input');
-        if (input && document.activeElement !== input && !target.classList.contains('search-clear-btn')) {
-          input.focus();
-        }
+    if (target && target.closest('.search-box') && !target.classList.contains('search-clear-btn')) {
+      const input = target.closest('.search-box')?.querySelector('input');
+      if (input && document.activeElement !== input) {
+        input.focus();
       }
     }
   });
@@ -242,6 +260,10 @@ function switchToTab(targetTab) {
 
   if (targetTab === 'benchmark') {
     loadBenchmarkHardwareSpecs();
+  }
+
+  if (targetTab === 'server') {
+    loadServerHosting();
   }
 
   if (targetTab === 'play' && skinViewer) {
@@ -330,7 +352,6 @@ function setupNavigation() {
       setTimeout(() => {
         const input = document.getElementById('mod-browse-search-input');
         if (input) {
-          window.api?.focusWindow?.();
           input.focus();
         }
       }, 60);
@@ -343,7 +364,6 @@ function setupNavigation() {
       setTimeout(() => {
         const input = document.getElementById('mods-local-search');
         if (input) {
-          window.api?.focusWindow?.();
           input.focus();
         }
       }, 60);
@@ -465,8 +485,10 @@ function init3DSkinViewer() {
     }
 
     const skinToLoad = pendingSkinUrl || 'assets/default-skin.png';
+    const variantToLoad = pendingSkinVariant || currentSkinVariant;
     pendingSkinUrl = null;
-    updateSkinDisplay(skinToLoad);
+    pendingSkinVariant = null;
+    updateSkinDisplay(skinToLoad, variantToLoad);
 
     if (currentCosmetics.backEquipment && skinViewer.playerObject) {
       skinViewer.playerObject.backEquipment = currentCosmetics.backEquipment;
@@ -493,27 +515,106 @@ function handleViewerResize() {
   }
 }
 
-function updateSkinDisplay(skinUrl) {
+const DEFAULT_HEAD_SVG_DATA_URL = 'data:image/svg+xml;utf8,' + encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8" shape-rendering="crispEdges">' +
+  '<rect width="8" height="8" fill="#B57B5A"/>' +
+  '<rect width="8" height="2" fill="#3B2518"/>' +
+  '<rect x="0" y="2" width="1" height="1" fill="#3B2518"/>' +
+  '<rect x="7" y="2" width="1" height="1" fill="#3B2518"/>' +
+  '<rect x="1" y="4" width="1" height="1" fill="#FFFFFF"/>' +
+  '<rect x="2" y="4" width="1" height="1" fill="#493B7F"/>' +
+  '<rect x="5" y="4" width="1" height="1" fill="#493B7F"/>' +
+  '<rect x="6" y="4" width="1" height="1" fill="#FFFFFF"/>' +
+  '<rect x="3" y="5" width="2" height="1" fill="#8E563B"/>' +
+  '<rect x="2" y="6" width="4" height="1" fill="#633A27"/>' +
+  '</svg>'
+);
+let defaultHeadDataUrl = DEFAULT_HEAD_SVG_DATA_URL;
+
+function attachPlayerHeadImg(imgEl, username, size = 32) {
+  if (!imgEl) return;
+  const clean = encodeURIComponent(String(username || 'Steve').trim() || 'Steve');
+  const px = Math.max(24, Number(size) || 32);
+  const candidates = [
+    `https://minotar.net/helm/${clean}/${px}.png`,
+    `https://mc-heads.net/avatar/${clean}/${px}`
+  ];
+  let idx = 0;
+  imgEl.onerror = () => {
+    idx++;
+    if (idx < candidates.length) {
+      imgEl.src = candidates[idx];
+    } else {
+      imgEl.onerror = null;
+      imgEl.src = defaultHeadDataUrl;
+    }
+  };
+  imgEl.src = candidates[0];
+}
+
+function renderSkinHeadDataUrl(skinSrc) {
+  return new Promise((resolve) => {
+    if (!skinSrc || typeof skinSrc !== 'string') return resolve(null);
+    const img = new Image();
+    if (!skinSrc.startsWith('data:') && !skinSrc.startsWith('assets/')) {
+      img.crossOrigin = 'anonymous';
+    }
+    img.onload = () => {
+      try {
+        if (img.width < 32 || img.height < 32) return resolve(null);
+        const scale = img.width / 64;
+        const c = document.createElement('canvas');
+        c.width = 64;
+        c.height = 64;
+        const ctx = c.getContext('2d');
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(img, 8 * scale, 8 * scale, 8 * scale, 8 * scale, 0, 0, 64, 64);
+        ctx.drawImage(img, 40 * scale, 8 * scale, 8 * scale, 8 * scale, 0, 0, 64, 64);
+        resolve(c.toDataURL('image/png'));
+      } catch (_) {
+        resolve(null);
+      }
+    };
+    img.onerror = () => resolve(null);
+    img.src = skinSrc.startsWith('http://') ? skinSrc.replace('http://', 'https://') : skinSrc;
+  });
+}
+
+renderSkinHeadDataUrl('assets/default-skin.png').then((cropped) => {
+  if (!cropped) return;
+  defaultHeadDataUrl = cropped;
+  ['user-avatar-head', 's2-avatar-img', 'modal-account-avatar'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el && el.getAttribute('src') === 'assets/default-skin.png') {
+      el.src = cropped;
+    }
+  });
+});
+
+function updateSkinDisplay(skinUrl, variant = null) {
   let target = skinUrl || 'assets/default-skin.png';
   if (typeof target === 'string' && target.startsWith('http://')) {
     target = target.replace('http://', 'https://');
   }
+  const effectiveVariant = (variant || currentSkinVariant || 'CLASSIC').toUpperCase();
+  const modelOpt = effectiveVariant === 'SLIM' ? 'slim' : 'default';
 
   if (!skinViewer) {
     pendingSkinUrl = target;
+    pendingSkinVariant = effectiveVariant;
     init3DSkinViewer();
     return;
   }
 
   try {
-    skinViewer.loadSkin(target).then(() => {
+    skinViewer.loadSkin(target, { model: modelOpt }).then(() => {
       if (skinViewer.playerObject?.skin) {
         skinViewer.playerObject.skin.visible = true;
       }
     }).catch(err => {
       console.warn('Błąd ładowania skórki, używam fallbacku:', err);
       if (target !== 'assets/default-skin.png') {
-        skinViewer.loadSkin('assets/default-skin.png').then(() => {
+        skinViewer.loadSkin('assets/default-skin.png', { model: 'default' }).then(() => {
           if (skinViewer.playerObject?.skin) {
             skinViewer.playerObject.skin.visible = true;
           }
@@ -556,7 +657,7 @@ async function loadConfig() {
     const customJvmInput = document.getElementById('setting-custom-jvm-args');
     if (customJvmInput) customJvmInput.value = currentConfig.customJvmArgs || '';
 
-    elements.settingJavaPath.value = currentConfig.javaPath || '/usr/bin/java';
+    elements.settingJavaPath.value = (currentConfig.javaPath && currentConfig.javaPath !== 'java' && currentConfig.javaPath !== 'java.exe') ? currentConfig.javaPath : '';
     elements.settingGameDir.value = currentConfig.gameDirectory || '~/.kasteuszlauncher/minecraft';
     elements.settingCloseOnLaunch.checked = !!currentConfig.closeOnLaunch;
 
@@ -565,6 +666,9 @@ async function loadConfig() {
 
     const theme = currentConfig.themeAccent || 'purple';
     applyTheme(theme, false);
+
+    const uiStyle = currentConfig.launcherStyle || 'style1';
+    applyLauncherStyleUI(uiStyle);
 
     if (elements.settingAmbientGlow) {
       elements.settingAmbientGlow.checked = currentConfig.ambientGlow !== false;
@@ -811,6 +915,234 @@ function setupSettingsListeners() {
   });
 }
 
+function setupUpdaterUI() {
+  const topbarPill = document.getElementById('topbar-update-pill');
+  const topbarText = document.getElementById('topbar-update-text');
+  const topbarBtn = document.getElementById('btn-topbar-update-action');
+
+  const globalBanner = document.getElementById('global-update-banner');
+  const bannerHeadline = document.getElementById('update-banner-headline');
+  const bannerSubline = document.getElementById('update-banner-subline');
+  const btnBannerDownload = document.getElementById('btn-banner-download-update');
+  const btnBannerInstall = document.getElementById('btn-banner-install-update');
+  const btnBannerDismiss = document.getElementById('btn-banner-dismiss-update');
+  const bannerProgressBar = document.getElementById('update-download-progress-bar');
+  const bannerProgressFill = document.getElementById('update-progress-bar-fill');
+
+  const settingsStatusPill = document.getElementById('settings-update-status-pill');
+  const settingsCurrentVer = document.getElementById('settings-current-version');
+  const settingsMsg = document.getElementById('settings-update-message');
+  const btnSettingsCheck = document.getElementById('btn-settings-check-update');
+  const btnSettingsDownload = document.getElementById('btn-settings-download-update');
+  const btnSettingsInstall = document.getElementById('btn-settings-install-update');
+  const settingsProgressRow = document.getElementById('settings-update-progress-row');
+  const settingsProgressLabel = document.getElementById('settings-update-progress-label');
+  const settingsProgressPct = document.getElementById('settings-update-progress-pct');
+  const settingsProgressBar = document.getElementById('settings-update-progress-bar');
+  const settingGithubRepo = document.getElementById('setting-github-repo');
+  const btnSaveGithubRepo = document.getElementById('btn-save-github-repo');
+
+  let bannerDismissed = false;
+
+  function renderStatus(status) {
+    if (!status) return;
+
+    if (settingsCurrentVer && status.currentVersion) {
+      settingsCurrentVer.textContent = `v${status.currentVersion}`;
+    }
+    if (settingGithubRepo && status.repo && !settingGithubRepo.matches(':focus')) {
+      settingGithubRepo.value = status.repo;
+    }
+
+    if (status.state === 'checking') {
+      if (settingsStatusPill) {
+        settingsStatusPill.className = 'update-status-pill checking';
+        settingsStatusPill.textContent = 'Sprawdzanie...';
+      }
+      if (settingsMsg) settingsMsg.textContent = 'Łączenie z GitHub Releases...';
+      if (btnSettingsCheck) btnSettingsCheck.disabled = true;
+    } else if (status.state === 'available') {
+      const ver = status.availableVersion ? `v${status.availableVersion}` : 'Nowa wersja';
+      if (settingsStatusPill) {
+        settingsStatusPill.className = 'update-status-pill update-ready';
+        settingsStatusPill.textContent = `Dostępna ${ver}`;
+      }
+      if (settingsMsg) {
+        settingsMsg.textContent = `Wykryto wydanie ${ver}! Kliknij poniżej, aby zaktualizować.`;
+      }
+      if (btnSettingsCheck) btnSettingsCheck.disabled = false;
+      if (btnSettingsDownload) btnSettingsDownload.style.display = 'inline-block';
+      if (btnSettingsInstall) btnSettingsInstall.style.display = 'none';
+
+      if (topbarPill) {
+        topbarPill.style.display = 'inline-flex';
+        if (topbarText) topbarText.textContent = `Aktualizacja ${ver}`;
+      }
+
+      if (!bannerDismissed && globalBanner) {
+        globalBanner.style.display = 'block';
+        if (bannerHeadline) bannerHeadline.textContent = `Dostępna nowa wersja Kasteusz Launcher ${ver}!`;
+        if (bannerSubline) bannerSubline.textContent = status.releaseNotes || 'Pobierz najnowszą wersję w kilka sekund bez utraty ustawień i światów.';
+        if (btnBannerDownload) btnBannerDownload.style.display = 'inline-block';
+        if (btnBannerInstall) btnBannerInstall.style.display = 'none';
+      }
+    } else if (status.state === 'downloading') {
+      if (settingsStatusPill) {
+        settingsStatusPill.className = 'update-status-pill checking';
+        settingsStatusPill.textContent = 'Pobieranie...';
+      }
+      if (settingsProgressRow) settingsProgressRow.style.display = 'block';
+      if (btnSettingsDownload) btnSettingsDownload.style.display = 'none';
+      if (bannerProgressBar) bannerProgressBar.style.display = 'block';
+      if (btnBannerDownload) btnBannerDownload.style.display = 'none';
+    } else if (status.state === 'downloaded') {
+      const ver = status.availableVersion ? `v${status.availableVersion}` : '';
+      if (settingsStatusPill) {
+        settingsStatusPill.className = 'update-status-pill up-to-date';
+        settingsStatusPill.textContent = `Gotowa do restartu`;
+      }
+      if (settingsMsg) {
+        settingsMsg.textContent = `Pobrano aktualizację ${ver}! Zrestartuj launcher, aby zastosować.`;
+      }
+      if (settingsProgressRow) settingsProgressRow.style.display = 'none';
+      if (btnSettingsDownload) btnSettingsDownload.style.display = 'none';
+      if (btnSettingsInstall) btnSettingsInstall.style.display = 'inline-block';
+
+      if (globalBanner) {
+        globalBanner.style.display = 'block';
+        if (bannerHeadline) bannerHeadline.textContent = `Aktualizacja ${ver} pobrana pomyślnie!`;
+        if (bannerSubline) bannerSubline.textContent = 'Kliknij przycisk poniżej, aby zrestartować launcher z najnowszą wersją.';
+        if (btnBannerDownload) btnBannerDownload.style.display = 'none';
+        if (btnBannerInstall) btnBannerInstall.style.display = 'inline-block';
+        if (bannerProgressBar) bannerProgressBar.style.display = 'none';
+      }
+      if (topbarBtn) {
+        topbarBtn.textContent = 'Zrestartuj';
+      }
+    } else if (status.state === 'not-available') {
+      if (settingsStatusPill) {
+        settingsStatusPill.className = 'update-status-pill up-to-date';
+        settingsStatusPill.textContent = 'Najnowsza wersja';
+      }
+      if (settingsMsg) settingsMsg.textContent = 'Posiadasz najbardziej aktualną wersję Kasteusz Launcher.';
+      if (btnSettingsCheck) btnSettingsCheck.disabled = false;
+      if (btnSettingsDownload) btnSettingsDownload.style.display = 'none';
+      if (btnSettingsInstall) btnSettingsInstall.style.display = 'none';
+      if (topbarPill) topbarPill.style.display = 'none';
+      if (globalBanner) globalBanner.style.display = 'none';
+    } else if (status.state === 'error') {
+      if (settingsStatusPill) {
+        settingsStatusPill.className = 'update-status-pill checking';
+        settingsStatusPill.textContent = 'Brak połączenia';
+      }
+      if (settingsMsg) settingsMsg.textContent = `Błąd: ${status.error || 'Nie udało się połączyć z serwerem aktualizacji.'}`;
+      if (btnSettingsCheck) btnSettingsCheck.disabled = false;
+    }
+  }
+
+  function renderProgress(prog) {
+    if (!prog) return;
+    const pct = `${prog.percent || 0}%`;
+    const speedMb = prog.bytesPerSecond ? (prog.bytesPerSecond / (1024 * 1024)).toFixed(1) : '0.0';
+    const mbTotal = prog.total ? (prog.total / (1024 * 1024)).toFixed(1) : '?';
+    const mbTrans = prog.transferred ? (prog.transferred / (1024 * 1024)).toFixed(1) : '0';
+
+    if (settingsProgressRow) settingsProgressRow.style.display = 'block';
+    if (settingsProgressPct) settingsProgressPct.textContent = pct;
+    if (settingsProgressBar) settingsProgressBar.style.width = pct;
+    if (settingsProgressLabel) settingsProgressLabel.textContent = `Pobieranie: ${mbTrans} MB / ${mbTotal} MB (${speedMb} MB/s)`;
+
+    if (bannerProgressBar) bannerProgressBar.style.display = 'block';
+    if (bannerProgressFill) bannerProgressFill.style.width = pct;
+    if (bannerSubline) bannerSubline.textContent = `Pobieranie aktualizacji: ${pct} (${speedMb} MB/s)`;
+  }
+
+  btnBannerDismiss?.addEventListener('click', () => {
+    bannerDismissed = true;
+    if (globalBanner) globalBanner.style.display = 'none';
+  });
+
+  const triggerDownload = async () => {
+    try {
+      showToast('Rozpoczęto pobieranie aktualizacji...');
+      await window.api.downloadUpdate();
+    } catch (err) {
+      showToast(`Błąd pobierania: ${err.message}`);
+    }
+  };
+
+  const triggerInstall = async () => {
+    try {
+      showToast('Restartowanie launchera...');
+      await window.api.installUpdate();
+    } catch (err) {
+      showToast(`Błąd instalacji: ${err.message}`);
+    }
+  };
+
+  btnBannerDownload?.addEventListener('click', triggerDownload);
+  btnSettingsDownload?.addEventListener('click', triggerDownload);
+  btnBannerInstall?.addEventListener('click', triggerInstall);
+  btnSettingsInstall?.addEventListener('click', triggerInstall);
+
+  topbarBtn?.addEventListener('click', () => {
+    const status = window.api.getUpdateStatus ? window.api.getUpdateStatus() : null;
+    if (status && status.state === 'downloaded') triggerInstall();
+    else triggerDownload();
+  });
+
+  btnSettingsCheck?.addEventListener('click', async () => {
+    try {
+      btnSettingsCheck.disabled = true;
+      if (settingsStatusPill) {
+        settingsStatusPill.className = 'update-status-pill checking';
+        settingsStatusPill.textContent = 'Sprawdzanie...';
+      }
+      showToast('Sprawdzanie dostępności aktualizacji na GitHubie...');
+      const res = await window.api.checkForUpdates();
+      renderStatus(res);
+      if (res?.state === 'not-available') {
+        showToast('Posiadasz najnowszą wersję launchera!');
+      }
+    } catch (err) {
+      showToast(`Błąd sprawdzania aktualizacji: ${err.message}`);
+    } finally {
+      btnSettingsCheck.disabled = false;
+    }
+  });
+
+  btnSaveGithubRepo?.addEventListener('click', async () => {
+    const val = settingGithubRepo?.value.trim();
+    if (!val || !val.includes('/')) {
+      showToast('Wpisz repozytorium w formacie: właściciel/nazwa (np. filipeczek1/KasteuszLauncher)');
+      return;
+    }
+    try {
+      await window.api.saveUpdateRepo(val);
+      showToast(`Zapisano źródło aktualizacji: ${val}`);
+      await window.api.checkForUpdates();
+    } catch (err) {
+      showToast(`Błąd: ${err.message}`);
+    }
+  });
+
+  if (window.api?.onUpdateStatusChanged) {
+    window.api.onUpdateStatusChanged((status) => {
+      renderStatus(status);
+    });
+  }
+
+  if (window.api?.onUpdateProgress) {
+    window.api.onUpdateProgress((prog) => {
+      renderProgress(prog);
+    });
+  }
+
+  if (window.api?.getUpdateStatus) {
+    window.api.getUpdateStatus().then(status => renderStatus(status)).catch(() => {});
+  }
+}
+
 async function loadAccount() {
   try {
     currentAccount = await window.api.getActiveAccount();
@@ -821,33 +1153,123 @@ async function loadAccount() {
   }
 }
 
+function syncSkinVariantButtons() {
+  const btnClassic = document.getElementById('skin-variant-classic');
+  const btnSlim = document.getElementById('skin-variant-slim');
+  btnClassic?.classList.toggle('active', currentSkinVariant !== 'SLIM');
+  btnSlim?.classList.toggle('active', currentSkinVariant === 'SLIM');
+}
+
+function updateWardrobeSkinSyncBanner() {
+  const titleEl = document.getElementById('wardrobe-skin-sync-title');
+  const descEl = document.getElementById('wardrobe-skin-sync-desc');
+  const btnCsl = document.getElementById('btn-wardrobe-install-csl');
+  if (!titleEl || !descEl) return;
+
+  if (currentAccount?.isPremium) {
+    titleEl.textContent = 'Konto Microsoft Premium — zapis prosto do Minecraft';
+    descEl.textContent = 'Każda zmiana skórki, modelu ramion (4px/3px) lub oficjalnej pelerynki jest wysyłana prosto na serwery Mojang i od razu widoczna w grze.';
+    if (btnCsl) btnCsl.style.display = 'none';
+    return;
+  }
+
+  const activeProf = typeof getActiveProfileObj === 'function' ? getActiveProfileObj() : null;
+  const loader = activeProf?.loader || 'fabric';
+  const isModded = loader === 'fabric' || loader === 'quilt' || loader === 'forge';
+  const hasCsl = Array.isArray(installedMods) && installedMods.some(
+    m => m.enabled && /customskinloader/i.test(`${m.filename || ''} ${m.name || ''} ${m.displayName || ''}`)
+  );
+
+  if (!currentAccount) {
+    titleEl.textContent = 'Zaloguj się, aby zapisywać skórkę w grze';
+    descEl.textContent = 'Po zalogowaniu (Microsoft lub Offline) każda zmiana skórki w Garderobie trafi bezpośrednio do gry.';
+    if (btnCsl) btnCsl.style.display = 'none';
+  } else if (isModded && hasCsl) {
+    titleEl.textContent = 'Tryb Offline + CustomSkinLoader gotowy';
+    descEl.textContent = 'Twoja skórka z Garderoby zapisuje się w folderze CustomSkinLoader i ładuje w grze na Twoim nicku.';
+    if (btnCsl) btnCsl.style.display = 'none';
+  } else if (isModded) {
+    titleEl.textContent = 'Tryb Offline — zapis lokalny w profilu gry';
+    descEl.textContent = 'Skórka zapisuje się w plikach gry. Dograj mod CustomSkinLoader obok, żeby widzieć ją na dowolnym nicku i serwerach.';
+    if (btnCsl) btnCsl.style.display = 'inline-flex';
+  } else {
+    titleEl.textContent = 'Tryb Offline (Vanilla) — automatyczna paczka skórki';
+    descEl.textContent = 'Przed uruchomieniem gry launcher automatycznie tworzy i włącza lokalną paczkę zasobów z Twoją skórką.';
+    if (btnCsl) btnCsl.style.display = 'none';
+  }
+}
+
 async function applyAccountToUI(account) {
   currentAccount = account;
+  currentAvatarHeadDataUrl = null;
   const subTypeEl = document.getElementById('user-account-type-label');
   const quickAccEl = document.getElementById('quick-stat-account');
 
   if (account) {
+    currentSkinVariant = (account.skinVariant || 'CLASSIC').toUpperCase() === 'SLIM' ? 'SLIM' : 'CLASSIC';
+    syncSkinVariantButtons();
+
     elements.userNicknameText.textContent = account.username;
     if (elements.userStatusDot) {
       elements.userStatusDot.classList.add('online');
       elements.userStatusDot.style.background = '';
     }
-    const typeLabel = account.isPremium ? 'Microsoft Premium' : 'Sesja Offline';
-    if (subTypeEl) subTypeEl.textContent = typeLabel;
-    if (quickAccEl) quickAccEl.textContent = typeLabel;
+    const isOwner = isOwnerAccount(account);
+    const typeLabel = isOwner ? '👑 Właściciel' : (account.isPremium ? 'Microsoft Premium' : 'Sesja Offline');
+    if (subTypeEl) {
+      subTypeEl.textContent = typeLabel;
+      if (isOwner) {
+        subTypeEl.style.color = '#F59E0B';
+        subTypeEl.style.fontWeight = '700';
+      } else {
+        subTypeEl.style.color = '';
+        subTypeEl.style.fontWeight = '';
+      }
+    }
+    if (quickAccEl) {
+      quickAccEl.textContent = typeLabel;
+      if (isOwner) {
+        quickAccEl.style.color = '#F59E0B';
+        quickAccEl.style.fontWeight = '700';
+      } else {
+        quickAccEl.style.color = '';
+        quickAccEl.style.fontWeight = '';
+      }
+    }
 
-    let skinToUse = account.customSkinUrl || account.skinUrl || 'assets/default-skin.png';
+    const defaultSkin = getDefaultSkinForAccount(account);
+    const skinToUse = account.skinUrl || account.customSkinUrl || defaultSkin;
 
     if (skinToUse) {
-      updateSkinDisplay(skinToUse);
-      if (elements.userAvatarHead) elements.userAvatarHead.src = `https://mc-heads.net/avatar/${encodeURIComponent(account.username)}/32`;
+      updateSkinDisplay(skinToUse, currentSkinVariant);
+      if (elements.userAvatarHead) attachPlayerHeadImg(elements.userAvatarHead, account.username, 48);
+      renderSkinHeadDataUrl(skinToUse).then((headDataUrl) => {
+        if (headDataUrl && currentAccount && currentAccount.username === account.username) {
+          currentAvatarHeadDataUrl = headDataUrl;
+          if (elements.userAvatarHead) {
+            elements.userAvatarHead.onerror = null;
+            elements.userAvatarHead.src = headDataUrl;
+          }
+          if (elements.modalAccountAvatar && elements.profileModal?.classList.contains('open')) {
+            elements.modalAccountAvatar.onerror = null;
+            elements.modalAccountAvatar.src = headDataUrl;
+          }
+          const s2Img = document.getElementById('s2-avatar-img');
+          if (s2Img) {
+            s2Img.onerror = null;
+            s2Img.src = headDataUrl;
+          }
+        }
+      });
     } else {
-      updateSkinDisplay('assets/default-skin.png');
-      if (elements.userAvatarHead) elements.userAvatarHead.src = 'assets/default-skin.png';
+      updateSkinDisplay(defaultSkin, currentSkinVariant);
+      if (elements.userAvatarHead) elements.userAvatarHead.src = defaultHeadDataUrl;
     }
 
     renderAccountCapes(account);
   } else {
+    currentSkinVariant = 'CLASSIC';
+    syncSkinVariantButtons();
     elements.userNicknameText.textContent = 'Zaloguj się';
     if (elements.userStatusDot) {
       elements.userStatusDot.classList.remove('online');
@@ -855,9 +1277,11 @@ async function applyAccountToUI(account) {
     }
     if (subTypeEl) subTypeEl.textContent = 'Kliknij, aby połączyć';
     if (quickAccEl) quickAccEl.textContent = 'Wymagane logowanie';
-    if (elements.userAvatarHead) elements.userAvatarHead.src = 'assets/default-skin.png';
-    updateSkinDisplay('assets/default-skin.png');
+    if (elements.userAvatarHead) elements.userAvatarHead.src = defaultHeadDataUrl;
+    updateSkinDisplay('assets/default-skin.png', 'CLASSIC');
   }
+  updateWardrobeSkinSyncBanner();
+  syncS2ProfileWidget();
 }
 
 elements.btnCloseLoginModal.addEventListener('click', closeLoginModal);
@@ -911,15 +1335,26 @@ elements.btnProfileChangeNick.addEventListener('click', async () => {
     showToast('Wpisz nick gracza Minecraft.');
     return;
   }
-  showToast(`Pobieranie skórki Minecraft dla ${newNick}...`);
+  showToast(currentAccount?.isPremium
+    ? `Pobieranie skórki gracza ${newNick} i wysyłanie na konto Microsoft...`
+    : `Pobieranie skórki Minecraft dla ${newNick}...`);
   try {
     const updated = await window.api.setUsername(newNick);
     await applyAccountToUI(updated);
     elements.modalAccountName.textContent = updated.username;
-    elements.modalAccountAvatar.src = `https://mc-heads.net/avatar/${encodeURIComponent(updated.username)}/48`;
-    showToast(`Ustawiono nick ${updated.username} i wczytano skórkę!`);
+    elements.modalAccountUuid.textContent = `UUID: ${updated.uuid}`;
+    if (currentAvatarHeadDataUrl) {
+      elements.modalAccountAvatar.onerror = null;
+      elements.modalAccountAvatar.src = currentAvatarHeadDataUrl;
+    } else {
+      attachPlayerHeadImg(elements.modalAccountAvatar, updated.username, 48);
+    }
+    showToast(updated.isPremium
+      ? `Wgrano skórkę gracza ${newNick} na Twoje konto Microsoft!`
+      : `Ustawiono nick ${updated.username} i zapisano skórkę w grze!`);
   } catch (err) {
-    showToast(`Błąd: ${err.message}`);
+    const cleanErr = (err.message || '').replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
+    showToast(`Błąd: ${cleanErr}`);
   }
 });
 
@@ -931,23 +1366,32 @@ elements.profileNewUsernameInput.addEventListener('keydown', (e) => {
 
 elements.btnUploadSkinFile.addEventListener('click', async () => {
   try {
-    const updated = await window.api.selectSkinFile();
+    const updated = await window.api.selectSkinFile(currentSkinVariant);
     if (updated) {
       await applyAccountToUI(updated);
-      showToast('Wczytano własną skórkę z pliku .png!');
+      showToast(updated.isPremium
+        ? 'Wysłano własną skórkę .png na konto Microsoft!'
+        : 'Zapisano własną skórkę .png w plikach gry!');
     }
   } catch (err) {
-    showToast(`Błąd wczytywania: ${err.message}`);
+    const cleanErr = (err.message || '').replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
+    showToast(`Błąd wczytywania skórki: ${cleanErr}`);
   }
 });
 
 elements.btnResetDefaultSkin.addEventListener('click', async () => {
   try {
-    const updated = await window.api.setCustomSkin('assets/default-skin.png');
+    currentSkinVariant = 'CLASSIC';
+    syncSkinVariantButtons();
+    const defaultSkin = getDefaultSkinForAccount(currentAccount);
+    const updated = await window.api.setCustomSkin(defaultSkin, 'CLASSIC');
     await applyAccountToUI(updated);
-    showToast('Przywrócono domyślną skórkę.');
+    showToast(updated?.isPremium
+      ? 'Wysłano domyślną skórkę na konto Microsoft.'
+      : 'Przywrócono domyślną skórkę w grze.');
   } catch (err) {
-    showToast(`Błąd: ${err.message}`);
+    const cleanErr = (err.message || '').replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
+    showToast(`Błąd: ${cleanErr}`);
   }
 });
 
@@ -977,6 +1421,7 @@ document.addEventListener('keydown', (e) => {
     closeProfileModal();
     closeWardrobeModal();
     closeProfileEditorModal();
+    document.getElementById('mod-version-modal')?.classList.remove('open', 'active');
   }
 });
 
@@ -998,10 +1443,24 @@ function openProfileModal() {
   }
   elements.modalAccountName.textContent = currentAccount.username;
   elements.modalAccountUuid.textContent = `UUID: ${currentAccount.uuid}`;
-  elements.modalAccountAvatar.src = `https://mc-heads.net/avatar/${encodeURIComponent(currentAccount.username)}/48`;
+  if (currentAvatarHeadDataUrl) {
+    elements.modalAccountAvatar.onerror = null;
+    elements.modalAccountAvatar.src = currentAvatarHeadDataUrl;
+  } else {
+    attachPlayerHeadImg(elements.modalAccountAvatar, currentAccount.username, 48);
+  }
   elements.profileNewUsernameInput.value = currentAccount.username;
 
-  if (currentAccount.isPremium) {
+  if (isOwnerAccount(currentAccount)) {
+    elements.modalAccountBadge.innerHTML = `
+      <span style="color: #F59E0B; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">👑 Właściciel</span>
+      <span style="color: var(--text-muted); font-size: 11px;">• ${currentAccount.isPremium ? 'Microsoft Premium' : 'Offline'}</span>
+    `;
+    elements.modalAccountBadge.style.color = '#F59E0B';
+    if (elements.profileStatRank) {
+      elements.profileStatRank.innerHTML = '<span style="color: #F59E0B; font-weight: 700;">👑 Właściciel</span>';
+    }
+  } else if (currentAccount.isPremium) {
     elements.modalAccountBadge.innerHTML = `
       <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
         <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
@@ -1012,6 +1471,10 @@ function openProfileModal() {
   } else {
     elements.modalAccountBadge.innerHTML = `<span>Tryb testowy (Offline)</span>`;
     elements.modalAccountBadge.style.color = '#eab308';
+  }
+
+  if (window.api?.getStats) {
+    window.api.getStats().then(s => updateStatsUI(s)).catch(() => {});
   }
 
   if (elements.profileModal) elements.profileModal.classList.add('open');
@@ -1044,6 +1507,7 @@ async function loadMods() {
   try {
     installedMods = await window.api.getModsList();
     renderModsList(installedMods);
+    updateWardrobeSkinSyncBanner();
   } catch (err) {
     console.error('Błąd ładowania modów:', err);
   }
@@ -1051,6 +1515,7 @@ async function loadMods() {
 
 function renderModsList(mods) {
   updateModCounters(mods);
+  renderS2QuickModsWidget(mods);
   if (!elements.modsListContainer) return;
   elements.modsListContainer.innerHTML = '';
 
@@ -1189,7 +1654,6 @@ function setupModsListeners() {
   const localSearchBox = localSearch?.closest('.search-box');
   localSearchBox?.addEventListener('click', (e) => {
     if (e.target.id === 'mods-local-search-clear') return;
-    window.api?.focusWindow?.();
     localSearch?.focus();
   });
 
@@ -1265,6 +1729,40 @@ function setupModsListeners() {
     }
   });
 
+  const btnUpdateAllMods = document.getElementById('btn-update-all-mods');
+  btnUpdateAllMods?.addEventListener('click', async () => {
+    const activeProf = getActiveProfileObj();
+    if (activeProf?.loader === 'vanilla') {
+      showToast('Profil Vanilla nie używa modów .jar.');
+      return;
+    }
+    const baseVer = activeProf?.mcVersion || (currentSelectedVersionId || '1.21.11').replace(/^(fabric|quilt)-/, '');
+    const loader = activeProf?.loader === 'quilt' ? 'quilt' : (activeProf?.loader === 'forge' ? 'forge' : 'fabric');
+    const origHtml = btnUpdateAllMods.innerHTML;
+    btnUpdateAllMods.disabled = true;
+    btnUpdateAllMods.innerHTML = `<span class="spinner-ring" style="width: 13px; height: 13px;"></span><span>Sprawdzanie...</span>`;
+    try {
+      const res = await window.api.updateInstalledMods({ gameVersion: baseVer, loader });
+      installedMods = res.mods || installedMods;
+      renderModsList(installedMods);
+      updateWardrobeSkinSyncBanner();
+      await loadProfiles();
+      if (res.updatedCount > 0) {
+        showToast(`Zaktualizowano ${res.updatedCount} z ${res.checkedCount} modów do najnowszej wersji!`);
+      } else if (res.checkedCount > 0) {
+        showToast(`Wszystkie wgrane mody (${res.checkedCount}) są już aktualne.`);
+      } else {
+        showToast('Brak zainstalowanych modów .jar w tym profilu.');
+      }
+    } catch (err) {
+      const cleanErr = (err.message || '').replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
+      showToast(`Błąd aktualizacji modów: ${cleanErr}`);
+    } finally {
+      btnUpdateAllMods.disabled = false;
+      btnUpdateAllMods.innerHTML = origHtml;
+    }
+  });
+
   window.addEventListener('dragover', (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -1286,6 +1784,12 @@ function setupModsListeners() {
     if (!e.dataTransfer || e.dataTransfer.files.length === 0) return;
     const files = Array.from(e.dataTransfer.files);
 
+    const mrpackPaths = files.filter(f => f.name.toLowerCase().endsWith('.mrpack')).map(f => f.path);
+    if (mrpackPaths.length > 0) {
+      await handleImportMrpack(mrpackPaths[0]);
+      return;
+    }
+
     const jarPaths = files.filter(f => f.name.toLowerCase().endsWith('.jar')).map(f => f.path);
     const zipPaths = files.filter(f => f.name.toLowerCase().endsWith('.zip')).map(f => f.path);
 
@@ -1295,6 +1799,8 @@ function setupModsListeners() {
         if (res && res.added > 0) {
           installedMods = res.mods;
           renderModsList(installedMods);
+          updateWardrobeSkinSyncBanner();
+          loadProfiles();
           showToast(`Zaimportowano ${res.added} mod(ów) .jar`);
         }
       } catch (err) {
@@ -1408,12 +1914,264 @@ function renderPacksList(packs) {
   });
 }
 
+let currentPacksMode = 'installed';
+let currentPacksModrinthOffset = 0;
+const PACKS_MODRINTH_PAGE_SIZE = 30;
+let currentPacksModrinthTotalHits = 0;
+let currentPacksModrinthHits = [];
+let packsSearchTimeout = null;
+
+function isPackAlreadyInstalled(hit) {
+  if (!Array.isArray(installedPacks) || installedPacks.length === 0) return false;
+  const slugClean = String(hit.slug || '').toLowerCase().replace(/[-_\s]/g, '');
+  const titleClean = String(hit.title || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  return installedPacks.some((p) => {
+    const fn = String(p.filename || '').toLowerCase().replace(/[-_\s]/g, '');
+    const nm = String(p.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    return (slugClean && slugClean.length > 2 && fn.includes(slugClean))
+      || (titleClean && titleClean.length > 3 && (fn.includes(titleClean) || nm.includes(titleClean)));
+  });
+}
+
+async function loadModrinthPacks(append = false) {
+  const searchInput = document.getElementById('packs-modrinth-search-input');
+  const sortSelect = document.getElementById('packs-modrinth-sort-select');
+  const verLock = document.getElementById('packs-modrinth-ver-lock');
+  const resultsContainer = document.getElementById('packs-modrinth-results');
+  const loadingEl = document.getElementById('packs-modrinth-loading');
+  const hitsCountEl = document.getElementById('packs-modrinth-hits-count');
+  const loadMoreBtn = document.getElementById('btn-packs-modrinth-load-more');
+  const paginationWrap = document.getElementById('packs-modrinth-pagination-wrap');
+
+  if (!resultsContainer) return;
+
+  if (!append) {
+    currentPacksModrinthOffset = 0;
+    currentPacksModrinthHits = [];
+    if (loadingEl) loadingEl.style.display = 'flex';
+    resultsContainer.style.opacity = '0.35';
+    if (paginationWrap) paginationWrap.style.display = 'none';
+  } else if (loadMoreBtn) {
+    loadMoreBtn.disabled = true;
+    loadMoreBtn.innerHTML = `<span class="spinner-ring" style="width: 14px; height: 14px;"></span><span>Ładowanie kolejnych...</span>`;
+  }
+
+  const query = searchInput?.value.trim() || '';
+  const sort = sortSelect?.value || 'downloads';
+  const activeMcVer = (getActiveProfileObj()?.mcVersion || currentSelectedVersionId || '1.21.11').replace(/^(fabric|quilt)-/, '');
+  const onlyCurrent = verLock ? verLock.checked : true;
+
+  const verLockLabel = verLock?.parentElement?.querySelector('span');
+  if (verLockLabel) {
+    verLockLabel.textContent = `Tylko wersja profilu (${activeMcVer})`;
+  }
+  const projectType = currentPackType === 'shaderpacks' ? 'shader' : 'resourcepack';
+
+  try {
+    const res = await window.api.searchModrinth({
+      query,
+      projectType,
+      gameVersion: activeMcVer,
+      sort,
+      onlyCurrentVersion: onlyCurrent,
+      limit: PACKS_MODRINTH_PAGE_SIZE,
+      offset: currentPacksModrinthOffset
+    });
+
+    if (loadingEl) loadingEl.style.display = 'none';
+    resultsContainer.style.opacity = '1';
+
+    currentPacksModrinthTotalHits = res.total_hits || 0;
+    const incomingHits = res.hits || [];
+    currentPacksModrinthHits = append ? currentPacksModrinthHits.concat(incomingHits) : incomingHits;
+
+    if (hitsCountEl) {
+      const label = currentPackType === 'shaderpacks' ? 'shaderów' : 'paczek zasobów';
+      hitsCountEl.textContent = `Znaleziono: ${currentPacksModrinthTotalHits.toLocaleString('pl-PL')} ${label} (wyświetlono: ${currentPacksModrinthHits.length})`;
+    }
+
+    renderModrinthPacksResults(incomingHits, append);
+
+    if (paginationWrap) {
+      if (currentPacksModrinthHits.length < currentPacksModrinthTotalHits) {
+        paginationWrap.style.display = 'flex';
+        if (loadMoreBtn) {
+          loadMoreBtn.disabled = false;
+          loadMoreBtn.innerHTML = `<span>Załaduj więcej (+${PACKS_MODRINTH_PAGE_SIZE})</span>`;
+        }
+      } else {
+        paginationWrap.style.display = 'none';
+      }
+    }
+  } catch (err) {
+    if (loadingEl) loadingEl.style.display = 'none';
+    resultsContainer.style.opacity = '1';
+    if (!append) {
+      resultsContainer.innerHTML = `
+        <div class="empty-state-box" style="grid-column: 1 / -1;">
+          <div class="setting-title" style="color: #F87171;">Błąd pobierania z Modrinth</div>
+          <div class="setting-desc">${err.message || 'Nie udało się załadować katalogu.'}</div>
+        </div>
+      `;
+    } else {
+      showToast(`Błąd ładowania: ${err.message}`);
+      if (loadMoreBtn) {
+        loadMoreBtn.disabled = false;
+        loadMoreBtn.innerHTML = `<span>Spróbuj ponownie</span>`;
+      }
+    }
+  }
+}
+
+function renderModrinthPacksResults(hitsToRender, append = false) {
+  const resultsContainer = document.getElementById('packs-modrinth-results');
+  if (!resultsContainer) return;
+  if (!append) resultsContainer.innerHTML = '';
+
+  const isShader = currentPackType === 'shaderpacks';
+  if ((!hitsToRender || hitsToRender.length === 0) && !append) {
+    resultsContainer.innerHTML = `
+      <div class="empty-state-box" style="grid-column: 1 / -1;">
+        <div class="setting-title">Brak wyników</div>
+        <div class="setting-desc">Nie znaleziono ${isShader ? 'shaderów' : 'pakietów zasobów'} dla wybranych filtrów. Spróbuj zmienić frazę lub wyłączyć filtr wersji profilu.</div>
+      </div>
+    `;
+    return;
+  }
+
+  const activeMcVer = (getActiveProfileObj()?.mcVersion || currentSelectedVersionId || '1.21.11').replace(/^(fabric|quilt)-/, '');
+
+  hitsToRender.forEach((item) => {
+    const card = document.createElement('div');
+    card.className = 'modrinth-card';
+    const installed = isPackAlreadyInstalled(item);
+    const iconUrl = item.icon_url || 'assets/logo.svg';
+    const downloadsFmt = formatDownloads(item.downloads);
+    const badgeLabel = isShader ? 'Shader' : 'Tekstury';
+
+    card.innerHTML = `
+      <div class="modrinth-card-top">
+        <img src="${iconUrl}" class="modrinth-card-icon" alt="${item.title}" onerror="this.src='assets/logo.svg'">
+        <div class="modrinth-card-head">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 2px;">
+            <div class="modrinth-card-title" title="${item.title}">${item.title}</div>
+            <span class="mod-tag">${badgeLabel}</span>
+          </div>
+          <div class="modrinth-card-author">Autor: ${item.author || 'Społeczność'}</div>
+          <div class="modrinth-card-desc" title="${item.description || ''}">${item.description || ''}</div>
+        </div>
+      </div>
+
+      <div class="modrinth-card-footer">
+        <div class="modrinth-stats tnum">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span>${downloadsFmt}</span>
+          ${item.versions && item.versions.length > 0 ? `<span class="mod-tag">MC ${item.versions[item.versions.length - 1]}</span>` : ''}
+        </div>
+
+        ${installed ? `
+          <button class="btn-modrinth-install installed" disabled>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="20 6 9 17 4 12"/></svg>
+            <span>Wgrano</span>
+          </button>
+        ` : `
+          <button class="btn-modrinth-install btn-pack-download">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <span>Pobierz</span>
+          </button>
+        `}
+      </div>
+    `;
+
+    const dlBtn = card.querySelector('.btn-pack-download');
+    dlBtn?.addEventListener('click', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dlBtn.disabled = true;
+      dlBtn.classList.add('installing');
+      dlBtn.innerHTML = `<span class="spinner-ring" style="width: 13px; height: 13px;"></span><span>Pobieranie...</span>`;
+
+      try {
+        const activeProf = getActiveProfileObj();
+        const res = await window.api.installModrinthPack({
+          projectId: item.project_id || item.id,
+          slug: item.slug,
+          packType: currentPackType,
+          gameVersion: activeMcVer,
+          loader: activeProf?.loader || 'fabric'
+        });
+        if (res?.packs) {
+          installedPacks = res.packs;
+          renderPacksList(installedPacks);
+        }
+        if (Array.isArray(res?.autoInstalledMods) && res.autoInstalledMods.length > 0) {
+          await loadMods();
+          await loadProfiles();
+          showToast(`Pobrano ${item.title} oraz automatycznie dograno: ${res.autoInstalledMods.join(', ')}!`);
+        } else {
+          showToast(`Pobrano i włączono: ${item.title}!`);
+        }
+        dlBtn.className = 'btn-modrinth-install installed';
+        dlBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="20 6 9 17 4 12"/></svg><span>Wgrano</span>`;
+      } catch (dlErr) {
+        const cleanErr = (dlErr.message || '').replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
+        showToast(`Błąd pobierania paczki: ${cleanErr}`);
+        dlBtn.disabled = false;
+        dlBtn.className = 'btn-modrinth-install btn-pack-download';
+        dlBtn.innerHTML = `<span>Ponów</span>`;
+      }
+    });
+
+    resultsContainer.appendChild(card);
+  });
+}
+
 function setupPacksListeners() {
   const btnRes = document.getElementById('packs-subtab-resourcepacks');
   const btnSha = document.getElementById('packs-subtab-shaderpacks');
+  const btnModeInstalled = document.getElementById('packs-mode-installed');
+  const btnModeModrinth = document.getElementById('packs-mode-modrinth');
+  const wrapInstalled = document.getElementById('packs-view-installed-wrap');
+  const wrapModrinth = document.getElementById('packs-view-modrinth-wrap');
   const dropTitle = document.getElementById('packs-dropzone-title');
   const btnAdd = document.getElementById('btn-add-packs');
   const btnOpen = document.getElementById('btn-open-packs-folder');
+
+  const searchInput = document.getElementById('packs-modrinth-search-input');
+  const clearBtn = document.getElementById('packs-modrinth-search-clear');
+  const searchBtn = document.getElementById('btn-packs-modrinth-search');
+  const sortSelect = document.getElementById('packs-modrinth-sort-select');
+  const verLock = document.getElementById('packs-modrinth-ver-lock');
+  const loadMoreBtn = document.getElementById('btn-packs-modrinth-load-more');
+  const modrinthHint = document.getElementById('packs-modrinth-hint');
+
+  const syncModrinthLabels = () => {
+    const isShader = currentPackType === 'shaderpacks';
+    if (searchInput) {
+      searchInput.placeholder = isShader
+        ? 'Szukaj shaderów (np. Complementary, BSL, MakeUp Ultra Fast, Rethinking Voxels)...'
+        : 'Szukaj paczek zasobów (np. Faithful, Bare Bones, Fresh Animations)...';
+    }
+    if (modrinthHint) {
+      modrinthHint.textContent = isShader
+        ? 'Przeglądasz shadery z Modrinth. Na profilu Fabric/Quilt launcher sam dogra Sodium + Iris, jeśli ich brakuje.'
+        : 'Przeglądasz pakiety zasobów (tekstury) z Modrinth. Pobrana paczka od razu włącza się w grze.';
+    }
+  };
+
+  const switchPacksMode = (mode) => {
+    currentPacksMode = mode;
+    btnModeInstalled?.classList.toggle('active', mode === 'installed');
+    btnModeModrinth?.classList.toggle('active', mode === 'modrinth');
+    if (wrapInstalled) wrapInstalled.style.display = mode === 'installed' ? 'block' : 'none';
+    if (wrapModrinth) wrapModrinth.style.display = mode === 'modrinth' ? 'block' : 'none';
+    syncModrinthLabels();
+    if (mode === 'modrinth') {
+      loadPacks(currentPackType).then(() => loadModrinthPacks(false));
+    } else {
+      loadPacks(currentPackType);
+    }
+  };
 
   const switchPackTab = (type) => {
     currentPackType = type;
@@ -1424,11 +2182,56 @@ function setupPacksListeners() {
         ? 'Przeciągnij i upuść paczki shaderów Iris (.zip)'
         : 'Przeciągnij i upuść pakiety zasobów (.zip)';
     }
-    loadPacks(type);
+    syncModrinthLabels();
+    if (currentPacksMode === 'modrinth') {
+      loadPacks(type).then(() => loadModrinthPacks(false));
+    } else {
+      loadPacks(type);
+    }
   };
 
   btnRes?.addEventListener('click', () => switchPackTab('resourcepacks'));
   btnSha?.addEventListener('click', () => switchPackTab('shaderpacks'));
+  btnModeInstalled?.addEventListener('click', () => switchPacksMode('installed'));
+  btnModeModrinth?.addEventListener('click', () => switchPacksMode('modrinth'));
+
+  searchInput?.closest('.search-box')?.addEventListener('click', (e) => {
+    if (e.target.id === 'packs-modrinth-search-clear') return;
+    searchInput?.focus();
+  });
+
+  searchInput?.addEventListener('input', () => {
+    const val = searchInput.value.trim();
+    if (clearBtn) clearBtn.style.display = val ? 'inline-flex' : 'none';
+    clearTimeout(packsSearchTimeout);
+    packsSearchTimeout = setTimeout(() => loadModrinthPacks(false), 350);
+  });
+
+  searchInput?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      clearTimeout(packsSearchTimeout);
+      loadModrinthPacks(false);
+    }
+  });
+
+  clearBtn?.addEventListener('click', () => {
+    if (searchInput) searchInput.value = '';
+    clearBtn.style.display = 'none';
+    loadModrinthPacks(false);
+  });
+
+  searchBtn?.addEventListener('click', () => {
+    clearTimeout(packsSearchTimeout);
+    loadModrinthPacks(false);
+  });
+
+  sortSelect?.addEventListener('change', () => loadModrinthPacks(false));
+  verLock?.addEventListener('change', () => loadModrinthPacks(false));
+  loadMoreBtn?.addEventListener('click', () => {
+    currentPacksModrinthOffset += PACKS_MODRINTH_PAGE_SIZE;
+    loadModrinthPacks(true);
+  });
 
   btnAdd?.addEventListener('click', async () => {
     try {
@@ -1502,7 +2305,6 @@ function setupModBrowser() {
   const searchBox = searchInput?.closest('.search-box');
   searchBox?.addEventListener('click', (e) => {
     if (e.target.id === 'mod-browse-search-clear') return;
-    window.api?.focusWindow?.();
     searchInput?.focus();
   });
 
@@ -1558,11 +2360,15 @@ function setupModBrowser() {
       e.preventDefault();
       clearTimeout(modSearchTimeout);
       loadModrinthMods(false);
+      searchInput?.focus();
     }
   });
 
   clearBtn?.addEventListener('click', () => {
-    if (searchInput) searchInput.value = '';
+    if (searchInput) {
+      searchInput.value = '';
+      searchInput.focus();
+    }
     if (clearBtn) clearBtn.style.display = 'none';
     loadModrinthMods(false);
   });
@@ -1589,7 +2395,10 @@ function setupModBrowser() {
   });
 
   setupModpackModalEvents();
+  setupModVersionModalEvents();
 }
+
+let modBrowseSearchSeq = 0;
 
 async function loadModrinthMods(append = false) {
   const searchInput = document.getElementById('mod-browse-search-input');
@@ -1603,6 +2412,9 @@ async function loadModrinthMods(append = false) {
   const paginationWrap = document.getElementById('mod-browse-pagination-wrap');
 
   if (!resultsContainer) return;
+
+  const mySeq = ++modBrowseSearchSeq;
+  const wasInputFocused = document.activeElement === searchInput;
 
   if (!append) {
     currentModBrowseOffset = 0;
@@ -1620,8 +2432,13 @@ async function loadModrinthMods(append = false) {
   const query = searchInput?.value.trim() || '';
   const sort = sortSelect?.value || 'downloads';
   const loader = loaderSelect?.value || currentModBrowseLoader || 'all';
-  const onlyCurrent = verLock ? verLock.checked : false;
   const activeMcVer = (getActiveProfileObj()?.mcVersion || currentSelectedVersionId || '1.21.11').replace(/^(fabric|quilt)-/, '');
+  const onlyCurrent = verLock ? verLock.checked : true;
+
+  const verLockLabel = verLock?.parentElement?.querySelector('span');
+  if (verLockLabel) {
+    verLockLabel.textContent = `Tylko wersja profilu (${activeMcVer})`;
+  }
 
   try {
     const res = await window.api.searchModrinth({
@@ -1635,6 +2452,10 @@ async function loadModrinthMods(append = false) {
       limit: MOD_BROWSE_PAGE_SIZE,
       offset: currentModBrowseOffset
     });
+
+    if (mySeq !== modBrowseSearchSeq && !append) {
+      return;
+    }
 
     if (loadingEl) loadingEl.style.display = 'none';
     resultsContainer.style.opacity = '1';
@@ -1654,6 +2475,10 @@ async function loadModrinthMods(append = false) {
     }
 
     renderModBrowseResults(incomingHits, append);
+
+    if (wasInputFocused && document.activeElement !== searchInput) {
+      searchInput?.focus();
+    }
 
     if (paginationWrap) {
       if (currentModBrowseHits.length < currentModBrowseTotalHits) {
@@ -1725,11 +2550,30 @@ function renderModBrowseResults(hitsToRender, append = false) {
     const downloadsFmt = formatDownloads(item.downloads);
 
     const detectedLoaders = (item.categories || item.loaders || []).filter(c => ['fabric', 'quilt', 'forge', 'neoforge'].includes(c.toLowerCase()));
-    const loaderBadgesHtml = detectedLoaders.map(l => {
-      const cls = l.toLowerCase();
-      const label = cls === 'neoforge' ? 'NeoForge' : (cls.charAt(0).toUpperCase() + cls.slice(1));
-      return `<span class="mod-tag tag-${cls}">${label}</span>`;
-    }).join(' ');
+    const activeProfLoader = (getActiveProfileObj()?.loader || 'fabric').toLowerCase();
+    detectedLoaders.sort((a, b) => {
+      const aIs = a.toLowerCase() === activeProfLoader ? -1 : 0;
+      const bIs = b.toLowerCase() === activeProfLoader ? -1 : 0;
+      return aIs - bIs;
+    });
+
+    let loaderBadgesHtml = '';
+    if (detectedLoaders.length > 2) {
+      const firstTwo = detectedLoaders.slice(0, 2).map(l => {
+        const cls = l.toLowerCase();
+        const label = cls === 'neoforge' ? 'NeoForge' : (cls.charAt(0).toUpperCase() + cls.slice(1));
+        return `<span class="mod-tag tag-${cls}">${label}</span>`;
+      }).join(' ');
+      const extra = detectedLoaders.length - 2;
+      const allNames = detectedLoaders.map(l => l.charAt(0).toUpperCase() + l.slice(1)).join(', ');
+      loaderBadgesHtml = `${firstTwo} <span class="mod-tag" title="Obsługiwane silniki: ${allNames}">+${extra}</span>`;
+    } else {
+      loaderBadgesHtml = detectedLoaders.map(l => {
+        const cls = l.toLowerCase();
+        const label = cls === 'neoforge' ? 'NeoForge' : (cls.charAt(0).toUpperCase() + cls.slice(1));
+        return `<span class="mod-tag tag-${cls}">${label}</span>`;
+      }).join(' ');
+    }
 
     const typeBadge = isPack
       ? `<span class="modpack-card-badge"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg> Modpack</span>`
@@ -1776,43 +2620,10 @@ function renderModBrowseResults(hitsToRender, append = false) {
     `;
 
     const downloadBtn = card.querySelector('.btn-mod-download');
-    downloadBtn?.addEventListener('click', async (e) => {
+    downloadBtn?.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      const slug = item.slug;
-      const pid = item.project_id || item.id;
-      const title = item.title;
-
-      downloadBtn.disabled = true;
-      downloadBtn.classList.add('installing');
-      downloadBtn.innerHTML = `<span class="spinner-ring" style="width: 13px; height: 13px;"></span><span>Pobieranie...</span>`;
-
-      try {
-        const activeProfile = getActiveProfileObj();
-        const res = await window.api.installModrinthMod({
-          projectId: pid,
-          slug,
-          gameVersion: activeMcVer,
-          loader: activeProfile?.loader || 'fabric'
-        });
-
-        if (res.success) {
-          installedMods = res.mods;
-          renderModsList(installedMods);
-          loadProfiles();
-          showToast(`Zainstalowano mod: ${title}`);
-          if (res.dependencies && res.dependencies.length > 0) {
-            showToast(`Pobrano zależności: ${res.dependencies.join(', ')}`);
-          }
-          downloadBtn.className = 'btn-modrinth-install installed';
-          downloadBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="20 6 9 17 4 12"/></svg><span>Zainstalowano</span>`;
-        }
-      } catch (dlErr) {
-        showToast(`Błąd instalacji moda: ${dlErr.message}`);
-        downloadBtn.disabled = false;
-        downloadBtn.className = 'btn-modrinth-install btn-mod-download';
-        downloadBtn.innerHTML = `<span>Ponów próbę</span>`;
-      }
+      openModVersionModal(item);
     });
 
     const modpackTrigger = card.querySelector('.btn-modpack-trigger');
@@ -1834,6 +2645,12 @@ function renderModBrowseResults(hitsToRender, append = false) {
       card.addEventListener('click', (e) => {
         if (e.target.closest('button')) return;
         openPackModal(e);
+      });
+    } else if (!installed) {
+      card.style.cursor = 'pointer';
+      card.addEventListener('click', (e) => {
+        if (e.target.closest('button')) return;
+        openModVersionModal(item);
       });
     }
 
@@ -2143,6 +2960,330 @@ async function openModpackInstallModal({ id, slug, title, author, iconUrl }) {
   }
 }
 
+// ========================================================
+// MODAL WYBORU WERSJI MODA (#mod-version-modal)
+// ========================================================
+let currentModVersionModalData = null;
+let currentSelectedModVersion = null;
+
+function setupModVersionModalEvents() {
+  const modal = document.getElementById('mod-version-modal');
+  const closeBtn = document.getElementById('btn-close-mod-version-modal');
+  const cancelBtn = document.getElementById('btn-cancel-mod-version');
+  const confirmBtn = document.getElementById('btn-confirm-mod-version-install');
+  const filterMc = document.getElementById('mod-version-filter-mc');
+  const filterLoader = document.getElementById('mod-version-filter-loader');
+
+  const closeModal = () => {
+    if (modal) modal.classList.remove('open', 'active');
+    currentModVersionModalData = null;
+    currentSelectedModVersion = null;
+  };
+
+  closeBtn?.addEventListener('click', closeModal);
+  cancelBtn?.addEventListener('click', closeModal);
+
+  modal?.addEventListener('click', (e) => {
+    if (e.target === modal) closeModal();
+  });
+
+  filterMc?.addEventListener('change', () => {
+    renderFilteredModVersions();
+  });
+
+  filterLoader?.addEventListener('change', () => {
+    renderFilteredModVersions();
+  });
+
+  confirmBtn?.addEventListener('click', async () => {
+    if (!currentModVersionModalData || !currentSelectedModVersion) return;
+
+    confirmBtn.disabled = true;
+    confirmBtn.innerHTML = `<span class="spinner-ring" style="width: 14px; height: 14px;"></span><span>Instalowanie...</span>`;
+
+    const activeProfile = getActiveProfileObj();
+    const pid = currentModVersionModalData.project_id || currentModVersionModalData.id;
+    const slug = currentModVersionModalData.slug;
+    const title = currentModVersionModalData.title;
+    const versionId = currentSelectedModVersion.id;
+    const gameVer = currentSelectedModVersion.game_versions?.[0] || (activeProfile?.mcVersion || '1.21.11').replace(/^(fabric|quilt)-/, '');
+    const ldr = currentSelectedModVersion.loaders?.[0] || activeProfile?.loader || 'fabric';
+
+    try {
+      const res = await window.api.installModrinthMod({
+        projectId: pid,
+        slug,
+        versionId,
+        gameVersion: gameVer,
+        loader: ldr
+      });
+
+      if (res && res.success) {
+        installedMods = res.mods;
+        renderModsList(installedMods);
+        loadProfiles();
+        showToast(`Zainstalowano mod: ${title} (${currentSelectedModVersion.version_number || currentSelectedModVersion.name || 'wybrana wersja'})`);
+        if (res.dependencies && res.dependencies.length > 0) {
+          showToast(`Pobrano zależności (${res.dependencies.length}): ${res.dependencies.join(', ')}`);
+        }
+        closeModal();
+
+        const cardBtn = document.querySelector(`.btn-mod-download[data-id="${pid}"], .btn-mod-download[data-slug="${slug}"]`);
+        if (cardBtn) {
+          cardBtn.className = 'btn-modrinth-install installed';
+          cardBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="20 6 9 17 4 12"/></svg><span>Zainstalowano</span>`;
+        }
+      } else {
+        throw new Error(res?.error || 'Nieznany błąd instalacji');
+      }
+    } catch (err) {
+      showToast(`Błąd instalacji moda: ${err.message}`);
+      confirmBtn.disabled = false;
+      confirmBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg><span>Zainstaluj wersję</span>`;
+    }
+  });
+}
+
+async function openModVersionModal(item) {
+  if (!item) return;
+
+  const modal = document.getElementById('mod-version-modal');
+  const titleEl = document.getElementById('mod-version-modal-title');
+  const iconEl = document.getElementById('mod-version-modal-icon');
+  const nameEl = document.getElementById('mod-version-modal-name');
+  const authorEl = document.getElementById('mod-version-modal-author');
+  const targetHintEl = document.getElementById('mod-version-modal-target-hint');
+  const filterMc = document.getElementById('mod-version-filter-mc');
+  const filterLoader = document.getElementById('mod-version-filter-loader');
+  const loadingEl = document.getElementById('mod-version-loading');
+  const listEl = document.getElementById('mod-version-list');
+  const selectedInfo = document.getElementById('mod-version-selected-info');
+  const confirmBtn = document.getElementById('btn-confirm-mod-version-install');
+
+  currentModVersionModalData = {
+    ...item,
+    versions: []
+  };
+  currentSelectedModVersion = null;
+
+  if (titleEl) titleEl.textContent = `Wybierz wersję: ${item.title}`;
+  if (nameEl) nameEl.textContent = item.title;
+  if (authorEl) authorEl.textContent = `Autor: ${item.author || 'Nieznany'}`;
+  if (iconEl) iconEl.src = item.icon_url || 'assets/logo.svg';
+
+  const activeProf = getActiveProfileObj();
+  const activeMcVer = (activeProf?.mcVersion || currentSelectedVersionId || '1.21.11').replace(/^(fabric|quilt)-/, '');
+  const activeLoader = (activeProf?.loader || 'fabric').toLowerCase();
+
+  if (targetHintEl) {
+    targetHintEl.innerHTML = `<span>Twój profil: <strong>${activeLoader.toUpperCase()} ${activeMcVer}</strong></span>`;
+  }
+
+  if (listEl) listEl.innerHTML = '';
+  if (loadingEl) loadingEl.style.display = 'block';
+  if (selectedInfo) selectedInfo.textContent = 'Ładowanie wydań z Modrinth...';
+  if (confirmBtn) {
+    confirmBtn.disabled = true;
+    confirmBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg><span>Zainstaluj wersję</span>`;
+  }
+
+  if (modal) modal.classList.add('open', 'active');
+
+  try {
+    const slugOrId = item.project_id || item.id || item.slug;
+    const versions = await window.api.getModrinthProjectVersions(slugOrId);
+
+    if (loadingEl) loadingEl.style.display = 'none';
+
+    if (!Array.isArray(versions) || versions.length === 0) {
+      if (listEl) {
+        listEl.innerHTML = '<div style="padding: 24px; text-align: center; color: var(--text-muted);">Brak dostępnych wydań na Modrinth.</div>';
+      }
+      if (selectedInfo) selectedInfo.textContent = 'Brak wydań.';
+      return;
+    }
+
+    currentModVersionModalData.versions = versions;
+
+    const mcSet = new Set();
+    const loaderSet = new Set();
+
+    versions.forEach(v => {
+      (v.game_versions || []).forEach(gv => mcSet.add(gv));
+      (v.loaders || []).forEach(l => loaderSet.add(l.toLowerCase()));
+    });
+
+    const uniqueMcs = Array.from(mcSet).sort(compareMcVersions);
+
+    if (filterMc) {
+      filterMc.innerHTML = '<option value="all">Wszystkie wersje gry</option>';
+      uniqueMcs.forEach(mc => {
+        const opt = document.createElement('option');
+        opt.value = mc;
+        const isCurrent = mc === activeMcVer;
+        opt.textContent = `Minecraft ${mc}${isCurrent ? ' (Twój profil)' : ''}`;
+        filterMc.appendChild(opt);
+      });
+
+      if (mcSet.has(activeMcVer)) {
+        filterMc.value = activeMcVer;
+      } else {
+        filterMc.value = 'all';
+      }
+    }
+
+    if (filterLoader) {
+      filterLoader.innerHTML = '<option value="all">Wszystkie loadery</option>';
+      ['fabric', 'quilt', 'neoforge', 'forge'].forEach(l => {
+        if (loaderSet.has(l)) {
+          const opt = document.createElement('option');
+          opt.value = l;
+          const isCurrent = l === activeLoader;
+          opt.textContent = `${l.charAt(0).toUpperCase() + l.slice(1)}${isCurrent ? ' (Twój profil)' : ''}`;
+          filterLoader.appendChild(opt);
+        }
+      });
+
+      if (loaderSet.has(activeLoader)) {
+        filterLoader.value = activeLoader;
+      } else {
+        filterLoader.value = 'all';
+      }
+    }
+
+    renderFilteredModVersions();
+
+  } catch (err) {
+    console.error('Błąd pobierania wersji moda:', err);
+    if (loadingEl) loadingEl.style.display = 'none';
+    if (listEl) {
+      listEl.innerHTML = `<div style="padding: 24px; text-align: center; color: #EF4444;">Błąd pobierania wydań: ${err.message}</div>`;
+    }
+  }
+}
+
+function renderFilteredModVersions() {
+  if (!currentModVersionModalData || !Array.isArray(currentModVersionModalData.versions)) return;
+
+  const listEl = document.getElementById('mod-version-list');
+  const filterMc = document.getElementById('mod-version-filter-mc');
+  const filterLoader = document.getElementById('mod-version-filter-loader');
+  const selectedInfo = document.getElementById('mod-version-selected-info');
+  const confirmBtn = document.getElementById('btn-confirm-mod-version-install');
+
+  const selectedMc = filterMc?.value || 'all';
+  const selectedLoader = (filterLoader?.value || 'all').toLowerCase();
+
+  const activeProf = getActiveProfileObj();
+  const activeMcVer = (activeProf?.mcVersion || currentSelectedVersionId || '1.21.11').replace(/^(fabric|quilt)-/, '');
+  const activeLoader = (activeProf?.loader || 'fabric').toLowerCase();
+
+  const filtered = currentModVersionModalData.versions.filter(v => {
+    if (selectedMc !== 'all') {
+      if (!v.game_versions || !v.game_versions.includes(selectedMc)) return false;
+    }
+    if (selectedLoader !== 'all') {
+      if (!v.loaders || !v.loaders.map(l => l.toLowerCase()).includes(selectedLoader)) return false;
+    }
+    return true;
+  });
+
+  if (!listEl) return;
+  listEl.innerHTML = '';
+
+  if (filtered.length === 0) {
+    listEl.innerHTML = `
+      <div style="padding: 28px; text-align: center; color: var(--text-muted); background: var(--surface-2); border-radius: var(--radius-md);">
+        Brak wydań dla wybranych filtrów (Minecraft: ${selectedMc}, Silnik: ${selectedLoader}).
+        <br><span style="font-size: 11.5px; opacity: 0.8; margin-top: 4px; display: inline-block;">Zmień filtry powyżej na "Wszystkie", aby zobaczyć inne wersje.</span>
+      </div>
+    `;
+    currentSelectedModVersion = null;
+    if (confirmBtn) confirmBtn.disabled = true;
+    if (selectedInfo) selectedInfo.textContent = 'Brak pasujących wersji.';
+    return;
+  }
+
+  let defaultIdx = filtered.findIndex(v => {
+    const hasMc = (v.game_versions || []).includes(activeMcVer);
+    const hasLdr = (v.loaders || []).map(l => l.toLowerCase()).includes(activeLoader);
+    return hasMc && hasLdr;
+  });
+
+  if (defaultIdx < 0) {
+    defaultIdx = filtered.findIndex(v => v.version_type === 'release');
+  }
+  if (defaultIdx < 0) defaultIdx = 0;
+
+  currentSelectedModVersion = filtered[defaultIdx];
+
+  const updateSelectionUI = (ver, itemElement) => {
+    currentSelectedModVersion = ver;
+    listEl.querySelectorAll('.mod-version-item').forEach(el => el.classList.remove('selected'));
+    itemElement?.classList.add('selected');
+    const radio = itemElement?.querySelector('.mod-ver-radio');
+    if (radio) radio.checked = true;
+
+    if (confirmBtn) {
+      confirmBtn.disabled = false;
+      confirmBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg><span>Zainstaluj ${ver.version_number || ver.name}</span>`;
+    }
+
+    const primaryFile = (ver.files || []).find(f => f.primary) || ver.files?.[0];
+    const sizeStr = primaryFile ? (primaryFile.size > 1048576 ? ` • ${(primaryFile.size / 1048576).toFixed(1)} MB` : ` • ${Math.round(primaryFile.size / 1024)} KB`) : '';
+    if (selectedInfo) {
+      selectedInfo.innerHTML = `Wybrano: <strong style="color: #fff;">${ver.name || ver.version_number}</strong> (${(ver.game_versions || []).slice(0, 3).join(', ')})${sizeStr}`;
+    }
+  };
+
+  filtered.forEach((v, idx) => {
+    const isSelected = idx === defaultIdx;
+    const isExactProfileMatch = (v.game_versions || []).includes(activeMcVer) &&
+      (v.loaders || []).map(l => l.toLowerCase()).includes(activeLoader);
+
+    const primaryFile = (v.files || []).find(f => f.primary) || v.files?.[0];
+    const sizeStr = primaryFile ? (primaryFile.size > 1048576 ? `${(primaryFile.size / 1048576).toFixed(1)} MB` : `${Math.round(primaryFile.size / 1024)} KB`) : '';
+    const dateStr = v.date_published ? new Date(v.date_published).toLocaleDateString('pl-PL') : '';
+
+    const itemEl = document.createElement('div');
+    itemEl.className = `mod-version-item${isSelected ? ' selected' : ''}`;
+    itemEl.innerHTML = `
+      <input type="radio" name="mod-version-radio-choice" class="mod-ver-radio" ${isSelected ? 'checked' : ''} style="cursor: pointer;">
+      <div style="flex: 1; min-width: 0;">
+        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+          <span style="font-weight: 700; font-size: 13px; color: #fff;">${v.name || v.version_number}</span>
+          <span class="mod-ver-type ${v.version_type || 'release'}">${(v.version_type || 'release').toUpperCase()}</span>
+          ${isExactProfileMatch ? '<span class="mod-ver-tag-rec">Zalecana dla Twojego profilu</span>' : ''}
+        </div>
+        <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px; display: flex; gap: 10px; flex-wrap: wrap;">
+          <span>MC: <strong>${(v.game_versions || []).slice(0, 4).join(', ')}${(v.game_versions?.length || 0) > 4 ? '...' : ''}</strong></span>
+          <span>Loadery: <strong>${(v.loaders || []).join(', ')}</strong></span>
+          ${sizeStr ? `<span>Rozmiar: <strong>${sizeStr}</strong></span>` : ''}
+          ${dateStr ? `<span>Wydano: ${dateStr}</span>` : ''}
+        </div>
+      </div>
+    `;
+
+    itemEl.addEventListener('click', () => {
+      updateSelectionUI(v, itemEl);
+    });
+
+    listEl.appendChild(itemEl);
+  });
+
+  if (currentSelectedModVersion) {
+    const primaryFile = (currentSelectedModVersion.files || []).find(f => f.primary) || currentSelectedModVersion.files?.[0];
+    const sizeStr = primaryFile ? (primaryFile.size > 1048576 ? ` • ${(primaryFile.size / 1048576).toFixed(1)} MB` : ` • ${Math.round(primaryFile.size / 1024)} KB`) : '';
+    if (selectedInfo) {
+      selectedInfo.innerHTML = `Wybrano: <strong style="color: #fff;">${currentSelectedModVersion.name || currentSelectedModVersion.version_number}</strong> (${(currentSelectedModVersion.game_versions || []).slice(0, 3).join(', ')})${sizeStr}`;
+    }
+    if (confirmBtn) {
+      confirmBtn.disabled = false;
+      confirmBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg><span>Zainstaluj ${currentSelectedModVersion.version_number || currentSelectedModVersion.name}</span>`;
+    }
+  }
+}
+
 let currentSelectedVersionId = '1.21.11';
 let profilesState = { activeProfileId: 'default-main', profiles: [], customEngines: [] };
 let editingProfileId = null;
@@ -2161,6 +3302,7 @@ const PROFILE_ICONS_SVG = {
 const LOADER_LABELS = {
   fabric: 'Fabric',
   quilt: 'Quilt',
+  forge: 'Forge',
   vanilla: 'Vanilla',
   custom: 'Własny'
 };
@@ -2196,6 +3338,7 @@ async function loadProfiles() {
     renderQuickVersionDropdown();
     renderProfilesCardsGrid();
     renderFullVersionsGrid();
+    renderS2ModpacksWidget();
     updateScreenshotsProfileDropdown();
     updateBenchmarkProfileDropdown();
   } catch (err) {
@@ -2228,7 +3371,7 @@ function applyActiveProfileToUI() {
     topbarLabel.textContent = `Profil ${active.name} (${loaderLabel} ${verText}) gotowy`;
   }
   if (!isGameLaunching && elements.playBtnText) {
-    elements.playBtnText.textContent = 'URUCHOM GRĘ';
+    elements.playBtnText.textContent = currentLauncherStyle === 'style2' ? 'GRAJ' : 'URUCHOM GRĘ';
   }
 
   const effectiveRam = active.memoryMax || currentConfig?.memoryMax || 4;
@@ -2245,6 +3388,9 @@ function applyActiveProfileToUI() {
   if (sidebarModsBadge) sidebarModsBadge.textContent = String(activeModsCount);
   if (subtabModsBadge) subtabModsBadge.textContent = String(activeModsCount);
   if (quickMods) quickMods.textContent = `${activeModsCount} aktywnych`;
+  updateWardrobeSkinSyncBanner();
+  syncS2ProfileWidget();
+  renderS2ModpacksWidget();
 }
 
 async function activateProfileById(profileId) {
@@ -2390,6 +3536,9 @@ function renderProfilesCardsGrid() {
           ` : ''}
         </div>
         <div style="display: flex; align-items: center; gap: 4px;">
+          <button type="button" class="btn-icon-only btn-prof-export" title="Eksportuj paczkę .mrpack dla znajomych" style="width: 28px; height: 28px;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          </button>
           <button type="button" class="btn-icon-only btn-prof-folder" title="Otwórz folder profilu" style="width: 28px; height: 28px;">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
           </button>
@@ -2420,6 +3569,9 @@ function renderProfilesCardsGrid() {
       if (typeof window.switchModsSubtab === 'function') {
         window.switchModsSubtab('installed');
       }
+    });
+    card.querySelector('.btn-prof-export')?.addEventListener('click', () => {
+      handleExportProfileMrpack(prof.id);
     });
     card.querySelector('.btn-prof-folder')?.addEventListener('click', () => {
       window.api.openProfileFolder(prof.id);
@@ -2595,15 +3747,126 @@ function closeProfileEditorModal() {
   document.getElementById('profile-editor-modal')?.classList.remove('open');
 }
 
+async function handleExportProfileMrpack(profileId = null) {
+  try {
+    const res = await window.api.exportProfileMrpack(profileId);
+    if (!res || res.canceled) return;
+    if (res.success) {
+      showToast(`Zapisano paczkę ${res.profileName}.mrpack (${res.sizeFormatted}) — wyślij plik znajomym!`);
+    }
+  } catch (err) {
+    const cleanErr = (err.message || '').replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
+    showToast(`Błąd eksportu paczki: ${cleanErr}`);
+  }
+}
+
+async function handleImportMrpack(explicitPath = null) {
+  const modal = document.getElementById('modpack-install-modal');
+  const iconEl = document.getElementById('modpack-modal-icon');
+  const nameEl = document.getElementById('modpack-modal-name');
+  const authorEl = document.getElementById('modpack-modal-author');
+  const detailsEl = document.getElementById('modpack-modal-details');
+  const configSection = document.getElementById('modpack-install-config-section');
+  const progressSection = document.getElementById('modpack-install-progress-section');
+  const closeBtn = document.getElementById('btn-close-modpack-modal');
+  const progressStatus = document.getElementById('modpack-progress-status');
+  const progressPct = document.getElementById('modpack-progress-pct');
+  const progressFill = document.getElementById('modpack-progress-fill');
+  const progressFile = document.getElementById('modpack-progress-file');
+  const statSpeed = document.getElementById('modpack-stat-speed');
+  const statSize = document.getElementById('modpack-stat-size');
+  const statEta = document.getElementById('modpack-stat-eta');
+  const statFiles = document.getElementById('modpack-stat-files');
+
+  let modalShown = false;
+  const ensureProgressModalOpen = () => {
+    if (modalShown) return;
+    modalShown = true;
+    if (iconEl) iconEl.src = 'assets/logo.svg';
+    if (nameEl) nameEl.textContent = 'Importowanie paczki .mrpack';
+    if (authorEl) authorEl.textContent = 'Paczka lokalna / od znajomego';
+    if (detailsEl) detailsEl.textContent = 'Pobieranie modów z Modrinth oraz wypakowywanie ustawień...';
+    if (configSection) configSection.style.display = 'none';
+    if (progressSection) progressSection.style.display = 'flex';
+    if (closeBtn) closeBtn.style.display = 'none';
+    if (progressFill) {
+      progressFill.style.width = '0%';
+      progressFill.style.background = 'linear-gradient(90deg, #8B5CF6, #EC4899, #06B6D4)';
+    }
+    if (progressPct) progressPct.textContent = '0%';
+    if (progressStatus) progressStatus.textContent = 'Odczytywanie pliku .mrpack...';
+    if (statSpeed) statSpeed.textContent = '0.0 MB/s';
+    if (statSize) statSize.textContent = '0 B / 0 B';
+    if (statEta) statEta.textContent = 'Obliczanie...';
+    if (statFiles) statFiles.textContent = '0 / 0 plików';
+    if (progressFile) progressFile.textContent = 'Przygotowywanie nowej instancji...';
+    if (modal) {
+      modal.classList.add('open');
+      modal.classList.add('active');
+    }
+  };
+
+  if (explicitPath) {
+    ensureProgressModalOpen();
+  }
+
+  const removeProgressListener = window.api.onModpackProgress((p) => {
+    ensureProgressModalOpen();
+    if (p.percent !== undefined) {
+      if (progressFill) progressFill.style.width = `${p.percent}%`;
+      if (progressPct) progressPct.textContent = `${p.percent}%`;
+    }
+    if (p.message && progressStatus) progressStatus.textContent = p.message;
+    if (p.currentFile && progressFile) progressFile.textContent = p.currentFile;
+    if (p.speedBytesPerSec !== undefined && statSpeed) statSpeed.textContent = formatSpeed(p.speedBytesPerSec);
+    if (p.downloadedBytes !== undefined && p.totalBytes !== undefined && statSize) {
+      statSize.textContent = `${formatByteSize(p.downloadedBytes)} / ${formatByteSize(p.totalBytes)}`;
+    }
+    if (p.etaSeconds !== undefined && statEta) statEta.textContent = formatEtaTime(p.etaSeconds);
+    if (p.completedFiles !== undefined && p.totalFiles !== undefined && statFiles) {
+      statFiles.textContent = `${p.completedFiles} / ${p.totalFiles} plików`;
+    }
+  });
+
+  try {
+    const res = await window.api.importProfileMrpack(explicitPath);
+    removeProgressListener();
+    if (closeBtn) closeBtn.style.display = 'flex';
+    if (modal) {
+      modal.classList.remove('open');
+      modal.classList.remove('active');
+    }
+    if (!res || res.canceled) return;
+
+    await loadProfiles();
+    await loadMods();
+    await loadPacks(currentPackType);
+    showToast(`Wczytano i wybrano paczkę: ${res.name} (${res.modCount || 0} pobranych plików)!`);
+  } catch (err) {
+    removeProgressListener();
+    if (closeBtn) closeBtn.style.display = 'flex';
+    if (modal) {
+      modal.classList.remove('open');
+      modal.classList.remove('active');
+    }
+    const cleanErr = (err.message || '').replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
+    showToast(`Błąd importu paczki .mrpack: ${cleanErr}`);
+  }
+}
+
 function setupProfilesListeners() {
   const modal = document.getElementById('profile-editor-modal');
   const btnOpenCreate = document.getElementById('btn-open-create-profile');
+  const btnExportActive = document.getElementById('btn-export-active-mrpack');
+  const btnImportMrpack = document.getElementById('btn-import-mrpack');
   const btnClose = document.getElementById('btn-close-profile-editor');
   const btnCancel = document.getElementById('btn-cancel-profile-editor');
   const btnSave = document.getElementById('btn-save-profile-modal');
   const customWrap = document.getElementById('prof-custom-engine-wrap');
 
   btnOpenCreate?.addEventListener('click', () => openProfileEditorModal());
+  btnExportActive?.addEventListener('click', () => handleExportProfileMrpack(null));
+  btnImportMrpack?.addEventListener('click', () => handleImportMrpack(null));
   btnClose?.addEventListener('click', closeProfileEditorModal);
   btnCancel?.addEventListener('click', closeProfileEditorModal);
   modal?.addEventListener('click', (e) => {
@@ -2721,16 +3984,25 @@ function setLaunchingState(launching, text = '') {
   isGameLaunching = launching;
   const progBar = document.getElementById('launch-progress-bar');
   const topbarLabel = document.getElementById('topbar-status-label');
+  const s3PlayBtn = document.getElementById('s3-btn-play');
+  const s3PlayLabel = document.getElementById('s3-btn-play-label');
+  const s3ProgBar = document.getElementById('s3-launch-progress-fill');
 
   if (launching) {
     elements.playBtnGroup.classList.add('launching');
     elements.playBtnText.textContent = text || 'Weryfikacja plików...';
-    if (progBar) progBar.style.width = '12%';
+    if (progBar) progBar.style.width = '0%';
+    if (s3PlayBtn) s3PlayBtn.classList.add('is-launching');
+    if (s3PlayLabel) s3PlayLabel.textContent = text || 'Weryfikacja...';
+    if (s3ProgBar) s3ProgBar.style.width = '0%';
     if (topbarLabel) topbarLabel.textContent = text || 'Przygotowywanie sesji gry...';
   } else {
     elements.playBtnGroup.classList.remove('launching');
-    elements.playBtnText.textContent = 'URUCHOM GRĘ';
+    elements.playBtnText.textContent = currentLauncherStyle === 'style2' ? 'GRAJ' : 'URUCHOM GRĘ';
     if (progBar) progBar.style.width = '0%';
+    if (s3PlayBtn) s3PlayBtn.classList.remove('is-launching');
+    if (s3PlayLabel) s3PlayLabel.textContent = 'ODPAL GRĘ';
+    if (s3ProgBar) s3ProgBar.style.width = '0%';
     if (topbarLabel) topbarLabel.textContent = 'Silnik gotowy do uruchomienia';
   }
 }
@@ -2742,6 +4014,8 @@ function setupLauncherEventListeners() {
   window.api.onLauncherStatus((data) => {
     if (data?.message) {
       elements.playBtnText.textContent = data.message;
+      const s3PlayLabel = document.getElementById('s3-btn-play-label');
+      if (s3PlayLabel) s3PlayLabel.textContent = data.message;
       if (topbarLabel) topbarLabel.textContent = data.message;
       appendLog(`[STATUS] ${data.message}`);
     }
@@ -2749,9 +4023,14 @@ function setupLauncherEventListeners() {
 
   window.api.onLauncherProgress((data) => {
     if (data) {
-      const pct = Math.max(5, Math.min(100, Number(data.percentage) || 0));
-      elements.playBtnText.textContent = `Pobieranie ${pct}%`;
+      const pct = Math.max(0, Math.min(100, Number(data.percentage) || 0));
+      const text = data.label || (data.isDownloading ? `Pobieranie ${pct}%` : `Weryfikacja ${pct}%`);
+      elements.playBtnText.textContent = text;
       if (progBar) progBar.style.width = `${pct}%`;
+      const s3PlayLabel = document.getElementById('s3-btn-play-label');
+      const s3ProgBar = document.getElementById('s3-launch-progress-fill');
+      if (s3PlayLabel) s3PlayLabel.textContent = text;
+      if (s3ProgBar) s3ProgBar.style.width = `${pct}%`;
     }
   });
 
@@ -2765,6 +4044,10 @@ function setupLauncherEventListeners() {
     showToast(`Uruchomiono Minecraft ${data.version}`);
     elements.playBtnText.textContent = 'SESJA AKTYWNA';
     if (progBar) progBar.style.width = '100%';
+    const s3PlayLabel = document.getElementById('s3-btn-play-label');
+    const s3ProgBar = document.getElementById('s3-launch-progress-fill');
+    if (s3PlayLabel) s3PlayLabel.textContent = 'GRA DZIAŁA';
+    if (s3ProgBar) s3ProgBar.style.width = '100%';
     if (topbarLabel) topbarLabel.textContent = `W grze: Minecraft ${data.version}`;
     appendLog(`[KasteuszLauncher] Minecraft ${data.version} wystartował.`);
     try {
@@ -2846,6 +4129,7 @@ function renderFriendsList(friends) {
   if (countEl) {
     countEl.textContent = String(list.length);
   }
+  syncS3FriendsStrip(list);
 
   if (list.length === 0) {
     container.innerHTML = `
@@ -2872,12 +4156,12 @@ function renderFriendsList(friends) {
     item.innerHTML = `
       <div class="friend-item-left">
         <div class="friend-avatar-wrap">
-          <img src="https://mc-heads.net/avatar/${encodeURIComponent(f.username)}/32" class="friend-avatar" alt="${f.username}" onerror="this.src='assets/default-skin.png'">
+          <img class="friend-avatar" alt="">
           <span class="friend-dot" style="background: ${f.online ? 'var(--emerald)' : 'var(--text-muted)'};"></span>
         </div>
         <div class="friend-meta">
-          <div class="friend-name">${f.username}</div>
-          <div class="friend-status">${f.status || (f.online ? 'Aktywny' : 'Gracz Minecraft')}</div>
+          <div class="friend-name"></div>
+          <div class="friend-status"></div>
         </div>
       </div>
       <button class="friend-remove-btn" title="Usuń ${f.username}">
@@ -2886,6 +4170,15 @@ function renderFriendsList(friends) {
         </svg>
       </button>
     `;
+    const avatarEl = item.querySelector('.friend-avatar');
+    if (avatarEl) {
+      avatarEl.alt = f.username;
+      attachPlayerHeadImg(avatarEl, f.username, 32);
+    }
+    const nameEl = item.querySelector('.friend-name');
+    if (nameEl) nameEl.textContent = f.username;
+    const statusEl = item.querySelector('.friend-status');
+    if (statusEl) statusEl.textContent = f.status || (f.online ? 'Aktywny' : 'Gracz Minecraft');
 
     item.querySelector('.friend-remove-btn')?.addEventListener('click', async (e) => {
       e.stopPropagation();
@@ -2986,6 +4279,7 @@ async function checkOfficialServerStatus() {
   const badgePill = document.getElementById('server-status-pill');
   const labelText = document.getElementById('server-status-label');
   const playersText = document.getElementById('server-players-count');
+  const s3SmpSub = document.getElementById('s3-smp-sub');
 
   try {
     const res = await fetch('https://api.mcsrvstat.us/3/szkolnesmp.com.pl');
@@ -2996,10 +4290,14 @@ async function checkOfficialServerStatus() {
           badgePill.className = 'server-status-pill online';
         }
         if (labelText) labelText.textContent = 'Online';
+        const online = data.players?.online ?? 0;
+        const max = data.players?.max ?? 20;
         if (playersText) {
-          const online = data.players?.online ?? 0;
-          const max = data.players?.max ?? 20;
           playersText.textContent = `Gracze: ${online} / ${max}`;
+        }
+        if (s3SmpSub) {
+          s3SmpSub.textContent = `Online • ${online}/${max} graczy`;
+          s3SmpSub.style.color = '#34D399';
         }
         return;
       }
@@ -3012,28 +4310,315 @@ async function checkOfficialServerStatus() {
   }
   if (labelText) labelText.textContent = 'Offline';
   if (playersText) playersText.textContent = 'Serwer wyłączony';
+  if (s3SmpSub) {
+    s3SmpSub.textContent = 'Serwer wyłączony';
+    s3SmpSub.style.color = '';
+  }
 }
 
 // ============================================================================
 // ============================================================================
+const SERVER_ENGINE_LABELS = {
+  paper: 'Paper',
+  purpur: 'Purpur',
+  fabric: 'Fabric',
+  vanilla: 'Vanilla'
+};
+
 let isServerRunning = false;
+let isTunnelActive = false;
+let isTunnelStarting = false;
+let currentTunnelAddress = null;
+let lastAnnouncedTunnelAddress = null;
+let latestServerMetrics = null;
+let serverMetricsPollTimer = null;
+let serverUptimeClockTimer = null;
+
+function formatDurationHMS(totalSec) {
+  const s = Math.max(0, Math.floor(Number(totalSec) || 0));
+  const hrs = Math.floor(s / 3600);
+  const mins = Math.floor((s % 3600) / 60);
+  const secs = s % 60;
+  return `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+}
+
+function formatDiskSizeMb(mb) {
+  const val = Number(mb) || 0;
+  if (val >= 1024) return `${(val / 1024).toFixed(2)} GB`;
+  if (val <= 0) return '0 MB';
+  return val < 10 ? `${val.toFixed(1)} MB` : `${Math.round(val)} MB`;
+}
+
+function updateServerMetricsUI(m) {
+  if (!m) return;
+  latestServerMetrics = m;
+
+  const running = !!m.running;
+  const starting = !!m.starting;
+
+  ['srv-card-cpu', 'srv-card-ram', 'srv-card-players', 'srv-card-uptime'].forEach(id => {
+    document.getElementById(id)?.classList.toggle('is-live', running);
+  });
+
+  // 1. CPU
+  const procCpu = Number(m.cpu?.processPct || 0);
+  const sysCpu = Number(m.cpu?.systemPct || 0);
+  const cores = m.cpu?.cores || 1;
+  const threads = m.cpu?.threads || 0;
+
+  const cpuVal = document.getElementById('srv-metric-cpu-val');
+  const cpuBadge = document.getElementById('srv-metric-cpu-badge');
+  const cpuBar = document.getElementById('srv-metric-cpu-bar');
+  const cpuSysBar = document.getElementById('srv-metric-cpu-sysbar');
+  const cpuSub = document.getElementById('srv-metric-cpu-sub');
+
+  if (cpuVal) cpuVal.textContent = running ? `${procCpu.toFixed(1)}%` : '0.0%';
+  if (cpuBadge) {
+    if (running) {
+      cpuBadge.textContent = `${threads || 1} wątków`;
+      cpuBadge.className = `srv-metric-badge tnum ${procCpu >= 85 ? 'is-crit' : procCpu >= 65 ? 'is-warn' : 'is-online'}`;
+    } else {
+      cpuBadge.textContent = 'Wyłączony';
+      cpuBadge.className = 'srv-metric-badge tnum';
+    }
+  }
+  if (cpuSysBar) cpuSysBar.style.width = `${Math.min(100, sysCpu)}%`;
+  if (cpuBar) {
+    cpuBar.style.width = `${running ? Math.min(100, procCpu) : 0}%`;
+    cpuBar.className = `srv-metric-fill ${procCpu >= 85 ? 'is-crit' : procCpu >= 65 ? 'is-warn' : ''}`;
+  }
+  if (cpuSub) cpuSub.textContent = `Cały PC: ${sysCpu.toFixed(1)}% • ${cores} wątków CPU`;
+
+  // 2. RAM
+  const usedMb = Number(m.ram?.usedMb || 0);
+  const cfgRamGb = parseInt(document.getElementById('server-cfg-ram')?.value || '4', 10) || 4;
+  const allocMb = Number(m.ram?.allocatedMb || (cfgRamGb * 1024));
+  const ramPct = Number(m.ram?.pct || 0);
+  const usedGbStr = (usedMb / 1024).toFixed(2);
+  const allocGbStr = (allocMb / 1024).toFixed(1).replace(/\.0$/, '');
+  const freeGbStr = ((m.ram?.systemFreeMb || 0) / 1024).toFixed(1);
+  const totalGbStr = Math.round((m.ram?.systemTotalMb || 0) / 1024);
+
+  const ramVal = document.getElementById('srv-metric-ram-val');
+  const ramBadge = document.getElementById('srv-metric-ram-badge');
+  const ramBar = document.getElementById('srv-metric-ram-bar');
+  const ramSub = document.getElementById('srv-metric-ram-sub');
+
+  if (ramVal) ramVal.textContent = `${running ? usedGbStr : '0.00'} / ${allocGbStr} GB`;
+  if (ramBadge) {
+    if (running) {
+      ramBadge.textContent = `${Math.round(ramPct)}% limitu`;
+      ramBadge.className = `srv-metric-badge tnum ${ramPct >= 90 ? 'is-crit' : ramPct >= 75 ? 'is-warn' : 'is-online'}`;
+    } else {
+      ramBadge.textContent = `Limit ${allocGbStr} GB`;
+      ramBadge.className = 'srv-metric-badge tnum';
+    }
+  }
+  if (ramBar) {
+    ramBar.style.width = `${running ? Math.min(100, ramPct) : 0}%`;
+    ramBar.className = `srv-metric-fill ${ramPct >= 90 ? 'is-crit' : ramPct >= 75 ? 'is-warn' : ''}`;
+  }
+  if (ramSub) ramSub.textContent = `Wolny RAM PC: ${freeGbStr} GB z ${totalGbStr} GB`;
+
+  // 3. Players & Ping
+  const online = Number(m.players?.online || 0);
+  const maxP = Number(m.players?.max || 12);
+  const playerNames = Array.isArray(m.players?.list) ? m.players.list : [];
+  const pingMs = m.players?.pingMs;
+  const lanOnly = !!m.players?.lanOnly;
+
+  const pVal = document.getElementById('srv-metric-players-val');
+  const pBadge = document.getElementById('srv-metric-players-badge');
+  const pBar = document.getElementById('srv-metric-players-bar');
+  const pSub = document.getElementById('srv-metric-players-sub');
+
+  if (pVal) pVal.textContent = `${online} / ${maxP}`;
+  if (pBadge) {
+    if (starting) {
+      pBadge.textContent = 'Startowanie';
+      pBadge.className = 'srv-metric-badge tnum is-warn';
+    } else if (running || lanOnly) {
+      pBadge.textContent = pingMs ? `Ping ${pingMs} ms` : (lanOnly ? 'Świat LAN' : 'Online');
+      pBadge.className = 'srv-metric-badge tnum is-online';
+    } else {
+      pBadge.textContent = 'Offline';
+      pBadge.className = 'srv-metric-badge tnum';
+    }
+  }
+  if (pBar) {
+    const pPct = (running || lanOnly) && maxP > 0 ? Math.min(100, Math.round((online / maxP) * 100)) : 0;
+    pBar.style.width = `${pPct}%`;
+  }
+  if (pSub) {
+    if (starting) {
+      pSub.textContent = 'Ładowanie świata i silnika...';
+    } else if (running || lanOnly) {
+      if (playerNames.length > 0) {
+        const preview = playerNames.slice(0, 3).join(', ');
+        pSub.textContent = `W grze: ${preview}${playerNames.length > 3 ? ` +${playerNames.length - 3}` : ''}`;
+      } else if (online > 0) {
+        pSub.textContent = `Aktywnych graczy: ${online}`;
+      } else {
+        pSub.textContent = 'Oczekiwanie na graczy';
+      }
+    } else {
+      pSub.textContent = 'Serwer wyłączony';
+    }
+  }
+
+  // 4. Uptime & Disk
+  const uptimeSec = (running && m.startedAt)
+    ? Math.max(0, Math.floor((Date.now() - m.startedAt) / 1000))
+    : Number(m.uptimeSec || 0);
+
+  const uVal = document.getElementById('srv-metric-uptime-val');
+  const uBadge = document.getElementById('srv-metric-uptime-badge');
+  const uBar = document.getElementById('srv-metric-uptime-bar');
+  const uSub = document.getElementById('srv-metric-uptime-sub');
+
+  if (uVal) uVal.textContent = formatDurationHMS(running ? uptimeSec : 0);
+  if (uBadge) {
+    if (starting) {
+      uBadge.textContent = 'Rozruch';
+      uBadge.className = 'srv-metric-badge tnum is-warn';
+    } else if (running) {
+      uBadge.textContent = m.tunnelActive ? 'Online • Tunel' : 'Online';
+      uBadge.className = 'srv-metric-badge tnum is-online';
+    } else {
+      uBadge.textContent = 'Offline';
+      uBadge.className = 'srv-metric-badge tnum';
+    }
+  }
+  if (uBar) {
+    uBar.style.width = running ? '100%' : '0%';
+    uBar.className = `srv-metric-fill ${starting ? 'is-warn' : 'is-emerald'}`;
+  }
+  if (uSub) {
+    uSub.textContent = `Świat: ${formatDiskSizeMb(m.disk?.worldMb || 0)} • Pliki: ${formatDiskSizeMb(m.disk?.totalMb || 0)}`;
+  }
+}
+
+async function refreshServerMetricsOnce() {
+  if (!window.api?.getServerMetrics) return;
+  try {
+    const m = await window.api.getServerMetrics();
+    updateServerMetricsUI(m);
+  } catch (_) {}
+}
 
 async function loadServerHosting() {
   try {
     const status = await window.api.getServerStatus();
     updateServerHostUI(status);
+    refreshServerMetricsOnce();
+    loadServerPlugins();
   } catch (err) {
     console.error('Błąd statusu serwera:', err);
   }
 }
 
+function updateServerTunnelUI(tunnel = {}) {
+  isTunnelActive = !!tunnel.active;
+  isTunnelStarting = !!tunnel.starting && !isTunnelActive;
+  currentTunnelAddress = tunnel.publicAddress || null;
+
+  const card = document.getElementById('server-tunnel-card');
+  const badge = document.getElementById('server-tunnel-badge');
+  const ipDisplay = document.getElementById('server-tunnel-ip-display');
+  const portInput = document.getElementById('server-tunnel-port-input');
+  const btnCopy = document.getElementById('btn-copy-tunnel-ip');
+  const btnToggle = document.getElementById('btn-toggle-tunnel');
+
+  card?.classList.toggle('is-active', isTunnelActive);
+
+  if (portInput) {
+    portInput.disabled = isTunnelActive || isTunnelStarting;
+    if (tunnel.targetPort && document.activeElement !== portInput) {
+      portInput.value = String(tunnel.targetPort);
+    }
+  }
+
+  if (btnCopy) {
+    btnCopy.disabled = !(isTunnelActive && currentTunnelAddress);
+  }
+
+  if (isTunnelActive && currentTunnelAddress) {
+    if (badge) {
+      badge.className = 'mod-tag status-on tnum';
+      badge.textContent = 'Aktywny';
+    }
+    if (ipDisplay) {
+      ipDisplay.textContent = currentTunnelAddress;
+      ipDisplay.style.color = '#34D399';
+    }
+    if (btnToggle) {
+      btnToggle.disabled = false;
+      btnToggle.className = 'btn-danger-ghost';
+      btnToggle.innerHTML = '<span>Zamknij tunel</span>';
+    }
+  } else if (isTunnelStarting) {
+    if (badge) {
+      badge.className = 'mod-tag tnum';
+      badge.textContent = 'Łączenie...';
+    }
+    if (ipDisplay) {
+      ipDisplay.textContent = tunnel.message || 'Tworzenie publicznego tunelu TCP (ok. 2–4 sek.)...';
+      ipDisplay.style.color = '#FBBF24';
+    }
+    if (btnToggle) {
+      btnToggle.disabled = false;
+      btnToggle.className = 'btn-secondary';
+      btnToggle.innerHTML = '<span class="spinner-ring" style="width: 13px; height: 13px;"></span><span>Łączenie...</span>';
+    }
+  } else {
+    if (badge) {
+      badge.className = 'mod-tag status-off tnum';
+      badge.textContent = 'Wyłączony';
+    }
+    if (ipDisplay) {
+      if (tunnel.error) {
+        ipDisplay.textContent = `Błąd tunelu: ${tunnel.error}`;
+        ipDisplay.style.color = '#F87171';
+      } else {
+        ipDisplay.textContent = 'Włącz serwer lub kliknij „Otwórz tunel”, aby uzyskać publiczne IP';
+        ipDisplay.style.color = '';
+      }
+    }
+    if (btnToggle) {
+      btnToggle.disabled = false;
+      btnToggle.className = 'btn-primary';
+      btnToggle.innerHTML = '<span>Otwórz tunel</span>';
+    }
+  }
+}
+
+function readServerConfigFromInputs() {
+  return {
+    engine: document.getElementById('server-cfg-engine')?.value || 'paper',
+    version: document.getElementById('server-cfg-version')?.value || '1.21.11',
+    ram: parseInt(document.getElementById('server-cfg-ram')?.value || '4', 10),
+    port: parseInt(document.getElementById('server-cfg-port')?.value || '25565', 10),
+    onlineMode: document.getElementById('server-cfg-online-mode')?.value === 'true',
+    autoTunnel: document.getElementById('server-cfg-auto-tunnel')?.value !== 'false',
+    gamemode: document.getElementById('server-cfg-gamemode')?.value || 'survival',
+    difficulty: document.getElementById('server-cfg-difficulty')?.value || 'normal',
+    pvp: document.getElementById('server-cfg-pvp')?.value === 'true'
+  };
+}
+
 function updateServerHostUI(status) {
   isServerRunning = !!status.running;
+  const isBusy = isServerRunning || !!status.starting;
   const btn = document.getElementById('btn-toggle-server');
+  const titleEl = document.getElementById('server-view-title');
   const statusText = document.getElementById('server-console-status-text');
   const statusDot = document.getElementById('server-console-dot');
   const sidebarServerDot = document.getElementById('sidebar-server-dot');
   const ipDisplay = document.getElementById('server-local-ip-display');
+  const localhostDisplay = document.getElementById('server-localhost-ip-display');
+  const tunnelPortInput = document.getElementById('server-tunnel-port-input');
+  const engineSelect = document.getElementById('server-cfg-engine');
+  const versionSelect = document.getElementById('server-cfg-version');
   const cmdInput = document.getElementById('server-cmd-input');
   const btnSend = document.getElementById('btn-send-server-cmd');
 
@@ -3041,8 +4626,38 @@ function updateServerHostUI(status) {
     sidebarServerDot.classList.toggle('visible', isServerRunning);
   }
 
+  if (status.config) {
+    const c = status.config;
+    if (engineSelect && c.engine) engineSelect.value = c.engine;
+    if (versionSelect && c.version) versionSelect.value = c.version;
+    if (document.getElementById('server-cfg-ram')) document.getElementById('server-cfg-ram').value = c.ram || 4;
+    if (document.getElementById('server-cfg-port')) document.getElementById('server-cfg-port').value = c.port || 25565;
+    if (document.getElementById('server-cfg-online-mode')) document.getElementById('server-cfg-online-mode').value = String(!!c.onlineMode);
+    if (document.getElementById('server-cfg-auto-tunnel')) document.getElementById('server-cfg-auto-tunnel').value = String(c.autoTunnel !== false);
+    if (document.getElementById('server-cfg-gamemode')) document.getElementById('server-cfg-gamemode').value = c.gamemode || 'survival';
+    if (document.getElementById('server-cfg-difficulty')) document.getElementById('server-cfg-difficulty').value = c.difficulty || 'normal';
+    if (document.getElementById('server-cfg-pvp')) document.getElementById('server-cfg-pvp').value = String(c.pvp !== false);
+  }
+
+  const activePort = status.port || status.config?.port || parseInt(document.getElementById('server-cfg-port')?.value || '25565', 10) || 25565;
+  const activeEngine = status.config?.engine || engineSelect?.value || 'paper';
+  const activeVersion = status.config?.version || versionSelect?.value || '1.21.11';
+  const engineLabel = SERVER_ENGINE_LABELS[activeEngine] || 'Paper';
+
+  if (titleEl) {
+    titleEl.textContent = `Serwer Lokalny (${engineLabel} ${activeVersion})`;
+  }
+  if (engineSelect) engineSelect.disabled = isBusy;
+  if (versionSelect) versionSelect.disabled = isBusy;
+
   if (ipDisplay && status.localIp) {
-    ipDisplay.textContent = `${status.localIp}:${status.port || 25565}`;
+    ipDisplay.textContent = `${status.localIp}:${activePort}`;
+  }
+  if (localhostDisplay) {
+    localhostDisplay.textContent = `localhost:${activePort}`;
+  }
+  if (tunnelPortInput && !isTunnelActive && !isTunnelStarting && document.activeElement !== tunnelPortInput) {
+    tunnelPortInput.value = String(activePort);
   }
 
   if (isServerRunning) {
@@ -3057,7 +4672,7 @@ function updateServerHostUI(status) {
       `;
     }
     if (statusText) {
-      statusText.textContent = 'Status: Serwer działa (Online)';
+      statusText.textContent = `Status: Serwer działa (${engineLabel} ${activeVersion})`;
       statusText.style.color = '#34D399';
     }
     if (statusDot) statusDot.style.display = 'inline-block';
@@ -3083,14 +4698,8 @@ function updateServerHostUI(status) {
     if (btnSend) btnSend.disabled = true;
   }
 
-  if (status.config) {
-    const c = status.config;
-    if (document.getElementById('server-cfg-ram')) document.getElementById('server-cfg-ram').value = c.ram || 4;
-    if (document.getElementById('server-cfg-port')) document.getElementById('server-cfg-port').value = c.port || 25565;
-    if (document.getElementById('server-cfg-online-mode')) document.getElementById('server-cfg-online-mode').value = String(!!c.onlineMode);
-    if (document.getElementById('server-cfg-gamemode')) document.getElementById('server-cfg-gamemode').value = c.gamemode || 'survival';
-    if (document.getElementById('server-cfg-difficulty')) document.getElementById('server-cfg-difficulty').value = c.difficulty || 'normal';
-    if (document.getElementById('server-cfg-pvp')) document.getElementById('server-cfg-pvp').value = String(c.pvp !== false);
+  if (status.tunnel) {
+    updateServerTunnelUI(status.tunnel);
   }
 }
 
@@ -3106,37 +4715,101 @@ function appendServerLog(line) {
 
 function setupServerHostingListeners() {
   const btnToggle = document.getElementById('btn-toggle-server');
+  const btnOpenFolder = document.getElementById('btn-open-server-folder');
+  const btnToggleTunnel = document.getElementById('btn-toggle-tunnel');
+  const btnCopyTunnel = document.getElementById('btn-copy-tunnel-ip');
   const btnCopyLocal = document.getElementById('btn-copy-local-ip');
   const btnCopyLocalhost = document.getElementById('btn-copy-localhost-ip');
   const cmdInput = document.getElementById('server-cmd-input');
   const btnSend = document.getElementById('btn-send-server-cmd');
 
+  btnOpenFolder?.addEventListener('click', async () => {
+    try {
+      await window.api.openServerFolder();
+      showToast('Otwarto folder serwera.');
+    } catch (err) {
+      showToast(`Błąd otwierania folderu: ${err.message}`);
+    }
+  });
+
+  btnToggleTunnel?.addEventListener('click', async () => {
+    if (isTunnelActive || isTunnelStarting) {
+      lastAnnouncedTunnelAddress = null;
+      try {
+        await window.api.stopServerTunnel();
+        updateServerTunnelUI({ active: false, starting: false, publicAddress: null });
+        showToast('Zamknięto publiczny tunel.');
+      } catch (err) {
+        showToast(`Błąd zamykania tunelu: ${err.message}`);
+      }
+      return;
+    }
+
+    const rawPort = document.getElementById('server-tunnel-port-input')?.value
+      || document.getElementById('server-cfg-port')?.value
+      || '25565';
+    const port = parseInt(rawPort, 10) || 25565;
+
+    updateServerTunnelUI({
+      active: false,
+      starting: true,
+      targetPort: port,
+      message: `Otwieranie publicznego tunelu dla portu ${port}...`
+    });
+
+    try {
+      const res = await window.api.startServerTunnel(port);
+      updateServerTunnelUI(res);
+      if (res?.publicAddress) {
+        lastAnnouncedTunnelAddress = res.publicAddress;
+        navigator.clipboard.writeText(res.publicAddress).catch(() => {});
+        showToast(`Tunel otwarty! Skopiowano adres dla znajomych: ${res.publicAddress}`);
+      }
+    } catch (err) {
+      const cleanErr = (err.message || '').replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
+      updateServerTunnelUI({ active: false, starting: false, error: cleanErr });
+      showToast(`Błąd tunelu: ${cleanErr}`);
+    }
+  });
+
+  btnCopyTunnel?.addEventListener('click', () => {
+    if (!currentTunnelAddress) return;
+    navigator.clipboard.writeText(currentTunnelAddress);
+    showToast(`Skopiowano publiczny adres dla znajomych: ${currentTunnelAddress}`);
+  });
+
   btnCopyLocal?.addEventListener('click', () => {
-    const ip = document.getElementById('server-local-ip-display')?.textContent || '172.20.10.4:25565';
+    const ip = document.getElementById('server-local-ip-display')?.textContent || '127.0.0.1:25565';
     navigator.clipboard.writeText(ip);
-    showToast(`Skopiowano IP serwera dla znajomych: ${ip}`);
+    showToast(`Skopiowano adres LAN: ${ip}`);
   });
 
   btnCopyLocalhost?.addEventListener('click', () => {
-    navigator.clipboard.writeText('localhost:25565');
-    showToast('Skopiowano adres: localhost:25565');
+    const addr = document.getElementById('server-localhost-ip-display')?.textContent || 'localhost:25565';
+    navigator.clipboard.writeText(addr);
+    showToast(`Skopiowano adres: ${addr}`);
   });
 
   const cfgInputs = [
-    'server-cfg-ram', 'server-cfg-port', 'server-cfg-online-mode',
-    'server-cfg-gamemode', 'server-cfg-difficulty', 'server-cfg-pvp'
+    'server-cfg-engine', 'server-cfg-version', 'server-cfg-ram', 'server-cfg-port',
+    'server-cfg-online-mode', 'server-cfg-auto-tunnel', 'server-cfg-gamemode',
+    'server-cfg-difficulty', 'server-cfg-pvp'
   ];
   cfgInputs.forEach(id => {
-    document.getElementById(id)?.addEventListener('change', () => {
-      const newCfg = {
-        ram: parseInt(document.getElementById('server-cfg-ram')?.value || '4', 10),
-        port: parseInt(document.getElementById('server-cfg-port')?.value || '25565', 10),
-        onlineMode: document.getElementById('server-cfg-online-mode')?.value === 'true',
-        gamemode: document.getElementById('server-cfg-gamemode')?.value || 'survival',
-        difficulty: document.getElementById('server-cfg-difficulty')?.value || 'normal',
-        pvp: document.getElementById('server-cfg-pvp')?.value === 'true'
-      };
-      window.api.saveServerConfig(newCfg);
+    document.getElementById(id)?.addEventListener('change', async () => {
+      const newCfg = readServerConfigFromInputs();
+      await window.api.saveServerConfig(newCfg);
+      const titleEl = document.getElementById('server-view-title');
+      const engineLabel = SERVER_ENGINE_LABELS[newCfg.engine] || 'Paper';
+      if (titleEl) titleEl.textContent = `Serwer Lokalny (${engineLabel} ${newCfg.version})`;
+      const lh = document.getElementById('server-localhost-ip-display');
+      if (lh) lh.textContent = `localhost:${newCfg.port}`;
+      const tp = document.getElementById('server-tunnel-port-input');
+      if (tp && !isTunnelActive && !isTunnelStarting) tp.value = String(newCfg.port);
+      if (id === 'server-cfg-engine') {
+        loadServerPlugins();
+      }
+      refreshServerMetricsOnce();
       showToast('Zapisano ustawienia serwera.');
     });
   });
@@ -3150,20 +4823,15 @@ function setupServerHostingListeners() {
         showToast(`Błąd zatrzymywania: ${err.message}`);
       }
     } else {
-      showToast('Uruchamianie serwera Minecraft 1.21.11...');
+      const newCfg = readServerConfigFromInputs();
+      const engineLabel = SERVER_ENGINE_LABELS[newCfg.engine] || 'Paper';
+      showToast(`Uruchamianie serwera ${engineLabel} ${newCfg.version}...`);
       try {
-        const newCfg = {
-          ram: parseInt(document.getElementById('server-cfg-ram')?.value || '4', 10),
-          port: parseInt(document.getElementById('server-cfg-port')?.value || '25565', 10),
-          onlineMode: document.getElementById('server-cfg-online-mode')?.value === 'true',
-          gamemode: document.getElementById('server-cfg-gamemode')?.value || 'survival',
-          difficulty: document.getElementById('server-cfg-difficulty')?.value || 'normal',
-          pvp: document.getElementById('server-cfg-pvp')?.value === 'true'
-        };
         await window.api.saveServerConfig(newCfg);
         await window.api.startServer();
       } catch (err) {
-        showToast(`Błąd startu serwera: ${err.message}`);
+        const cleanErr = (err.message || '').replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
+        showToast(`Błąd startu serwera: ${cleanErr}`);
       }
     }
   });
@@ -3188,13 +4856,60 @@ function setupServerHostingListeners() {
     appendServerLog(line);
   });
 
+  window.api.onServerMetrics?.((metrics) => {
+    updateServerMetricsUI(metrics);
+  });
+
+  if (!serverMetricsPollTimer) {
+    serverMetricsPollTimer = setInterval(() => {
+      const srvView = document.getElementById('view-server');
+      if (srvView?.classList.contains('active') && !isServerRunning) {
+        refreshServerMetricsOnce();
+      }
+    }, 2500);
+  }
+
+  if (!serverUptimeClockTimer) {
+    serverUptimeClockTimer = setInterval(() => {
+      if (!latestServerMetrics?.running || !latestServerMetrics?.startedAt) return;
+      const uVal = document.getElementById('srv-metric-uptime-val');
+      if (uVal) {
+        const sec = Math.max(0, Math.floor((Date.now() - latestServerMetrics.startedAt) / 1000));
+        uVal.textContent = formatDurationHMS(sec);
+      }
+    }, 1000);
+  }
+
+  window.api.onServerTunnelStatus?.((data) => {
+    updateServerTunnelUI(data || {});
+    if (data?.active && data?.publicAddress && data.publicAddress !== lastAnnouncedTunnelAddress) {
+      lastAnnouncedTunnelAddress = data.publicAddress;
+      navigator.clipboard.writeText(data.publicAddress).catch(() => {});
+      showToast(`Tunel publiczny gotowy! Skopiowano adres: ${data.publicAddress}`);
+    }
+    if (!data?.active && !data?.starting) {
+      lastAnnouncedTunnelAddress = null;
+    }
+  });
+
+  window.api.onLanDetected?.((data) => {
+    if (!data?.port) return;
+    const tp = document.getElementById('server-tunnel-port-input');
+    if (tp && !isTunnelActive && !isTunnelStarting) {
+      tp.value = String(data.port);
+    }
+    showToast(`Wykryto świat LAN (port ${data.port}) — możesz udostępnić go znajomym w zakładce Serwer Lokalny!`);
+  });
+
   window.api.onServerStatus((data) => {
     if (data.status === 'running') {
-      showToast('Twój serwer Minecraft 1.21.11 został pomyślnie uruchomiony!');
-      updateServerHostUI({ running: true, localIp: data.ip, port: data.port });
+      const cfg = readServerConfigFromInputs();
+      const engineLabel = SERVER_ENGINE_LABELS[cfg.engine] || 'Paper';
+      showToast(`Serwer ${engineLabel} ${cfg.version} jest już Online!`);
+      loadServerHosting();
     } else if (data.status === 'stopped') {
       showToast('Serwer został zatrzymany.');
-      updateServerHostUI({ running: false });
+      loadServerHosting();
     } else if (data.status === 'downloading' || data.status === 'preparing' || data.status === 'starting') {
       updateServerHostUI({ running: false, starting: true });
       if (data.message) appendServerLog(`[SYSTEM] ${data.message}`);
@@ -3206,7 +4921,343 @@ function setupServerHostingListeners() {
 
   window.api.onServerDownloadProgress((data) => {
     const statusText = document.getElementById('server-console-status-text');
-    if (statusText) statusText.textContent = `Pobieranie server.jar 1.21.11: ${data.pct}%`;
+    const ver = document.getElementById('server-cfg-version')?.value || '1.21.11';
+    if (statusText) statusText.textContent = `Pobieranie silnika serwera ${ver}: ${data.pct}%`;
+  });
+
+  setupServerPluginsListeners();
+}
+
+// ========================================================
+// SERVER PLUGINS & ADDONS MANAGER
+// ========================================================
+
+let serverPluginsActiveTab = 'browse';
+let serverPluginsSearchQuery = '';
+let serverPluginsCurrentFilter = 'all';
+let serverPluginsInstalledList = [];
+let serverPluginsSearchResults = [];
+let serverPluginsSearchDebounce = null;
+let serverPluginsIsSearching = false;
+const installingPluginsSet = new Set();
+
+function formatCompactNumber(num) {
+  const n = Number(num) || 0;
+  if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
+  return String(n);
+}
+
+async function loadServerPlugins() {
+  const warnEl = document.getElementById('server-plugins-vanilla-warn');
+  const searchBar = document.getElementById('server-plugins-search-bar');
+  const countBadge = document.getElementById('server-plugins-count-badge');
+  const installedCount = document.getElementById('srv-installed-count');
+  const subdesc = document.getElementById('server-plugins-subdesc');
+
+  if (!window.api?.getServerPlugins) return;
+
+  try {
+    const res = await window.api.getServerPlugins();
+    if (!res.supported) {
+      if (warnEl) warnEl.style.display = 'flex';
+      if (searchBar) searchBar.style.display = 'none';
+      if (countBadge) countBadge.textContent = 'Vanilla (Brak pluginów)';
+      if (installedCount) installedCount.textContent = '0';
+      const browseGrid = document.getElementById('server-plugins-browse-grid');
+      const instList = document.getElementById('server-plugins-installed-list');
+      if (browseGrid) browseGrid.innerHTML = '';
+      if (instList) instList.innerHTML = '';
+      return;
+    }
+
+    if (warnEl) warnEl.style.display = 'none';
+    if (searchBar) searchBar.style.display = 'flex';
+
+    serverPluginsInstalledList = res.items || [];
+    const count = serverPluginsInstalledList.length;
+
+    if (countBadge) {
+      countBadge.textContent = count > 0 ? `${count} ${count === 1 ? 'zainstalowany' : (count < 5 ? 'zainstalowane' : 'zainstalowanych')}` : '0 zainstalowanych';
+    }
+    if (installedCount) {
+      installedCount.textContent = String(count);
+    }
+    if (subdesc && res.label) {
+      subdesc.textContent = res.type === 'mods'
+        ? 'Pobieraj modyfikacje serwerowe Fabric bezpośrednio z bazy Modrinth.'
+        : 'Pobieraj oficjalne pluginy z Modrinth w 1 kliknięcie (Geyser do Bedrocka, ViaVersion, EssentialsX, SkinsRestorer, Chunky, WorldEdit).';
+    }
+
+    renderInstalledServerPlugins(serverPluginsInstalledList);
+
+    if (serverPluginsSearchResults.length === 0 && !serverPluginsIsSearching) {
+      searchServerPluginsModrinth(serverPluginsSearchQuery, serverPluginsCurrentFilter);
+    }
+  } catch (err) {
+    console.error('Błąd loadServerPlugins:', err);
+  }
+}
+
+function renderInstalledServerPlugins(items = []) {
+  const container = document.getElementById('server-plugins-installed-list');
+  if (!container) return;
+
+  if (!items || items.length === 0) {
+    container.innerHTML = `
+      <div class="server-plugins-empty">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="color: var(--text-muted); opacity: 0.7;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        <div style="font-weight: 600; color: var(--text-secondary);">Brak zainstalowanych pluginów</div>
+        <div>Przejdź do zakładki „Szukaj w Modrinth”, aby pobrać pierwsze wtyczki (np. Geyser, ViaVersion, EssentialsX).</div>
+        <button class="btn-primary" style="margin-top: 6px;" onclick="window.switchServerPluginsTab('browse')">Przeglądaj Modrinth</button>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = items.map(item => `
+    <div class="server-installed-row ${item.enabled ? '' : 'is-disabled'}" data-file="${escapeHtml(item.filename)}">
+      <div class="server-installed-info">
+        <div class="server-installed-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+        </div>
+        <div class="server-installed-text">
+          <div class="server-installed-name">
+            ${escapeHtml(item.displayName)}
+            ${item.version ? `<span class="mod-tag tnum" style="margin-left: 6px;">v${escapeHtml(item.version)}</span>` : ''}
+            <span class="mod-tag tnum" style="margin-left: 4px; font-weight: normal; color: var(--text-muted);">${escapeHtml(item.sizeFormatted)}</span>
+          </div>
+          <div class="server-installed-meta">
+            ${item.description ? escapeHtml(item.description) : escapeHtml(item.filename)}
+            ${item.author ? ` • Autor: ${escapeHtml(item.author)}` : ''}
+          </div>
+        </div>
+      </div>
+
+      <div class="server-installed-actions">
+        <span class="mod-tag ${item.enabled ? 'status-on' : 'status-off'} tnum" style="font-size: 10.5px;">
+          ${item.enabled ? 'Aktywny' : 'Wyłączony'}
+        </span>
+        <label class="ui-switch" title="${item.enabled ? 'Wyłącz plugin' : 'Włącz plugin'}">
+          <input type="checkbox" ${item.enabled ? 'checked' : ''} onchange="window.handleToggleServerPlugin('${escapeHtml(item.filename)}')">
+          <span class="switch-slider"></span>
+        </label>
+        <button class="btn-danger-ghost" style="padding: 4px 8px; height: 30px;" title="Usuń plugin" onclick="window.handleDeleteServerPlugin('${escapeHtml(item.filename)}')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+        </button>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function searchServerPluginsModrinth(query = '', filter = 'all') {
+  const container = document.getElementById('server-plugins-browse-grid');
+  if (!container) return;
+
+  serverPluginsIsSearching = true;
+  container.innerHTML = `
+    <div style="grid-column: 1 / -1; padding: 36px 20px; text-align: center; color: var(--text-muted); display: flex; flex-direction: column; align-items: center; gap: 8px;">
+      <span class="spinner-ring" style="width: 22px; height: 22px;"></span>
+      <span>Wyszukiwanie pluginów w bazie Modrinth...</span>
+    </div>
+  `;
+
+  try {
+    const res = await window.api.searchServerPlugins({ query, filter, limit: 24 });
+    serverPluginsSearchResults = res?.hits || [];
+    renderModrinthPluginsGrid(serverPluginsSearchResults);
+  } catch (err) {
+    container.innerHTML = `
+      <div style="grid-column: 1 / -1; padding: 30px; text-align: center; color: #F87171;">
+        Błąd wyszukiwania: ${escapeHtml(err.message)}
+      </div>
+    `;
+  } finally {
+    serverPluginsIsSearching = false;
+  }
+}
+
+function renderModrinthPluginsGrid(hits = []) {
+  const container = document.getElementById('server-plugins-browse-grid');
+  if (!container) return;
+
+  if (!hits || hits.length === 0) {
+    container.innerHTML = `
+      <div class="server-plugins-empty" style="grid-column: 1 / -1;">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <div>Nie znaleziono pluginów pasujących do wyszukiwania.</div>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = hits.map(hit => {
+    const isInstalling = installingPluginsSet.has(hit.slug);
+    const isInstalled = hit.isInstalled;
+
+    let btnMarkup = '';
+    if (isInstalled) {
+      btnMarkup = `
+        <button class="btn-secondary" style="height: 28px; padding: 0 10px; font-size: 11px; color: #34D399; pointer-events: none;">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          <span>Zainstalowany</span>
+        </button>
+      `;
+    } else if (isInstalling) {
+      btnMarkup = `
+        <button class="btn-primary" style="height: 28px; padding: 0 10px; font-size: 11px;" disabled>
+          <span class="spinner-ring" style="width: 11px; height: 11px;"></span>
+          <span>Pobieranie...</span>
+        </button>
+      `;
+    } else {
+      btnMarkup = `
+        <button class="btn-emerald" style="height: 28px; padding: 0 11px; font-size: 11px;" onclick="window.handleInstallServerPlugin('${escapeHtml(hit.slug)}')">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span>Zainstaluj</span>
+        </button>
+      `;
+    }
+
+    const iconMarkup = hit.icon_url
+      ? `<img src="${escapeHtml(hit.icon_url)}" class="server-plugin-icon" alt="" onerror="this.outerHTML='<div class=\\\'server-plugin-icon\\\'><svg width=\\\'18\\\' height=\\\'18\\\' viewBox=\\\'0 0 24 24\\\' fill=\\\'none\\\' stroke=\\\'currentColor\\\' stroke-width=\\\'2\\\'><rect x=\\\'3\\\' y=\\\'3\\\' width=\\\'18\\\' height=\\\'18\\\' rx=\\\'2\\\'/></svg></div>'">`
+      : `<div class="server-plugin-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg></div>`;
+
+    return `
+      <div class="server-plugin-card">
+        <div class="server-plugin-top">
+          ${iconMarkup}
+          <div class="server-plugin-meta">
+            <div class="server-plugin-name" title="${escapeHtml(hit.title)}">${escapeHtml(hit.title)}</div>
+            <div class="server-plugin-author">${hit.author ? `Autor: ${escapeHtml(hit.author)}` : ''}</div>
+          </div>
+        </div>
+        <div class="server-plugin-desc">${escapeHtml(hit.description || '')}</div>
+        <div class="server-plugin-foot">
+          <div class="server-plugin-stats">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <span>${formatCompactNumber(hit.downloads)} pobrań</span>
+          </div>
+          ${btnMarkup}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+window.handleInstallServerPlugin = async function (slug) {
+  if (!slug || installingPluginsSet.has(slug)) return;
+  installingPluginsSet.add(slug);
+  renderModrinthPluginsGrid(serverPluginsSearchResults);
+  showToast(`Pobieranie pluginu ${slug}...`);
+
+  try {
+    const res = await window.api.installServerPlugin({ slug });
+    showToast(`Pomyślnie zainstalowano ${res.filename || slug}!`);
+    await loadServerPlugins();
+    await searchServerPluginsModrinth(serverPluginsSearchQuery, serverPluginsCurrentFilter);
+  } catch (err) {
+    showToast(`Błąd instalacji pluginu: ${err.message}`);
+  } finally {
+    installingPluginsSet.delete(slug);
+    renderModrinthPluginsGrid(serverPluginsSearchResults);
+  }
+};
+
+window.handleToggleServerPlugin = async function (filename) {
+  try {
+    const res = await window.api.toggleServerPlugin(filename);
+    showToast(`${res.enabled ? 'Włączono' : 'Wyłączono'} plugin: ${res.newFilename}`);
+    await loadServerPlugins();
+  } catch (err) {
+    showToast(`Błąd: ${err.message}`);
+  }
+};
+
+window.handleDeleteServerPlugin = async function (filename) {
+  if (!confirm(`Czy na pewno chcesz usunąć plugin „${filename}”?`)) return;
+  try {
+    await window.api.deleteServerPlugin(filename);
+    showToast(`Usunięto plugin ${filename}.`);
+    await loadServerPlugins();
+    await searchServerPluginsModrinth(serverPluginsSearchQuery, serverPluginsCurrentFilter);
+  } catch (err) {
+    showToast(`Błąd usuwania: ${err.message}`);
+  }
+};
+
+window.switchServerPluginsTab = function (tabName) {
+  serverPluginsActiveTab = tabName;
+  const browseBtn = document.getElementById('srv-tab-browse');
+  const instBtn = document.getElementById('srv-tab-installed');
+  const browsePane = document.getElementById('server-plugins-browse-pane');
+  const instPane = document.getElementById('server-plugins-installed-pane');
+  const searchBar = document.getElementById('server-plugins-search-bar');
+
+  if (tabName === 'browse') {
+    browseBtn?.classList.add('active');
+    instBtn?.classList.remove('active');
+    if (browsePane) browsePane.style.display = 'block';
+    if (instPane) instPane.style.display = 'none';
+    if (searchBar) searchBar.style.display = 'flex';
+  } else {
+    browseBtn?.classList.remove('active');
+    instBtn?.classList.add('active');
+    if (browsePane) browsePane.style.display = 'none';
+    if (instPane) instPane.style.display = 'block';
+    if (searchBar) searchBar.style.display = 'none';
+  }
+};
+
+function setupServerPluginsListeners() {
+  document.getElementById('srv-tab-browse')?.addEventListener('click', () => {
+    window.switchServerPluginsTab('browse');
+  });
+
+  document.getElementById('srv-tab-installed')?.addEventListener('click', () => {
+    window.switchServerPluginsTab('installed');
+  });
+
+  document.getElementById('btn-open-plugins-folder')?.addEventListener('click', async () => {
+    try {
+      await window.api.openServerPluginsFolder();
+      showToast('Otwarto folder pluginów.');
+    } catch (err) {
+      showToast(`Błąd otwierania folderu: ${err.message}`);
+    }
+  });
+
+  const searchInput = document.getElementById('server-plugins-search-input');
+  const clearBtn = document.getElementById('btn-clear-plugins-search');
+
+  searchInput?.addEventListener('input', (e) => {
+    const q = e.target.value.trim();
+    serverPluginsSearchQuery = q;
+    if (clearBtn) clearBtn.style.display = q ? 'block' : 'none';
+
+    if (serverPluginsSearchDebounce) clearTimeout(serverPluginsSearchDebounce);
+    serverPluginsSearchDebounce = setTimeout(() => {
+      searchServerPluginsModrinth(serverPluginsSearchQuery, serverPluginsCurrentFilter);
+    }, 320);
+  });
+
+  clearBtn?.addEventListener('click', () => {
+    if (searchInput) {
+      searchInput.value = '';
+      serverPluginsSearchQuery = '';
+      clearBtn.style.display = 'none';
+      searchServerPluginsModrinth('', serverPluginsCurrentFilter);
+    }
+  });
+
+  const chips = document.querySelectorAll('.server-plugins-chips .srv-chip');
+  chips.forEach(chip => {
+    chip.addEventListener('click', () => {
+      chips.forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      serverPluginsCurrentFilter = chip.getAttribute('data-filter') || 'all';
+      searchServerPluginsModrinth(serverPluginsSearchQuery, serverPluginsCurrentFilter);
+    });
   });
 }
 
@@ -3223,6 +5274,8 @@ let currentCapeId = "kasteusz";
 let isPlayerFlipped = false;
 
 function openWardrobeModal() {
+  syncSkinVariantButtons();
+  updateWardrobeSkinSyncBanner();
   const modal = elements.wardrobeModal || document.getElementById('wardrobe-modal');
   if (modal) modal.classList.add("open");
 }
@@ -3458,9 +5511,18 @@ function renderAccountCapes(account) {
     card.appendChild(preview);
     card.appendChild(info);
 
-    card.addEventListener("click", () => {
+    card.addEventListener("click", async () => {
       applyCape(capeUrl, true);
-      showToast(`Założono Twoją oficjalną pelerynkę: ${c.alias || "Mojang"}!`);
+      if (account.isPremium && c.id && window.api?.setMojangCape) {
+        try {
+          await window.api.setMojangCape(c.id);
+          showToast(`Założono oficjalną pelerynkę ${c.alias || "Mojang"} w samej grze!`);
+          return;
+        } catch (err) {
+          console.warn('Uwaga przy ustawianiu pelerynki Mojang:', err);
+        }
+      }
+      showToast(`Założono pelerynkę: ${c.alias || "Mojang"}!`);
     });
 
     if (currentCapeId === capeUrl) card.classList.add("active");
@@ -3573,62 +5635,158 @@ function setupWardrobeListeners() {
     }
   });
 
-  elements.btnRemoveCape?.addEventListener("click", () => {
+  elements.btnRemoveCape?.addEventListener("click", async () => {
     applyCape("none", true);
+    if (currentAccount?.isPremium && window.api?.setMojangCape) {
+      try { await window.api.setMojangCape("none"); } catch (_) {}
+    }
     showToast("Pelerynka została zdjęta.");
   });
 
-  elements.btnPresetMcqueen?.addEventListener("click", async () => {
-    updateSkinDisplay("assets/default-skin.png");
+  const btnInstallCsl = document.getElementById('btn-wardrobe-install-csl');
+  btnInstallCsl?.addEventListener('click', async () => {
+    const activeProf = getActiveProfileObj();
+    const activeMcVer = (activeProf?.mcVersion || currentSelectedVersionId || '1.21.11').replace(/^(fabric|quilt)-/, '');
+    const origText = btnInstallCsl.textContent;
+    btnInstallCsl.disabled = true;
+    btnInstallCsl.textContent = 'Pobieranie...';
     try {
-      await window.api.setCustomSkin("assets/default-skin.png");
-    } catch (e) {}
-    showToast("Założono skin: Zygzak McQueen #95!");
+      const res = await window.api.installModrinthMod({
+        projectId: 'customskinloader',
+        slug: 'customskinloader',
+        gameVersion: activeMcVer,
+        loader: activeProf?.loader || 'fabric'
+      });
+      if (res?.mods) {
+        installedMods = res.mods;
+        renderModsList(installedMods);
+      }
+      await loadProfiles();
+      updateWardrobeSkinSyncBanner();
+      showToast('Dograno CustomSkinLoader! Twoja skórka i pelerynka będą widoczne na każdym serwerze w trybie Offline.');
+    } catch (err) {
+      const cleanErr = (err.message || '').replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
+      showToast(`Błąd pobierania CustomSkinLoader: ${cleanErr}`);
+    } finally {
+      btnInstallCsl.disabled = false;
+      btnInstallCsl.textContent = origText;
+    }
+  });
+
+  const handleVariantSwitch = async (variant) => {
+    const norm = variant === 'SLIM' ? 'SLIM' : 'CLASSIC';
+    if (currentSkinVariant === norm) return;
+    currentSkinVariant = norm;
+    syncSkinVariantButtons();
+    const skinToUse = currentAccount?.skinUrl || currentAccount?.customSkinUrl || getDefaultSkinForAccount(currentAccount);
+    updateSkinDisplay(skinToUse, norm);
+    if (currentAccount) {
+      try {
+        const updated = await window.api.setCustomSkin(skinToUse, norm);
+        if (updated) await applyAccountToUI(updated);
+        showToast(norm === 'SLIM' ? 'Ustawiono smukłe ramiona (Alex • 3px) w grze.' : 'Ustawiono klasyczne ramiona (Steve • 4px) w grze.');
+      } catch (err) {
+        const cleanErr = (err.message || '').replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
+        showToast(`Błąd zmiany modelu ramion: ${cleanErr}`);
+      }
+    }
+  };
+
+  document.getElementById('skin-variant-classic')?.addEventListener('click', () => handleVariantSwitch('CLASSIC'));
+  document.getElementById('skin-variant-slim')?.addEventListener('click', () => handleVariantSwitch('SLIM'));
+
+  elements.btnPresetMcqueen?.addEventListener("click", async () => {
+    if (!isOwnerAccount(currentAccount)) {
+      showToast("Ta unikalna skórka Zygzaka McQueena #95 jest zarezerwowana wyłącznie dla Właściciela!");
+      return;
+    }
+    currentSkinVariant = 'CLASSIC';
+    syncSkinVariantButtons();
+    updateSkinDisplay("assets/mcqueen-skin.png", 'CLASSIC');
+    try {
+      const updated = await window.api.setCustomSkin("assets/mcqueen-skin.png", 'CLASSIC');
+      if (updated) await applyAccountToUI(updated);
+      showToast(updated?.isPremium ? "Wysłano skórkę Zygzaka McQueena na konto Microsoft!" : "Założono skórkę Zygzaka McQueena #95 w grze!");
+    } catch (err) {
+      const cleanErr = (err.message || '').replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
+      showToast(`Błąd zapisu skórki: ${cleanErr}`);
+    }
   });
 
   elements.btnPresetSteve?.addEventListener("click", async () => {
     const url = "https://textures.minecraft.net/texture/1a406e897914457613d760ab577a34d35388b73d263f9d4ca4570b5f816b3fb9";
-    updateSkinDisplay(url);
+    currentSkinVariant = 'CLASSIC';
+    syncSkinVariantButtons();
+    updateSkinDisplay(url, 'CLASSIC');
     try {
-      await window.api.setCustomSkin(url);
-    } catch (e) {}
-    showToast("Założono skin: Steve!");
+      const updated = await window.api.setCustomSkin(url, 'CLASSIC');
+      if (updated) await applyAccountToUI(updated);
+      showToast(updated?.isPremium ? "Wysłano skórkę Steve na konto Microsoft!" : "Założono skórkę Steve w grze!");
+    } catch (err) {
+      const cleanErr = (err.message || '').replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
+      showToast(`Błąd zapisu skórki: ${cleanErr}`);
+    }
   });
 
   elements.btnPresetAlex?.addEventListener("click", async () => {
     const url = "https://textures.minecraft.net/texture/e5585b88c7dd884ec71b83d693eeab61a5867ff4691bc9dbb2eb5420a32194b6";
-    updateSkinDisplay(url);
+    currentSkinVariant = 'SLIM';
+    syncSkinVariantButtons();
+    updateSkinDisplay(url, 'SLIM');
     try {
-      await window.api.setCustomSkin(url);
-    } catch (e) {}
-    showToast("Założono skin: Alex!");
+      const updated = await window.api.setCustomSkin(url, 'SLIM');
+      if (updated) await applyAccountToUI(updated);
+      showToast(updated?.isPremium ? "Wysłano skórkę Alex (3px) na konto Microsoft!" : "Założono skórkę Alex (3px) w grze!");
+    } catch (err) {
+      const cleanErr = (err.message || '').replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
+      showToast(`Błąd zapisu skórki: ${cleanErr}`);
+    }
   });
 
   elements.btnWardrobeFetchNick?.addEventListener("click", async () => {
     const nick = elements.wardrobeNickInput?.value.trim();
-    if (!nick) return;
+    if (!nick) {
+      showToast("Wpisz nick gracza Minecraft.");
+      return;
+    }
+    showToast(currentAccount?.isPremium
+      ? `Pobieranie skórki ${nick} i wysyłanie na konto Microsoft...`
+      : `Pobieranie skórki gracza ${nick}...`);
     try {
       const url = await window.api.getSkinUrl(nick);
       if (url) {
-        updateSkinDisplay(url);
-        await window.api.setCustomSkin(url);
-        showToast(`Pobrano skórkę dla gracza ${nick}!`);
+        updateSkinDisplay(url, currentSkinVariant);
+        const updated = await window.api.setCustomSkin(url, currentSkinVariant);
+        if (updated) await applyAccountToUI(updated);
+        showToast(updated?.isPremium
+          ? `Wgrano skórkę gracza ${nick} na Twoje konto Microsoft!`
+          : `Założono skórkę gracza ${nick} w grze!`);
       }
     } catch (err) {
-      showToast(`Błąd pobierania skórki: ${err.message}`);
+      const cleanErr = (err.message || '').replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
+      showToast(`Błąd pobierania skórki: ${cleanErr}`);
+    }
+  });
+
+  elements.wardrobeNickInput?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      elements.btnWardrobeFetchNick?.click();
     }
   });
 
   elements.btnWardrobeUploadSkin?.addEventListener("click", async () => {
     try {
-      const newSkinUrl = await window.api.selectSkinFile();
-      if (newSkinUrl) {
-        updateSkinDisplay(newSkinUrl);
-        await window.api.setCustomSkin(newSkinUrl);
-        showToast("Załadowano własną skórkę z pliku!");
+      const updated = await window.api.selectSkinFile(currentSkinVariant);
+      if (updated) {
+        await applyAccountToUI(updated);
+        showToast(updated.isPremium
+          ? "Wysłano własną skórkę .png na Twoje konto Microsoft!"
+          : "Zapisano własną skórkę .png bezpośrednio w plikach gry!");
       }
     } catch (err) {
-      showToast(`Błąd ładowania skórki: ${err.message}`);
+      const cleanErr = (err.message || '').replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
+      showToast(`Błąd ładowania skórki: ${cleanErr}`);
     }
   });
 }
@@ -3659,8 +5817,14 @@ function updateStatsUI(statsData) {
   }
 
   if (elements.profileStatRank) {
-    elements.profileStatRank.textContent = String(statsData.rankTitle || 'Gracz Kasteusz').replace(/[^\w\sąćęłńóśźżĄĆĘŁŃÓŚŹŻ#-]/g, '').trim() || 'Gracz';
+    if (isOwnerAccount(currentAccount)) {
+      elements.profileStatRank.innerHTML = '<span style="color: #F59E0B; font-weight: 700;">👑 Właściciel</span>';
+    } else {
+      elements.profileStatRank.textContent = String(statsData.rankTitle || 'Gracz Kasteusz').trim() || 'Gracz';
+    }
   }
+
+  syncS2StatsWidget(statsData);
 }
 
 async function loadStats() {
@@ -3693,6 +5857,7 @@ function applyTheme(themeName, save = true) {
 
   document.documentElement.setAttribute("data-theme", theme);
   document.body.setAttribute("data-theme", theme);
+  try { localStorage.setItem("kasteusz_theme_accent", theme); } catch (_) {}
 
   document.querySelectorAll(".theme-card").forEach(card => {
     card.classList.toggle("active", card.dataset.theme === theme);
@@ -3739,6 +5904,503 @@ function setupThemesListeners() {
   elements.settingAnimSpeed?.addEventListener("change", (e) => {
     const speed = parseInt(e.target.value, 10) / 100;
     window.api.saveConfig({ animationSpeed: speed });
+  });
+}
+
+// ==========================================================================
+// LAUNCHER UI STYLES (STYL 1 / STYL 2 BADLION / STYL 3 AUTORSKI)
+// ==========================================================================
+const LAUNCHER_STYLE_LABELS = {
+  style1: 'Styl 1',
+  style2: 'Styl 2',
+  style3: 'Styl 3'
+};
+
+let currentLauncherStyle = 'style1';
+let s2QuickModFilterText = '';
+let s3RotatorTimer = null;
+let s3RotatorIndex = 0;
+
+const S3_KINETIC_PHRASES = [
+  'ZE ZNAJOMYMI.',
+  'NA SERWER.',
+  'DO GRY.',
+  'I GRASZ.'
+];
+
+function renderS3KineticWord(phrase) {
+  const container = document.getElementById('s3-kinetic-word');
+  if (!container) return;
+  container.innerHTML = '';
+  const chars = Array.from(String(phrase || ''));
+  chars.forEach((ch, idx) => {
+    const span = document.createElement('span');
+    span.className = ch === ' ' ? 's3-char is-space' : 's3-char';
+    span.style.setProperty('--char-idx', String(idx));
+    span.textContent = ch === ' ' ? '\u00A0' : ch;
+    container.appendChild(span);
+  });
+
+  const rule = document.querySelector('.s3-heading-rule');
+  if (rule) {
+    rule.style.animation = 'none';
+    void rule.offsetWidth;
+    rule.style.animation = 's3RuleExpand 0.6s cubic-bezier(0.16, 1, 0.3, 1) both';
+  }
+}
+
+function startS3KineticRotator() {
+  if (s3RotatorTimer) clearInterval(s3RotatorTimer);
+  renderS3KineticWord(S3_KINETIC_PHRASES[s3RotatorIndex]);
+
+  s3RotatorTimer = setInterval(() => {
+    s3RotatorIndex = (s3RotatorIndex + 1) % S3_KINETIC_PHRASES.length;
+    renderS3KineticWord(S3_KINETIC_PHRASES[s3RotatorIndex]);
+  }, 3800);
+}
+
+function applyLauncherStyleUI(styleName) {
+  const allowed = ['style1', 'style2', 'style3'];
+  const normalized = allowed.includes(styleName) ? styleName : 'style1';
+  currentLauncherStyle = normalized;
+
+  document.documentElement.setAttribute('data-ui-style', normalized);
+  document.body.setAttribute('data-ui-style', normalized);
+  try {
+    localStorage.setItem('kasteusz_launcher_style', normalized);
+  } catch (_) {}
+
+  document.querySelectorAll('.launcher-style-card').forEach(card => {
+    card.classList.toggle('active', card.dataset.launcherStyle === normalized);
+  });
+
+  if (!isGameLaunching && elements.playBtnText) {
+    elements.playBtnText.textContent = normalized === 'style2' ? 'GRAJ' : 'URUCHOM GRĘ';
+  }
+
+  if (normalized === 'style3') {
+    startS3KineticRotator();
+  } else if (s3RotatorTimer) {
+    clearInterval(s3RotatorTimer);
+    s3RotatorTimer = null;
+  }
+
+  syncS2ProfileWidget();
+  renderS2ModpacksWidget();
+  renderS2QuickModsWidget(installedMods);
+  syncS3HeroWidget();
+
+  setTimeout(handleViewerResize, 60);
+  setTimeout(handleViewerResize, 240);
+}
+
+async function switchLauncherStyleWithRestart(targetStyle) {
+  const allowed = ['style1', 'style2', 'style3'];
+  if (!allowed.includes(targetStyle)) return;
+
+  if (targetStyle === currentLauncherStyle) {
+    showToast(`${LAUNCHER_STYLE_LABELS[targetStyle]} jest już aktywny.`);
+    return;
+  }
+
+  try { window.uiSounds?.playClick?.(); } catch (_) {}
+
+  try {
+    localStorage.setItem('kasteusz_launcher_style', targetStyle);
+  } catch (_) {}
+
+  try {
+    await window.api.saveConfig({ launcherStyle: targetStyle });
+    if (currentConfig) currentConfig.launcherStyle = targetStyle;
+  } catch (err) {
+    console.error('Błąd zapisu stylu launchera:', err);
+  }
+
+  const overlay = document.getElementById('style-restart-overlay');
+  const titleEl = document.getElementById('style-restart-title');
+  if (titleEl) {
+    titleEl.textContent = `Przełączanie na ${LAUNCHER_STYLE_LABELS[targetStyle]}...`;
+  }
+  if (overlay) {
+    overlay.style.display = 'flex';
+  }
+
+  setTimeout(async () => {
+    try {
+      if (window.api?.restartApp) {
+        await window.api.restartApp();
+      } else {
+        window.location.reload();
+      }
+    } catch (_) {
+      window.location.reload();
+    }
+  }, 380);
+}
+
+function jumpToModrinthModpacks() {
+  switchToTab('mods');
+  if (typeof window.switchModsSubtab === 'function') {
+    window.switchModsSubtab('modrinth');
+  }
+  setTimeout(() => {
+    const packBtn = document.getElementById('modrinth-type-modpack');
+    if (packBtn) packBtn.click();
+  }, 80);
+}
+
+function syncS3HeroWidget() {
+  const techMeta = document.getElementById('s3-tech-meta');
+  const subNick = document.getElementById('s3-sub-nick');
+  const subProf = document.getElementById('s3-sub-profile');
+  const pickerKicker = document.getElementById('s3-picker-kicker');
+  const pickerName = document.getElementById('s3-picker-name');
+  const modsMain = document.getElementById('s3-mods-main');
+
+  const activeProf = typeof getActiveProfileObj === 'function' ? getActiveProfileObj() : null;
+  const loaderLabel = activeProf ? (LOADER_LABELS[activeProf.loader] || activeProf.loader || 'Fabric') : 'Fabric';
+  const verText = activeProf
+    ? (activeProf.loader === 'custom' && activeProf.customVersionId ? activeProf.customVersionId : activeProf.mcVersion)
+    : (currentConfig?.selectedVersion || '1.21.11');
+  const ramGb = activeProf?.memoryMax || currentConfig?.memoryMax || 4;
+  const profName = activeProf?.name || 'Kasteusz Main';
+
+  if (techMeta) {
+    techMeta.textContent = `gotowy do gry • ${String(loaderLabel).toLowerCase()} ${verText} • ${ramGb} GB RAM`;
+  }
+  if (subNick) {
+    subNick.textContent = currentAccount?.username || 'Gość';
+  }
+  if (subProf) {
+    subProf.textContent = profName;
+  }
+  if (pickerKicker) {
+    pickerKicker.textContent = `${String(loaderLabel).toUpperCase()} ${verText}`;
+  }
+  if (pickerName) {
+    pickerName.textContent = profName;
+  }
+
+  const allMods = Array.isArray(installedMods) ? installedMods : [];
+  const enabledCount = activeProf?.loader === 'vanilla'
+    ? 0
+    : (allMods.length > 0 ? allMods.filter(m => m.enabled).length : (activeProf?.modsEnabled ?? 0));
+  if (modsMain) {
+    modsMain.textContent = activeProf?.loader === 'vanilla' ? 'Tryb Vanilla' : `${enabledCount} włączonych`;
+  }
+
+  renderS3ProfileDropdown();
+}
+
+function renderS3ProfileDropdown() {
+  const menu = document.getElementById('s3-profile-dropdown');
+  if (!menu) return;
+  menu.innerHTML = '';
+
+  const list = profilesState?.profiles || [];
+  list.forEach(prof => {
+    const isSelected = prof.id === profilesState.activeProfileId;
+    const loaderLabel = LOADER_LABELS[prof.loader] || 'Fabric';
+    const verLabel = prof.loader === 'custom' && prof.customVersionId ? prof.customVersionId : prof.mcVersion;
+
+    const item = document.createElement('div');
+    item.className = `version-menu-item ${isSelected ? 'active' : ''}`;
+    item.innerHTML = `
+      <div style="display:flex;flex-direction:column;min-width:0;">
+        <span style="font-size:12px;font-weight:700;color:#FAFAFA;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></span>
+        <span class="tnum" style="font-size:10.5px;color:#94A3B8;"></span>
+      </div>
+      <span class="loader-pill ${prof.loader}">${loaderLabel}</span>
+    `;
+    item.querySelector('span').textContent = prof.name;
+    item.querySelectorAll('span')[1].textContent = `${verLabel}${prof.loader !== 'vanilla' ? ` • ${prof.modsEnabled || 0} modów` : ''}`;
+    item.addEventListener('click', () => {
+      menu.classList.remove('open');
+      activateProfileById(prof.id);
+    });
+    menu.appendChild(item);
+  });
+}
+
+function formatPolishPeopleCount(n) {
+  if (n === 1) return '1 osoba';
+  const m10 = n % 10;
+  const m100 = n % 100;
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return `${n} osoby`;
+  return `${n} osób`;
+}
+
+function syncS3FriendsStrip(friends) {
+  const headsEl = document.getElementById('s3-friends-heads');
+  const mainEl = document.getElementById('s3-friends-main');
+  const list = Array.isArray(friends) ? friends : [];
+
+  if (mainEl) {
+    mainEl.textContent = formatPolishPeopleCount(list.length);
+  }
+  if (headsEl) {
+    headsEl.innerHTML = '';
+    list.slice(0, 3).forEach(f => {
+      const nick = typeof f === 'string' ? f : (f?.username || f?.name || 'Steve');
+      const img = document.createElement('img');
+      img.alt = nick;
+      img.title = nick;
+      attachPlayerHeadImg(img, nick, 32);
+      headsEl.appendChild(img);
+    });
+  }
+}
+
+function syncS2ProfileWidget() {
+  const avatarImg = document.getElementById('s2-avatar-img');
+  const nickEl = document.getElementById('s2-player-nick');
+  const badgeEl = document.getElementById('s2-account-badge');
+  const engineEl = document.getElementById('s2-stat-engine');
+
+  if (currentAccount) {
+    if (nickEl) nickEl.textContent = currentAccount.username || 'Gracz';
+    if (badgeEl) {
+      if (isOwnerAccount(currentAccount)) {
+        badgeEl.textContent = '👑 WŁAŚCICIEL';
+        badgeEl.style.color = '#F59E0B';
+      } else {
+        badgeEl.textContent = currentAccount.isPremium ? 'PREMIUM' : 'OFFLINE';
+        badgeEl.style.color = currentAccount.isPremium ? '#34D399' : '#38BDF8';
+      }
+    }
+    if (avatarImg) {
+      if (currentAvatarHeadDataUrl) {
+        avatarImg.onerror = null;
+        avatarImg.src = currentAvatarHeadDataUrl;
+      } else {
+        attachPlayerHeadImg(avatarImg, currentAccount.username, 64);
+      }
+    }
+  } else {
+    if (nickEl) nickEl.textContent = 'Zaloguj się';
+    if (badgeEl) {
+      badgeEl.textContent = 'GOŚĆ';
+      badgeEl.style.color = '#FBBF24';
+    }
+    if (avatarImg) {
+      avatarImg.onerror = null;
+      avatarImg.src = defaultHeadDataUrl;
+    }
+  }
+
+  const activeProf = typeof getActiveProfileObj === 'function' ? getActiveProfileObj() : null;
+  if (engineEl && activeProf) {
+    const loaderName = (LOADER_LABELS[activeProf.loader] || activeProf.loader || 'FABRIC').toUpperCase();
+    engineEl.textContent = loaderName;
+  }
+
+  syncS3HeroWidget();
+}
+
+function syncS2StatsWidget(statsData) {
+  if (!statsData) return;
+  const rankEl = document.getElementById('s2-player-rank');
+  const timeEl = document.getElementById('s2-stat-playtime');
+  const launchesEl = document.getElementById('s2-stat-launches');
+  const s3TimeEl = document.getElementById('s3-time-sub');
+  const formatted = formatPlaytime(statsData.totalPlaytimeMinutes);
+
+  if (rankEl) {
+    if (isOwnerAccount(currentAccount)) {
+      rankEl.innerHTML = '<span style="color: #F59E0B; font-weight: 700;">👑 Właściciel</span>';
+    } else {
+      rankEl.textContent = String(statsData.rankTitle || 'Gracz').trim() || 'Gracz';
+    }
+  }
+  if (timeEl) {
+    timeEl.textContent = formatted;
+  }
+  if (launchesEl) {
+    launchesEl.textContent = String(statsData.totalLaunches || 0);
+  }
+  if (s3TimeEl) {
+    s3TimeEl.textContent = `W grze: ${formatted}`;
+  }
+}
+
+function renderS2ModpacksWidget() {
+  const listEl = document.getElementById('s2-modpacks-list');
+  const countEl = document.getElementById('s2-profiles-count');
+  if (!listEl) return;
+
+  const profiles = profilesState?.profiles || [];
+  if (countEl) countEl.textContent = String(profiles.length);
+
+  listEl.innerHTML = '';
+  if (profiles.length === 0) {
+    listEl.innerHTML = `<div style="font-size:11px;color:var(--text-muted);padding:10px 4px;text-align:center;">Brak profili.</div>`;
+    return;
+  }
+
+  profiles.forEach(prof => {
+    const isSelected = prof.id === profilesState.activeProfileId;
+    const isModpack = /modpack/i.test(prof.name || '');
+    const cleanName = String(prof.name || 'Profil').replace(/^\[Modpack\]\s*/i, '');
+    const verLabel = prof.loader === 'custom' && prof.customVersionId ? prof.customVersionId : prof.mcVersion;
+    const modsTxt = prof.loader === 'vanilla' ? 'Vanilla' : `${prof.modsEnabled || 0} modów`;
+    const tagLabel = isSelected ? 'WYBRANY' : (isModpack ? 'PACZKA' : (LOADER_LABELS[prof.loader] || 'FABRIC'));
+
+    const row = document.createElement('div');
+    row.className = `s2-pack-item ${isSelected ? 'active' : ''}`;
+    row.innerHTML = `
+      <div class="s2-pack-info">
+        <span class="s2-pack-name"></span>
+        <span class="s2-pack-sub tnum"></span>
+      </div>
+      <span class="s2-pack-tag ${isModpack && !isSelected ? 'modpack' : ''}"></span>
+    `;
+    row.querySelector('.s2-pack-name').textContent = cleanName;
+    row.querySelector('.s2-pack-sub').textContent = `${verLabel} • ${modsTxt}`;
+    row.querySelector('.s2-pack-tag').textContent = tagLabel;
+
+    row.addEventListener('click', () => {
+      if (!isSelected) activateProfileById(prof.id);
+    });
+    listEl.appendChild(row);
+  });
+
+  syncS3HeroWidget();
+}
+
+function renderS2QuickModsWidget(mods) {
+  syncS3HeroWidget();
+  const listEl = document.getElementById('s2-quick-mods-list');
+  const countEl = document.getElementById('s2-mods-count-pill');
+  if (!listEl) return;
+
+  const all = Array.isArray(mods) ? mods : [];
+  const activeCount = all.filter(m => m.enabled).length;
+  if (countEl) countEl.textContent = `${activeCount}/${all.length}`;
+
+  listEl.innerHTML = '';
+  const activeProf = typeof getActiveProfileObj === 'function' ? getActiveProfileObj() : null;
+  if (activeProf && activeProf.loader === 'vanilla') {
+    listEl.innerHTML = `<div style="font-size:11px;color:var(--text-muted);padding:12px 6px;text-align:center;">Profil Vanilla — wybierz profil Fabric po lewej, żeby używać modów.</div>`;
+    return;
+  }
+
+  const q = s2QuickModFilterText.trim().toLowerCase();
+  const filtered = q
+    ? all.filter(m =>
+        (m.displayName || m.name || '').toLowerCase().includes(q) ||
+        (m.filename || '').toLowerCase().includes(q)
+      )
+    : all;
+
+  if (filtered.length === 0) {
+    listEl.innerHTML = `<div style="font-size:11px;color:var(--text-muted);padding:12px 6px;text-align:center;">${all.length === 0 ? 'Pusto — pobierz mody przyciskiem Modrinth.' : 'Nic nie znaleziono.'}</div>`;
+    return;
+  }
+
+  filtered.forEach(mod => {
+    const row = document.createElement('div');
+    row.className = `s2-mod-mini-row ${mod.enabled ? '' : 'off'}`;
+    const displayName = mod.displayName || mod.name || mod.filename;
+
+    row.innerHTML = `
+      <div class="s2-mod-mini-left">
+        <span class="s2-mod-mini-dot"></span>
+        <span class="s2-mod-mini-name"></span>
+      </div>
+      <input type="checkbox" class="ui-switch s2-mod-mini-switch" ${mod.enabled ? 'checked' : ''} title="Włącz / wyłącz mod">
+    `;
+    const nameSpan = row.querySelector('.s2-mod-mini-name');
+    nameSpan.textContent = displayName;
+    nameSpan.title = `${displayName} (${mod.filename})`;
+
+    const toggle = row.querySelector('.s2-mod-mini-switch');
+    toggle.addEventListener('change', async () => {
+      try {
+        await window.api.toggleMod(mod.filename);
+        await loadMods();
+        await loadProfiles();
+      } catch (err) {
+        showToast(`Błąd przełączania moda: ${err.message}`);
+      }
+    });
+
+    listEl.appendChild(row);
+  });
+}
+
+function setupLauncherStylesListeners() {
+  document.querySelectorAll('.launcher-style-card').forEach(card => {
+    card.addEventListener('click', () => {
+      const style = card.dataset.launcherStyle;
+      if (style) switchLauncherStyleWithRestart(style);
+    });
+  });
+
+  const openAccAction = () => {
+    if (!currentAccount) openLoginModal();
+    else openProfileModal();
+  };
+  document.getElementById('s2-avatar-box')?.addEventListener('click', openAccAction);
+  document.getElementById('s2-btn-account')?.addEventListener('click', openAccAction);
+  document.getElementById('s2-btn-wardrobe')?.addEventListener('click', () => {
+    document.getElementById('btn-open-wardrobe')?.click();
+  });
+
+  document.getElementById('s2-btn-import-mrpack')?.addEventListener('click', () => handleImportMrpack(null));
+  document.getElementById('s2-btn-browse-modpacks')?.addEventListener('click', jumpToModrinthModpacks);
+  document.getElementById('s2-btn-open-modrinth')?.addEventListener('click', () => {
+    switchToTab('mods');
+    if (typeof window.switchModsSubtab === 'function') window.switchModsSubtab('modrinth');
+  });
+  document.getElementById('s2-btn-all-mods')?.addEventListener('click', () => {
+    switchToTab('mods');
+    if (typeof window.switchModsSubtab === 'function') window.switchModsSubtab('installed');
+  });
+
+  document.getElementById('s2-quick-mod-filter')?.addEventListener('input', (e) => {
+    s2QuickModFilterText = e.target.value || '';
+    renderS2QuickModsWidget(installedMods);
+  });
+
+  document.getElementById('s2-extra-fps')?.addEventListener('click', () => switchToTab('benchmark'));
+  document.getElementById('s2-extra-packs')?.addEventListener('click', () => switchToTab('packs'));
+  document.getElementById('s2-extra-cosmetics')?.addEventListener('click', () => {
+    document.getElementById('btn-open-wardrobe')?.click();
+  });
+  document.getElementById('s2-extra-screens')?.addEventListener('click', () => switchToTab('screenshots'));
+  document.getElementById('s2-extra-music')?.addEventListener('click', () => switchToTab('music'));
+  document.getElementById('s2-extra-doctor')?.addEventListener('click', () => {
+    document.getElementById('btn-open-crash-doctor')?.click();
+  });
+
+  // Styl 3 Editorial interactions
+  document.getElementById('s3-btn-play')?.addEventListener('click', () => {
+    elements.btnPlayGame?.click();
+  });
+
+  const s3ProfBtn = document.getElementById('s3-profile-btn');
+  const s3ProfMenu = document.getElementById('s3-profile-dropdown');
+  s3ProfBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    s3ProfMenu?.classList.toggle('open');
+  });
+  document.addEventListener('click', (e) => {
+    if (s3ProfMenu && s3ProfBtn && !s3ProfMenu.contains(e.target) && !s3ProfBtn.contains(e.target)) {
+      s3ProfMenu.classList.remove('open');
+    }
+  });
+
+  document.getElementById('s3-strip-smp')?.addEventListener('click', () => {
+    document.getElementById('btn-copy-server-ip')?.click();
+  });
+  document.getElementById('s3-strip-mods')?.addEventListener('click', () => {
+    switchToTab('mods');
+  });
+  document.getElementById('s3-strip-wardrobe')?.addEventListener('click', () => {
+    document.getElementById('btn-open-wardrobe')?.click();
+  });
+  document.getElementById('s3-strip-friends')?.addEventListener('click', () => {
+    document.getElementById('btn-add-friend')?.click();
   });
 }
 

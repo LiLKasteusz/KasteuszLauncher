@@ -74,7 +74,17 @@ function recordClose() {
   return stats;
 }
 
-function getRankTitle(minutes) {
+function getRankTitle(minutes, username = '', uuid = '') {
+  const clean = String(username || '').trim().toLowerCase();
+  const cleanUuid = String(uuid || '').replace(/-/g, '').toLowerCase();
+  if (
+    clean === 'mcqueen420_' ||
+    clean === 'mcqueen420' ||
+    clean === 'kasteusz' ||
+    cleanUuid === 'c78190c60bda425e9feea980e541479'
+  ) {
+    return '👑 Właściciel';
+  }
   const hours = (minutes || 0) / 60;
   if (hours >= 100) return 'Legenda Kasteusza 👑';
   if (hours >= 50) return 'Mistrz Szkolne SMP ⚔️';

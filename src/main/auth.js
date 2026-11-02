@@ -1,5 +1,17 @@
 const { BrowserWindow, session } = require('electron');
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
 const config = require('./config');
+
+let AdmZip = null;
+try {
+  AdmZip = require('adm-zip');
+} catch (_) {
+  AdmZip = null;
+}
+
+const SKINS_CACHE_DIR = path.join(config.APP_DIR, 'skins');
 
 const MS_CLIENT_ID = '00000000402b5328';
 const MS_REDIRECT_URI = 'https://login.live.com/oauth20_desktop.srf';
@@ -327,8 +339,13 @@ async function authenticateWithXboxAndMinecraft(msAccessToken, msRefreshToken) {
 }
 
 async function getSkinUrlForUsername(username) {
-  if (!username) return null;
+  if (!username) return 'assets/default-skin.png';
   const clean = username.trim();
+
+  // Skórka Zygzaka McQueena zarezerwowana wyłącznie dla konta Mcqueen420_ / Kasteusz
+  if (/^mcqueen420_?$/i.test(clean) || /^kasteusz$/i.test(clean)) {
+    return 'assets/mcqueen-skin.png';
+  }
 
   try {
     const mojangRes = await fetch(`https://api.mojang.com/users/profiles/minecraft/${encodeURIComponent(clean)}`, {
@@ -354,17 +371,330 @@ async function getSkinUrlForUsername(username) {
     console.warn('Mojang API niedostępne lub brak gracza:', err.message);
   }
 
-  return `https://mc-heads.net/skin/${encodeURIComponent(clean)}`;
+  // Domyślny fallback dla zwykłych graczy / znajomych: próba z mc-heads lub standardowy Steve
+  try {
+    const headCheck = await fetch(`https://mc-heads.net/skin/${encodeURIComponent(clean)}`, { method: 'HEAD' });
+    if (headCheck.ok) {
+      return `https://mc-heads.net/skin/${encodeURIComponent(clean)}`;
+    }
+  } catch (_) {}
+
+  return 'assets/default-skin.png';
+}
+
+function computeOfflineUuid(username) {
+  const clean = String(username || 'Player').trim();
+  const md5 = crypto.createHash('md5').update(`OfflinePlayer:${clean}`, 'utf8').digest();
+  md5[6] = (md5[6] & 0x0f) | 0x30;
+  md5[8] = (md5[8] & 0x3f) | 0x80;
+  const hex = md5.toString('hex');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+}
+
+async function resolveSkinPngBuffer(skinSource) {
+  if (!skinSource || typeof skinSource !== 'string') return null;
+
+  if (skinSource.startsWith('data:image/')) {
+    const commaIdx = skinSource.indexOf(',');
+    if (commaIdx !== -1) {
+      return Buffer.from(skinSource.slice(commaIdx + 1), 'base64');
+    }
+  }
+
+  if (skinSource.startsWith('http://') || skinSource.startsWith('https://')) {
+    const res = await fetch(skinSource, {
+      headers: { 'User-Agent': 'KasteuszLauncher/2.4.0' }
+    });
+    if (!res.ok) {
+      throw new Error(`Nie udało się pobrać pliku skórki (${res.status})`);
+    }
+    return Buffer.from(await res.arrayBuffer());
+  }
+
+  const cleanRel = skinSource.replace(/^file:\/\//, '');
+  const candidatePaths = [
+    cleanRel,
+    path.join(__dirname, '../renderer', cleanRel),
+    path.join(__dirname, '..', cleanRel)
+  ];
+  for (const p of candidatePaths) {
+    if (p && fs.existsSync(p)) {
+      return fs.readFileSync(p);
+    }
+  }
+  return null;
+}
+
+function saveLocalSkinCache(username, pngBuffer) {
+  if (!username || !pngBuffer || pngBuffer.length === 0) return null;
+  try {
+    if (!fs.existsSync(SKINS_CACHE_DIR)) {
+      fs.mkdirSync(SKINS_CACHE_DIR, { recursive: true });
+    }
+    const safeName = String(username).replace(/[^a-zA-Z0-9_.-]/g, '_');
+    const outPath = path.join(SKINS_CACHE_DIR, `${safeName}.png`);
+    fs.writeFileSync(outPath, pngBuffer);
+    return outPath;
+  } catch (_) {
+    return null;
+  }
+}
+
+async function ensureValidPremiumToken(account) {
+  if (!account || !account.isPremium) return account;
+  const needsRefresh = !account.mcAccessToken || (account.expiresAt && Date.now() > account.expiresAt - 120000);
+  if (needsRefresh && account.msRefreshToken) {
+    return await refreshAccountToken(account);
+  }
+  return account;
+}
+
+async function uploadSkinToMicrosoft(account, pngBuffer, variant = 'CLASSIC') {
+  const freshAcc = await ensureValidPremiumToken(account);
+  if (!freshAcc?.mcAccessToken) {
+    throw new Error('Brak aktywnego tokenu Microsoft. Zaloguj się ponownie.');
+  }
+
+  const normalizedVariant = String(variant || freshAcc.skinVariant || 'CLASSIC').toLowerCase() === 'slim'
+    ? 'slim'
+    : 'classic';
+
+  const form = new FormData();
+  form.append('variant', normalizedVariant);
+  form.append('file', new Blob([pngBuffer], { type: 'image/png' }), 'skin.png');
+
+  const res = await fetch('https://api.minecraftservices.com/minecraft/profile/skins', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${freshAcc.mcAccessToken}`
+    },
+    body: form
+  });
+
+  if (!res.ok) {
+    const errText = await res.text().catch(() => '');
+    throw new Error(`Mojang API odrzuciło skórkę (${res.status}): ${errText.slice(0, 140) || res.statusText}`);
+  }
+
+  let profile = null;
+  try {
+    profile = await res.json();
+  } catch (_) {}
+
+  const activeMojangSkin = profile?.skins?.find(s => s.state === 'ACTIVE')?.url || profile?.skins?.[0]?.url || null;
+  freshAcc.skinVariant = normalizedVariant.toUpperCase();
+  freshAcc.mojangSkinUrl = activeMojangSkin || freshAcc.mojangSkinUrl || null;
+  if (Array.isArray(profile?.capes)) {
+    freshAcc.capes = profile.capes;
+  }
+  return freshAcc;
+}
+
+async function setOfficialMojangCape(capeIdOrUrl) {
+  let active = config.getActiveAccount();
+  if (!active || !active.isPremium) {
+    return { synced: false, reason: 'offline' };
+  }
+
+  active = await ensureValidPremiumToken(active);
+  if (!capeIdOrUrl || capeIdOrUrl === 'none') {
+    const res = await fetch('https://api.minecraftservices.com/minecraft/profile/capes/active', {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${active.mcAccessToken}` }
+    });
+    return { synced: res.ok };
+  }
+
+  const capes = Array.isArray(active.capes) ? active.capes : [];
+  const matched = capes.find(c =>
+    c.id === capeIdOrUrl ||
+    (c.url && c.url.replace('http://', 'https://') === String(capeIdOrUrl).replace('http://', 'https://'))
+  );
+
+  if (!matched || !matched.id) {
+    return { synced: false, reason: 'custom_local_cape' };
+  }
+
+  const res = await fetch('https://api.minecraftservices.com/minecraft/profile/capes/active', {
+    method: 'PUT',
+    headers: {
+      'Authorization': `Bearer ${active.mcAccessToken}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ capeId: matched.id })
+  });
+
+  return { synced: res.ok, capeAlias: matched.alias };
+}
+
+function updateOptionsResourcePackEntry(instanceDir, packFileName, shouldEnable) {
+  try {
+    const optionsPath = path.join(instanceDir, 'options.txt');
+    const entryName = `file/${packFileName}`;
+    let lines = fs.existsSync(optionsPath) ? fs.readFileSync(optionsPath, 'utf8').split('\n') : [];
+    const rpIdx = lines.findIndex(l => l.startsWith('resourcePacks:'));
+
+    if (rpIdx >= 0) {
+      const raw = lines[rpIdx].replace(/^resourcePacks:/, '').trim();
+      let list = [];
+      try { list = JSON.parse(raw); } catch (_) { list = ['vanilla']; }
+      if (!Array.isArray(list)) list = ['vanilla'];
+
+      list = list.filter(item => item !== entryName);
+      if (shouldEnable) {
+        list.push(entryName);
+      }
+      lines[rpIdx] = `resourcePacks:${JSON.stringify(list)}`;
+    } else if (shouldEnable) {
+      lines.push(`resourcePacks:["vanilla",${JSON.stringify(entryName)}]`);
+    } else {
+      return;
+    }
+
+    fs.writeFileSync(optionsPath, lines.filter(Boolean).join('\n') + '\n', 'utf8');
+  } catch (_) {}
+}
+
+async function syncSkinToInstance(instanceDir, account = null) {
+  try {
+    const acc = account || config.getActiveAccount();
+    if (!instanceDir || !acc) return;
+
+    const rpName = 'KasteuszOfflineSkin.zip';
+    const rpPath = path.join(instanceDir, 'resourcepacks', rpName);
+
+    if (acc.isPremium) {
+      if (fs.existsSync(rpPath)) {
+        try { fs.unlinkSync(rpPath); } catch (_) {}
+      }
+      updateOptionsResourcePackEntry(instanceDir, rpName, false);
+      return;
+    }
+
+    const username = acc.username || acc.name || 'Gracz';
+    const safeName = String(username).replace(/[^a-zA-Z0-9_.-]/g, '_');
+    const cachedSkinPath = path.join(SKINS_CACHE_DIR, `${safeName}.png`);
+
+    let pngBuf = null;
+    if (fs.existsSync(cachedSkinPath)) {
+      pngBuf = fs.readFileSync(cachedSkinPath);
+    } else if (acc.skinUrl) {
+      pngBuf = await resolveSkinPngBuffer(acc.skinUrl).catch(() => null);
+      if (pngBuf) saveLocalSkinCache(username, pngBuf);
+    }
+
+    if (!pngBuf || pngBuf.length === 0) return;
+
+    // 1. CustomSkinLoader LocalSkin support (per-username skin on Fabric/Forge/Quilt)
+    const cslDir = path.join(instanceDir, 'CustomSkinLoader');
+    const localSkinsDir = path.join(cslDir, 'LocalSkin', 'skins');
+    fs.mkdirSync(localSkinsDir, { recursive: true });
+    fs.writeFileSync(path.join(localSkinsDir, `${username}.png`), pngBuf);
+
+    const cslCfgPath = path.join(cslDir, 'CustomSkinLoader.json');
+    if (!fs.existsSync(cslCfgPath)) {
+      const cslConfig = {
+        enable: true,
+        loadlist: [
+          {
+            name: 'LocalSkin',
+            type: 'Legacy',
+            checkPNG: false,
+            skin: 'LocalSkin/skins/{USERNAME}.png',
+            model: (acc.skinVariant || 'CLASSIC').toLowerCase() === 'slim' ? 'slim' : 'default',
+            cape: 'LocalSkin/capes/{USERNAME}.png'
+          },
+          {
+            name: 'Mojang',
+            type: 'MojangAPI'
+          }
+        ]
+      };
+      fs.writeFileSync(cslCfgPath, JSON.stringify(cslConfig, null, 2), 'utf8');
+    } else {
+      try {
+        const parsed = JSON.parse(fs.readFileSync(cslCfgPath, 'utf8'));
+        if (Array.isArray(parsed.loadlist)) {
+          const localEntry = parsed.loadlist.find(e => e.name === 'LocalSkin');
+          const modelType = (acc.skinVariant || 'CLASSIC').toLowerCase() === 'slim' ? 'slim' : 'default';
+          if (localEntry) {
+            localEntry.model = modelType;
+          } else {
+            parsed.loadlist.unshift({
+              name: 'LocalSkin',
+              type: 'Legacy',
+              checkPNG: false,
+              skin: 'LocalSkin/skins/{USERNAME}.png',
+              model: modelType,
+              cape: 'LocalSkin/capes/{USERNAME}.png'
+            });
+          }
+          fs.writeFileSync(cslCfgPath, JSON.stringify(parsed, null, 2), 'utf8');
+        }
+      } catch (_) {}
+    }
+
+    // Check if CustomSkinLoader mod is already active in mods/
+    const modsDir = path.join(instanceDir, 'mods');
+    let hasCustomSkinLoaderMod = false;
+    if (fs.existsSync(modsDir)) {
+      try {
+        hasCustomSkinLoaderMod = fs.readdirSync(modsDir).some(f =>
+          f.toLowerCase().includes('customskinloader') && f.toLowerCase().endsWith('.jar')
+        );
+      } catch (_) {}
+    }
+
+    // 2. Vanilla fallback resourcepack (used when CustomSkinLoader mod is not installed)
+    if (hasCustomSkinLoaderMod) {
+      if (fs.existsSync(rpPath)) {
+        try { fs.unlinkSync(rpPath); } catch (_) {}
+      }
+      updateOptionsResourcePackEntry(instanceDir, rpName, false);
+    } else if (AdmZip) {
+      const rpDir = path.join(instanceDir, 'resourcepacks');
+      fs.mkdirSync(rpDir, { recursive: true });
+      const zip = new AdmZip();
+      const mcmeta = {
+        pack: {
+          pack_format: 34,
+          supported_formats: { min_inclusive: 1, max_inclusive: 99 },
+          description: `Skorka gracza ${username} (Kasteusz Launcher)`
+        }
+      };
+      zip.addFile('pack.mcmeta', Buffer.from(JSON.stringify(mcmeta, null, 2), 'utf8'));
+      zip.addFile('pack.png', pngBuf);
+
+      // Legacy 1.8 - 1.19.2 paths
+      zip.addFile('assets/minecraft/textures/entity/steve.png', pngBuf);
+      zip.addFile('assets/minecraft/textures/entity/alex.png', pngBuf);
+
+      // Modern 1.19.3+ default player skin paths
+      const defaults = ['alex', 'ari', 'efe', 'kai', 'makena', 'noor', 'steve', 'sunny', 'zuri'];
+      for (const name of defaults) {
+        zip.addFile(`assets/minecraft/textures/entity/player/wide/${name}.png`, pngBuf);
+        zip.addFile(`assets/minecraft/textures/entity/player/slim/${name}.png`, pngBuf);
+      }
+
+      zip.writeZip(rpPath);
+      updateOptionsResourcePackEntry(instanceDir, rpName, true);
+    }
+  } catch (err) {
+    console.warn('[SkinSync] Ostrzeżenie synchronizacji skórki Offline:', err.message);
+  }
 }
 
 async function createOfflineAccount(username) {
   const cleanName = (username || 'Gracz').replace(/[^a-zA-Z0-9_]/g, '').substring(0, 16) || 'Gracz';
   const skinUrl = await getSkinUrlForUsername(cleanName);
+  const pngBuf = await resolveSkinPngBuffer(skinUrl).catch(() => null);
+  if (pngBuf) saveLocalSkinCache(cleanName, pngBuf);
 
   const offlineAccount = {
-    uuid: '00000000-0000-0000-0000-000000000000',
+    uuid: computeOfflineUuid(cleanName),
     username: cleanName,
-    skinUrl: skinUrl,
+    name: cleanName,
+    skinUrl: pngBuf ? `data:image/png;base64,${pngBuf.toString('base64')}` : skinUrl,
     skinVariant: 'CLASSIC',
     capes: [],
     mcAccessToken: 'offline_token',
@@ -374,6 +704,12 @@ async function createOfflineAccount(username) {
     isPremium: false
   };
   config.addOrUpdateAccount(offlineAccount);
+
+  try {
+    const profiles = require('./profiles');
+    await syncSkinToInstance(profiles.getActiveInstanceDirectory(), offlineAccount);
+  } catch (_) {}
+
   return offlineAccount;
 }
 
@@ -384,18 +720,73 @@ async function setAccountUsernameAndSkin(newUsername) {
   const cleanName = (newUsername || 'Gracz').replace(/[^a-zA-Z0-9_]/g, '').substring(0, 16) || 'Gracz';
   const skinUrl = await getSkinUrlForUsername(cleanName);
 
+  if (active.isPremium) {
+    // On Microsoft Premium, do not corrupt authenticated username — upload the fetched skin to Mojang!
+    return await setAccountCustomSkin(skinUrl, active.skinVariant || 'CLASSIC');
+  }
+
+  const oldUuid = active.uuid;
+  const pngBuf = await resolveSkinPngBuffer(skinUrl).catch(() => null);
+  if (pngBuf) saveLocalSkinCache(cleanName, pngBuf);
+
+  if (oldUuid && oldUuid !== computeOfflineUuid(cleanName)) {
+    config.removeAccount(oldUuid);
+  }
+
+  active.uuid = computeOfflineUuid(cleanName);
   active.username = cleanName;
-  active.skinUrl = skinUrl;
+  active.name = cleanName;
+  active.skinUrl = pngBuf ? `data:image/png;base64,${pngBuf.toString('base64')}` : skinUrl;
+  delete active.customSkinUrl;
   config.addOrUpdateAccount(active);
+
+  try {
+    const profiles = require('./profiles');
+    await syncSkinToInstance(profiles.getActiveInstanceDirectory(), active);
+  } catch (_) {}
+
   return active;
 }
 
-async function setAccountCustomSkin(skinUrl) {
-  const active = config.getActiveAccount();
+async function setAccountCustomSkin(skinUrl, variant = null) {
+  let active = config.getActiveAccount();
   if (!active) throw new Error('Brak aktywnego konta.');
 
-  active.skinUrl = skinUrl;
+  const chosenVariant = (variant || active.skinVariant || 'CLASSIC').toUpperCase() === 'SLIM' ? 'SLIM' : 'CLASSIC';
+  const pngBuf = await resolveSkinPngBuffer(skinUrl);
+  if (!pngBuf || pngBuf.length === 0) {
+    throw new Error('Nie udało się odczytać pliku PNG skórki.');
+  }
+
+  saveLocalSkinCache(active.username || active.name || 'Gracz', pngBuf);
+  const dataUrl = `data:image/png;base64,${pngBuf.toString('base64')}`;
+
+  if (active.isPremium) {
+    active = await uploadSkinToMicrosoft(active, pngBuf, chosenVariant);
+    active.skinUrl = dataUrl;
+    delete active.customSkinUrl;
+    active.skinSyncedInGame = 'microsoft';
+    config.addOrUpdateAccount(active);
+    return active;
+  }
+
+  if (!active.uuid || active.uuid === '00000000-0000-0000-0000-000000000000') {
+    const oldUuid = active.uuid;
+    active.uuid = computeOfflineUuid(active.username || 'Gracz');
+    if (oldUuid) config.removeAccount(oldUuid);
+  }
+
+  active.skinUrl = dataUrl;
+  delete active.customSkinUrl;
+  active.skinVariant = chosenVariant;
+  active.skinSyncedInGame = 'offline';
   config.addOrUpdateAccount(active);
+
+  try {
+    const profiles = require('./profiles');
+    await syncSkinToInstance(profiles.getActiveInstanceDirectory(), active);
+  } catch (_) {}
+
   return active;
 }
 
@@ -404,7 +795,10 @@ module.exports = {
   completeMicrosoftAuth,
   refreshAccountToken,
   createOfflineAccount,
+  computeOfflineUuid,
   getSkinUrlForUsername,
   setAccountUsernameAndSkin,
-  setAccountCustomSkin
+  setAccountCustomSkin,
+  setOfficialMojangCape,
+  syncSkinToInstance
 };

@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('api', {
   closeWindow: () => ipcRenderer.send('window:close'),
   maximizeWindow: () => ipcRenderer.send('window:maximize'),
   focusWindow: () => ipcRenderer.send('window:focus'),
+  restartApp: () => ipcRenderer.invoke('app:restart'),
 
   getActiveAccount: () => ipcRenderer.invoke('auth:get-active'),
   loginMicrosoft: () => ipcRenderer.invoke('auth:login-microsoft'),
@@ -13,9 +14,10 @@ contextBridge.exposeInMainWorld('api', {
   listAccounts: () => ipcRenderer.invoke('auth:list-accounts'),
   switchAccount: (uuid) => ipcRenderer.invoke('auth:switch-account', uuid),
   setUsername: (username) => ipcRenderer.invoke('auth:set-username', username),
-  setCustomSkin: (skinUrl) => ipcRenderer.invoke('auth:set-custom-skin', skinUrl),
+  setCustomSkin: (skinUrl, variant) => ipcRenderer.invoke('auth:set-custom-skin', skinUrl, variant),
+  setMojangCape: (capeIdOrUrl) => ipcRenderer.invoke('auth:set-mojang-cape', capeIdOrUrl),
   getSkinUrl: (username) => ipcRenderer.invoke('auth:get-skin-url', username),
-  selectSkinFile: () => ipcRenderer.invoke('auth:select-skin-file'),
+  selectSkinFile: (variant) => ipcRenderer.invoke('auth:select-skin-file', variant),
 
   getConfig: () => ipcRenderer.invoke('config:get'),
   saveConfig: (data) => ipcRenderer.invoke('config:save', data),
@@ -34,6 +36,8 @@ contextBridge.exposeInMainWorld('api', {
   duplicateProfile: (id) => ipcRenderer.invoke('profiles:duplicate', id),
   deleteProfile: (id) => ipcRenderer.invoke('profiles:delete', id),
   openProfileFolder: (id) => ipcRenderer.invoke('profiles:open-folder', id),
+  exportProfileMrpack: (id) => ipcRenderer.invoke('profiles:export-mrpack', id),
+  importProfileMrpack: (filePath) => ipcRenderer.invoke('profiles:import-mrpack', filePath),
 
   getModsList: () => ipcRenderer.invoke('mods:get-list'),
   addModFiles: () => ipcRenderer.invoke('mods:add-files'),
@@ -47,6 +51,7 @@ contextBridge.exposeInMainWorld('api', {
   searchModrinth: (params) => ipcRenderer.invoke('mods:search-modrinth', params),
   getModrinthProjectVersions: (idOrSlug) => ipcRenderer.invoke('mods:get-modrinth-versions', idOrSlug),
   installModrinthMod: (params) => ipcRenderer.invoke('mods:install-modrinth', params),
+  updateInstalledMods: (params) => ipcRenderer.invoke('mods:update-all', params),
   installModrinthModpack: (params) => ipcRenderer.invoke('mods:install-modpack', params),
   onModpackProgress: (callback) => {
     const handler = (_event, data) => callback(data);
@@ -55,6 +60,7 @@ contextBridge.exposeInMainWorld('api', {
   },
 
   getPacksList: (type) => ipcRenderer.invoke('packs:get-list', type),
+  installModrinthPack: (params) => ipcRenderer.invoke('packs:install-modrinth', params),
   addPackFiles: (type) => ipcRenderer.invoke('packs:add-files', type),
   copyPackFiles: (type, paths) => ipcRenderer.invoke('packs:copy-files', type, paths),
   togglePack: (type, filename) => ipcRenderer.invoke('packs:toggle', type, filename),
@@ -81,12 +87,37 @@ contextBridge.exposeInMainWorld('api', {
   saveServerConfig: (cfg) => ipcRenderer.invoke('server:save-config', cfg),
   startServer: () => ipcRenderer.invoke('server:start'),
   stopServer: () => ipcRenderer.invoke('server:stop'),
+  openServerFolder: () => ipcRenderer.invoke('server:open-folder'),
+  startServerTunnel: (port) => ipcRenderer.invoke('server:start-tunnel', port),
+  stopServerTunnel: () => ipcRenderer.invoke('server:stop-tunnel'),
   sendServerCommand: (cmd) => ipcRenderer.invoke('server:send-cmd', cmd),
   getServerStatus: () => ipcRenderer.invoke('server:get-status'),
+  getServerMetrics: () => ipcRenderer.invoke('server:get-metrics'),
+  getServerPlugins: () => ipcRenderer.invoke('server:get-plugins'),
+  searchServerPlugins: (opts) => ipcRenderer.invoke('server:search-plugins', opts),
+  installServerPlugin: (opts) => ipcRenderer.invoke('server:install-plugin', opts),
+  toggleServerPlugin: (filename) => ipcRenderer.invoke('server:toggle-plugin', filename),
+  deleteServerPlugin: (filename) => ipcRenderer.invoke('server:delete-plugin', filename),
+  openServerPluginsFolder: () => ipcRenderer.invoke('server:open-plugins-folder'),
+  onServerMetrics: (callback) => {
+    const sub = (_event, val) => callback(val);
+    ipcRenderer.on('server:metrics', sub);
+    return () => ipcRenderer.removeListener('server:metrics', sub);
+  },
   onServerStatus: (callback) => {
     const sub = (_event, val) => callback(val);
     ipcRenderer.on('server:status', sub);
     return () => ipcRenderer.removeListener('server:status', sub);
+  },
+  onServerTunnelStatus: (callback) => {
+    const sub = (_event, val) => callback(val);
+    ipcRenderer.on('server:tunnel-status', sub);
+    return () => ipcRenderer.removeListener('server:tunnel-status', sub);
+  },
+  onLanDetected: (callback) => {
+    const sub = (_event, val) => callback(val);
+    ipcRenderer.on('server:lan-detected', sub);
+    return () => ipcRenderer.removeListener('server:lan-detected', sub);
   },
   onServerLog: (callback) => {
     const sub = (_event, val) => callback(val);
@@ -174,5 +205,22 @@ contextBridge.exposeInMainWorld('api', {
   getDetailedSpecs: () => ipcRenderer.invoke('benchmark:get-specs'),
   runBenchmark: () => ipcRenderer.invoke('benchmark:run'),
   getOptimalConfig: (profileId) => ipcRenderer.invoke('benchmark:get-optimal', profileId),
-  applyOptimalConfig: (payload, profileId) => ipcRenderer.invoke('benchmark:apply', payload, profileId)
+  applyOptimalConfig: (payload, profileId) => ipcRenderer.invoke('benchmark:apply', payload, profileId),
+
+  // Auto-updater
+  checkForUpdates: () => ipcRenderer.invoke('updater:check'),
+  downloadUpdate: () => ipcRenderer.invoke('updater:download'),
+  installUpdate: () => ipcRenderer.invoke('updater:install'),
+  getUpdateStatus: () => ipcRenderer.invoke('updater:get-status'),
+  saveUpdateRepo: (repo) => ipcRenderer.invoke('updater:save-repo', repo),
+  onUpdateStatusChanged: (callback) => {
+    const sub = (_event, status) => callback(status);
+    ipcRenderer.on('updater:status-changed', sub);
+    return () => ipcRenderer.removeListener('updater:status-changed', sub);
+  },
+  onUpdateProgress: (callback) => {
+    const sub = (_event, progress) => callback(progress);
+    ipcRenderer.on('updater:progress', sub);
+    return () => ipcRenderer.removeListener('updater:progress', sub);
+  }
 });
