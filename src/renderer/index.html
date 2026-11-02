@@ -86,6 +86,28 @@
     </div>
   </div>
 
+  <!-- Global Broadcast Announcement Banner (from Owner) -->
+  <div id="global-announcement-banner" class="global-update-banner global-announcement-banner" style="display: none; background: linear-gradient(90deg, rgba(245, 158, 11, 0.18) 0%, rgba(217, 119, 6, 0.12) 100%); border-bottom: 1px solid rgba(245, 158, 11, 0.35);">
+    <div class="update-banner-inner">
+      <div class="update-banner-left">
+        <div class="update-banner-icon-badge" style="background: rgba(245, 158, 11, 0.25); color: #F59E0B; border: 1px solid rgba(245, 158, 11, 0.4);">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>
+          </svg>
+        </div>
+        <div class="update-banner-copy">
+          <div class="update-banner-headline" id="announcement-banner-title" style="color: #FBBF24; display: flex; align-items: center; gap: 6px;">
+            <span>👑 Ogłoszenie Właściciela (Kasteusz)</span>
+          </div>
+          <div class="update-banner-subline" id="announcement-banner-text" style="color: #EEF2FF; font-size: 12.5px;"></div>
+        </div>
+      </div>
+      <div class="update-banner-actions">
+        <button class="btn-ghost" id="btn-banner-dismiss-announcement" style="color: #FDE68A;">Rozumiem</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ======================================================================
        2. APP SHELL: LEFT SIDEBAR + MAIN WORKSPACE
        ====================================================================== -->
@@ -194,6 +216,22 @@
               <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
             </svg>
             <span class="nav-pill-label">Ustawienia</span>
+          </button>
+        </div>
+
+        <!-- Sekcja Właściciela / Administracji (tylko dla Właściciela) -->
+        <div class="nav-section owner-only-nav-section" id="nav-section-admin" style="display: none;">
+          <div class="nav-section-label" style="color: #F59E0B; display: flex; align-items: center; gap: 6px; font-weight: 700; letter-spacing: 0.5px;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="#F59E0B"><path d="M2 4l3 12h14l3-12-6 7-4-7-4 7-6-7zm3 16h14v2H5v-2z"/></svg>
+            <span>WŁAŚCICIEL</span>
+          </div>
+
+          <button class="nav-pill nav-pill-admin" data-tab="admin" id="nav-btn-admin" title="Panel Administracyjny Właściciela" style="border: 1px solid rgba(245, 158, 11, 0.35); background: linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(217, 119, 6, 0.04));">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#F59E0B" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M2 4l3 12h14l3-12-6 7-4-7-4 7-6-7zm3 16h14v2H5v-2z"/>
+            </svg>
+            <span class="nav-pill-label" style="color: #FBBF24; font-weight: 700;">Panel Admina</span>
+            <span class="nav-pill-badge tnum" id="sidebar-admin-online-badge" style="background: rgba(245, 158, 11, 0.25); color: #FDE68A; border-color: rgba(245, 158, 11, 0.45);">1</span>
           </button>
         </div>
 
@@ -2229,6 +2267,133 @@
             <div class="terminal-card" style="min-height: 160px;">
               <div class="terminal-log-body" id="logs-console">
                 <div class="log-line">[SYSTEM] KasteuszLauncher gotowy do pracy.</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ======================================================================
+           TAB VIEW: PANEL ADMINA / WŁAŚCICIELA (#view-admin)
+           ====================================================================== -->
+      <section class="tab-view" id="view-admin">
+        <div class="view-header">
+          <div class="view-header-main">
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <div class="admin-crown-badge">👑</div>
+              <div>
+                <h1 class="view-title" style="background: linear-gradient(135deg, #FDE68A 0%, #F59E0B 50%, #D97706 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Centrum Dowodzenia Właściciela</h1>
+                <p class="view-subtitle">Podgląd zalogowanych graczy w czasie rzeczywistym, serwera Szkolne SMP i centrum ogłoszeń globalnych</p>
+              </div>
+            </div>
+          </div>
+          <div class="view-header-actions">
+            <button class="btn-secondary" id="btn-admin-refresh" title="Odśwież listę graczy i serwer">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+              <span>Odśwież</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="admin-content-layout">
+
+          <!-- Top Stats Row -->
+          <div class="admin-kpi-grid">
+            <div class="admin-kpi-card">
+              <div class="admin-kpi-icon" style="background: rgba(16, 185, 129, 0.15); color: #34D399;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              </div>
+              <div class="admin-kpi-info">
+                <span class="admin-kpi-label">Gracze w Launcherze (Live)</span>
+                <span class="admin-kpi-val tnum" id="admin-stat-launcher-count">0</span>
+              </div>
+            </div>
+
+            <div class="admin-kpi-card">
+              <div class="admin-kpi-icon" style="background: rgba(99, 102, 241, 0.15); color: #818CF8;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+              </div>
+              <div class="admin-kpi-info">
+                <span class="admin-kpi-label">Szkolne SMP (mc.szkolnesmp.com.pl)</span>
+                <span class="admin-kpi-val tnum" id="admin-stat-server-count">0 / 20</span>
+              </div>
+            </div>
+
+            <div class="admin-kpi-card">
+              <div class="admin-kpi-icon" style="background: rgba(245, 158, 11, 0.15); color: #F59E0B;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 4l3 12h14l3-12-6 7-4-7-4 7-6-7zm3 16h14v2H5v-2z"/></svg>
+              </div>
+              <div class="admin-kpi-info">
+                <span class="admin-kpi-label">Status Konta</span>
+                <span class="admin-kpi-val" style="font-size: 14px; color: #FBBF24;">👑 Właściciel Główny</span>
+              </div>
+            </div>
+
+            <div class="admin-kpi-card">
+              <div class="admin-kpi-icon" style="background: rgba(14, 165, 233, 0.15); color: #38BDF8;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+              </div>
+              <div class="admin-kpi-info">
+                <span class="admin-kpi-label">Sieć Zdalna</span>
+                <span class="admin-kpi-val" style="font-size: 13px; color: #34D399;" id="admin-stat-network">Połączono</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 1: Launcher Active Players -->
+          <div class="admin-card">
+            <div class="admin-card-header">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <div class="live-dot-pulse"></div>
+                <h3 class="admin-card-title">Zalogowani Gracze w Kasteusz Launcher</h3>
+                <span class="admin-pill-tag" id="admin-launcher-tag">Na żywo</span>
+              </div>
+              <span class="admin-card-hint">Osoby z uruchomionym launcherem lub grające na komputerze</span>
+            </div>
+
+            <div class="admin-players-grid" id="admin-launcher-players-container">
+              <div class="admin-loading-row">
+                <div class="spinner-sm"></div>
+                <span>Wyszukiwanie aktywnych graczy w sieci...</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 2: Szkolne SMP Server Players -->
+          <div class="admin-card">
+            <div class="admin-card-header">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#818CF8" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+                <h3 class="admin-card-title">Gracze na serwerze Szkolne SMP (Minecraft)</h3>
+                <span class="server-status-pill online" id="admin-smp-status-pill">Sprawdzanie...</span>
+              </div>
+              <span class="admin-card-hint" id="admin-smp-details">mc.szkolnesmp.com.pl:23008 • Paper 1.21.11</span>
+            </div>
+
+            <div class="admin-players-grid" id="admin-server-players-container">
+              <div class="admin-empty-state">Brak połączonych graczy na serwerze Szkolne SMP.</div>
+            </div>
+          </div>
+
+          <!-- Section 3: Global Broadcast Announcement -->
+          <div class="admin-card broadcast-card">
+            <div class="admin-card-header">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" stroke-width="2"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+                <h3 class="admin-card-title">Globalne Ogłoszenie do Wszystkich Launcherów</h3>
+              </div>
+              <span class="admin-card-hint">Wiadomość wyświetli się na żywo u wszystkich znajomych z uruchomionym launcherem</span>
+            </div>
+
+            <div class="broadcast-form">
+              <textarea class="ui-input broadcast-textarea" id="admin-broadcast-msg" rows="2" placeholder="Wpisz treść ogłoszenia, np. Hejka! O 20:00 startuje event na Szkolne SMP, wbijajcie na serwer!"></textarea>
+              <div class="broadcast-actions">
+                <span class="broadcast-feedback" id="admin-broadcast-feedback"></span>
+                <button class="btn-primary" id="btn-admin-send-broadcast" style="background: linear-gradient(135deg, #F59E0B, #D97706); border-color: rgba(245,158,11,0.5);">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                  <span>Wyślij ogłoszenie</span>
+                </button>
               </div>
             </div>
           </div>

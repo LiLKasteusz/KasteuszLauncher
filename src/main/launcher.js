@@ -10,6 +10,7 @@ const profiles = require('./profiles');
 const discord = require('./discord');
 const stats = require('./stats');
 const javaManager = require('./javaManager');
+const presence = require('./presence');
 
 // Optymalizacja weryfikacji MCLC – jeśli plik zasobów/biblioteki już istnieje na dysku
 // i ma prawidłowy rozmiar, pomijamy powolne asynchroniczne hashowanie SHA1 4500+ plików
@@ -798,6 +799,7 @@ async function launchMinecraft(window, versionOverride) {
               statusDetails: `Gra na serwerze: ${serverName}`,
               gameVersion: versionToLaunch
             });
+            try { presence.sendPresenceHeartbeat(`Na serwerze ${serverName}`); } catch (_) {}
           }
         }
       } else if (line.includes('Starting integrated minecraft server') || line.includes('Starting integrated server')) {
@@ -807,6 +809,7 @@ async function launchMinecraft(window, versionOverride) {
           statusDetails: 'Tryb jednoosobowy (Singleplayer)',
           gameVersion: versionToLaunch
         });
+        try { presence.sendPresenceHeartbeat(`W grze: Singleplayer (${versionToLaunch})`); } catch (_) {}
       } else if (
         line.includes('Stopping singleplayer server') ||
         line.includes('Client disconnected with reason') ||
@@ -819,6 +822,7 @@ async function launchMinecraft(window, versionOverride) {
           statusDetails: 'W menu gry',
           gameVersion: versionToLaunch
         });
+        try { presence.sendPresenceHeartbeat(`W grze: W menu (${versionToLaunch})`); } catch (_) {}
       }
     });
 
@@ -859,6 +863,7 @@ async function launchMinecraft(window, versionOverride) {
         console.warn('[Stats] Błąd recordClose:', stErr.message);
       }
       discord.setLauncherActivity({ isPlaying: false, serverIp: null, statusDetails: 'W menu launchera' });
+      try { presence.setGameActivity(false); } catch (_) {}
       safeSend('launcher:closed', { code });
       if (updatedStats) {
         const curAcc = config.getActiveAccount();
@@ -898,6 +903,7 @@ async function launchMinecraft(window, versionOverride) {
           statusDetails: 'W menu gry',
           gameVersion: versionToLaunch
         });
+        try { presence.setGameActivity(true, versionToLaunch); } catch (_) {}
         safeSend('launcher:started', { version: versionToLaunch });
         if (currentStats) {
           safeSend('stats:updated', currentStats);

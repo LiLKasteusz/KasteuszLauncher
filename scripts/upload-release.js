@@ -134,6 +134,24 @@ async function main() {
   ];
 
   for (const item of files) {
+    if (Array.isArray(release.assets)) {
+      const existing = release.assets.find(a => a.name === item.name);
+      if (existing) {
+        console.log(`[Clean] Usuwanie poprzedniej wersji pliku ${item.name} (ID: ${existing.id})...`);
+        try {
+          await apiRequest({
+            hostname: 'api.github.com',
+            path: `/repos/${owner}/${repo}/releases/assets/${existing.id}`,
+            method: 'DELETE',
+            headers: {
+              'Authorization': `token ${token}`,
+              'User-Agent': 'KasteuszLauncher-Release',
+              'Accept': 'application/vnd.github.v3+json'
+            }
+          });
+        } catch (_) {}
+      }
+    }
     await uploadAsset(relId, item.file, item.name, item.type);
   }
 

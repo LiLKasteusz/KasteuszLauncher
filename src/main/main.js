@@ -15,6 +15,7 @@ const stats = require('./stats');
 const spotify = require('./spotify');
 const screenshots = require('./screenshots');
 const updater = require('./updater');
+const presence = require('./presence');
 
 let mainWindow = null;
 let isRestartingApp = false;
@@ -65,6 +66,7 @@ function createWindow() {
 app.whenReady().then(() => {
   createWindow();
   updater.initUpdater(mainWindow);
+  presence.initPresence(mainWindow);
   discord.initDiscordRPC();
 
   const registerShortcut = (key, action) => {
@@ -744,3 +746,4 @@ ipcMain.handle('benchmark:apply', async (_e, payload, profileId) => {
 });
 
 updater.setupUpdaterIpc();
+presence.setupPresenceIpc();

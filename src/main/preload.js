@@ -222,5 +222,15 @@ contextBridge.exposeInMainWorld('api', {
     const sub = (_event, progress) => callback(progress);
     ipcRenderer.on('updater:progress', sub);
     return () => ipcRenderer.removeListener('updater:progress', sub);
+  },
+
+  // Presence & Admin Panel
+  getAdminPresenceData: () => ipcRenderer.invoke('presence:get-admin-data'),
+  broadcastAnnouncement: (msg) => ipcRenderer.invoke('presence:broadcast', msg),
+  sendPresenceHeartbeat: () => ipcRenderer.invoke('presence:heartbeat'),
+  onAnnouncementReceived: (callback) => {
+    const sub = (_event, data) => callback(data);
+    ipcRenderer.on('presence:announcement', sub);
+    return () => ipcRenderer.removeListener('presence:announcement', sub);
   }
 });

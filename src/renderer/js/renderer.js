@@ -169,6 +169,7 @@ async function initApp() {
     setupCrashDoctorListeners();
     setupBenchmarkListeners();
     setupUpdaterUI();
+    setupAdminDashboard();
   } catch (listenerErr) {
     console.error('Błąd rejestracji listenerów UI:', listenerErr);
   }
@@ -264,6 +265,14 @@ function switchToTab(targetTab) {
 
   if (targetTab === 'server') {
     loadServerHosting();
+  }
+
+  if (targetTab === 'admin') {
+    if (!isOwnerAccount(currentAccount)) {
+      switchToTab('play');
+      return;
+    }
+    loadAdminDashboard();
   }
 
   if (targetTab === 'play' && skinViewer) {
@@ -1147,6 +1156,222 @@ function setupUpdaterUI() {
   }
 }
 
+// ============================================================================
+// ADMIN / OWNER PANEL CONTROLLER (#view-admin)
+// ============================================================================
+let adminAutoRefreshTimer = null;
+
+function setupAdminDashboard() {
+  const btnRefresh = document.getElementById('btn-admin-refresh');
+  const btnSendBroadcast = document.getElementById('btn-admin-send-broadcast');
+  const broadcastInput = document.getElementById('admin-broadcast-msg');
+  const broadcastFeedback = document.getElementById('admin-broadcast-feedback');
+  const btnDismissAnnounce = document.getElementById('btn-banner-dismiss-announcement');
+  const announceBanner = document.getElementById('global-announcement-banner');
+  const announceTitle = document.getElementById('announcement-banner-title');
+  const announceText = document.getElementById('announcement-banner-text');
+
+  btnRefresh?.addEventListener('click', async () => {
+    btnRefresh.disabled = true;
+    try {
+      await loadAdminDashboard(true);
+      showToast('Zaktualizowano listę graczy i serwer!');
+    } catch (err) {
+      showToast(`Błąd odświeżania: ${err.message}`);
+    } finally {
+      btnRefresh.disabled = false;
+    }
+  });
+
+  btnSendBroadcast?.addEventListener('click', async () => {
+    const text = (broadcastInput?.value || '').trim();
+    if (!text) {
+      if (broadcastFeedback) {
+        broadcastFeedback.textContent = 'Wpisz treść ogłoszenia!';
+        broadcastFeedback.style.color = '#EF4444';
+      }
+      return;
+    }
+
+    btnSendBroadcast.disabled = true;
+    if (broadcastFeedback) {
+      broadcastFeedback.textContent = 'Wysyłanie ogłoszenia...';
+      broadcastFeedback.style.color = '#F59E0B';
+    }
+
+    try {
+      await window.api.broadcastAnnouncement(text);
+      if (broadcastInput) broadcastInput.value = '';
+      if (broadcastFeedback) {
+        broadcastFeedback.textContent = '✅ Ogłoszenie wysłane do wszystkich launcherów!';
+        broadcastFeedback.style.color = '#34D399';
+        setTimeout(() => { if (broadcastFeedback) broadcastFeedback.textContent = ''; }, 4500);
+      }
+      showToast('Ogłoszenie zostało rozesłane!');
+    } catch (err) {
+      if (broadcastFeedback) {
+        broadcastFeedback.textContent = `Błąd: ${err.message}`;
+        broadcastFeedback.style.color = '#EF4444';
+      }
+    } finally {
+      btnSendBroadcast.disabled = false;
+    }
+  });
+
+  btnDismissAnnounce?.addEventListener('click', () => {
+    if (announceBanner) announceBanner.style.display = 'none';
+  });
+
+  // Global Announcement Listener
+  if (window.api?.onAnnouncementReceived) {
+    window.api.onAnnouncementReceived((data) => {
+      if (!data || !data.message) return;
+      if (announceBanner && announceText) {
+        if (announceTitle) announceTitle.textContent = data.title || '👑 Ogłoszenie Właściciela (Kasteusz)';
+        announceText.textContent = data.message;
+        announceBanner.style.display = 'block';
+      }
+    });
+  }
+
+  // Auto-refresh interval (every 15s if admin tab is visible, or update badge)
+  if (adminAutoRefreshTimer) clearInterval(adminAutoRefreshTimer);
+  adminAutoRefreshTimer = setInterval(() => {
+    const adminView = document.getElementById('view-admin');
+    if (adminView && adminView.classList.contains('active') && isOwnerAccount(currentAccount)) {
+      loadAdminDashboard(false).catch(() => {});
+    }
+  }, 15000);
+}
+
+async function loadAdminDashboard(isManual = false) {
+  if (!isOwnerAccount(currentAccount)) return;
+
+  const launcherContainer = document.getElementById('admin-launcher-players-container');
+  const serverContainer = document.getElementById('admin-server-players-container');
+  const statLauncherCount = document.getElementById('admin-stat-launcher-count');
+  const statServerCount = document.getElementById('admin-stat-server-count');
+  const smpStatusPill = document.getElementById('admin-smp-status-pill');
+  const smpDetails = document.getElementById('admin-smp-details');
+  const sidebarAdminBadge = document.getElementById('sidebar-admin-online-badge');
+
+  try {
+    const res = await window.api.getAdminPresenceData();
+    if (!res || !res.success) {
+      if (launcherContainer) {
+        launcherContainer.innerHTML = `<div class="admin-empty-state" style="color: #EF4444;">${res?.error || 'Nie udało się pobrać danych panelu.'}</div>`;
+      }
+      return;
+    }
+
+    const launcherPlayers = Array.isArray(res.launcherPlayers) ? res.launcherPlayers : [];
+    const serverData = res.serverData || {};
+
+    // 1. KPI Counts
+    if (statLauncherCount) statLauncherCount.textContent = `${launcherPlayers.length} online`;
+    if (sidebarAdminBadge) sidebarAdminBadge.textContent = String(launcherPlayers.length);
+
+    const sOnline = serverData.playersCount ?? 0;
+    const sMax = serverData.maxPlayers ?? 20;
+    if (statServerCount) statServerCount.textContent = `${sOnline} / ${sMax}`;
+
+    if (smpStatusPill) {
+      smpStatusPill.className = `server-status-pill ${serverData.online ? 'online' : 'offline'}`;
+      smpStatusPill.textContent = serverData.online ? 'Online' : 'Offline';
+    }
+    if (smpDetails) {
+      const pingText = serverData.pingMs ? ` • ${serverData.pingMs} ms` : '';
+      smpDetails.textContent = `mc.szkolnesmp.com.pl:23008 • ${serverData.version || 'Paper 1.21.11'}${pingText}`;
+    }
+
+    // 2. Render Launcher Players
+    if (launcherContainer) {
+      if (!launcherPlayers.length) {
+        launcherContainer.innerHTML = `<div class="admin-empty-state">Brak innych aktywnych graczy w launcherze w tej chwili.</div>`;
+      } else {
+        launcherContainer.innerHTML = launcherPlayers.map(p => {
+          const isOwner = !!p.isOwner;
+          const nick = escapeHtml(p.user || 'Gracz');
+          const status = escapeHtml(p.status || 'W menu głównym');
+          const os = escapeHtml(p.os || 'Windows');
+          const ver = escapeHtml(p.ver || 'v2.5.1');
+          const ram = p.ramGb ? `${p.ramGb} GB RAM` : '4 GB RAM';
+          const dtSec = Math.max(0, Math.round((Date.now() - (p.ts || Date.now())) / 1000));
+          const timeAgo = dtSec < 20 ? '🟢 Aktywny teraz' : (dtSec < 60 ? `🟢 ${dtSec}s temu` : `🟡 ${Math.round(dtSec / 60)}m temu`);
+          const osIcon = os.toLowerCase().includes('win') ? '🪟' : (os.toLowerCase().includes('mac') ? '🍎' : '🐧');
+
+          return `
+            <div class="admin-player-card ${isOwner ? 'is-owner' : ''}">
+              <div class="admin-player-avatar-wrap">
+                <img src="https://mc-heads.net/avatar/${encodeURIComponent(nick)}/48" alt="${nick}" onerror="this.src='assets/default-skin.png'">
+              </div>
+              <div class="admin-player-info">
+                <div class="admin-player-top-row">
+                  <span class="admin-player-nick" title="${nick}">${nick}</span>
+                  <span class="admin-rank-tag ${isOwner ? 'owner' : 'player'}">${isOwner ? '👑 WŁAŚCICIEL' : 'GRACZ'}</span>
+                </div>
+                <div class="admin-player-status" title="${status}">
+                  <span class="live-dot-pulse" style="width: 6px; height: 6px;"></span>
+                  <span>${status}</span>
+                </div>
+                <div class="admin-player-meta">
+                  <span>${osIcon} ${os}</span>
+                  <span>•</span>
+                  <span>${ver}</span>
+                  <span>•</span>
+                  <span>${ram}</span>
+                  <span>•</span>
+                  <span>${timeAgo}</span>
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+    }
+
+    // 3. Render Server Players
+    if (serverContainer) {
+      const serverPlayers = serverData.sample || [];
+      if (!serverData.online) {
+        serverContainer.innerHTML = `<div class="admin-empty-state">Serwer Szkolne SMP jest aktualnie wyłączony lub restartowany.</div>`;
+      } else if (!serverPlayers.length) {
+        serverContainer.innerHTML = `<div class="admin-empty-state">Brak zalogowanych graczy na serwerze Szkolne SMP (0/${sMax}).</div>`;
+      } else {
+        serverContainer.innerHTML = serverPlayers.map(nick => {
+          const cleanNick = escapeHtml(nick);
+          return `
+            <div class="admin-player-card">
+              <div class="admin-player-avatar-wrap">
+                <img src="https://mc-heads.net/avatar/${encodeURIComponent(cleanNick)}/48" alt="${cleanNick}" onerror="this.src='assets/default-skin.png'">
+              </div>
+              <div class="admin-player-info">
+                <div class="admin-player-top-row">
+                  <span class="admin-player-nick" title="${cleanNick}">${cleanNick}</span>
+                  <span class="admin-rank-tag player">SERWER SMP</span>
+                </div>
+                <div class="admin-player-status" style="color: #38BDF8;">
+                  <span>🌐 Zalogowany na mc.szkolnesmp.com.pl</span>
+                </div>
+                <div class="admin-player-meta">
+                  <span>W świecie gry</span>
+                  <span>•</span>
+                  <span>Online</span>
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+    }
+
+  } catch (err) {
+    if (launcherContainer) {
+      launcherContainer.innerHTML = `<div class="admin-empty-state" style="color: #EF4444;">Błąd połączenia: ${escapeHtml(err.message)}</div>`;
+    }
+  }
+}
+
 async function loadAccount() {
   try {
     currentAccount = await window.api.getActiveAccount();
@@ -1219,6 +1444,16 @@ async function applyAccountToUI(account) {
       elements.userStatusDot.style.background = '';
     }
     const isOwner = isOwnerAccount(account);
+    const adminNavSec = document.getElementById('nav-section-admin');
+    if (adminNavSec) {
+      adminNavSec.style.display = isOwner ? 'block' : 'none';
+    }
+    if (!isOwner) {
+      const activeNav = document.querySelector('.nav-pill.active');
+      if (activeNav && activeNav.getAttribute('data-tab') === 'admin') {
+        switchToTab('play');
+      }
+    }
     const typeLabel = isOwner ? '👑 Właściciel' : (account.isPremium ? 'Microsoft Premium' : 'Sesja Offline');
     if (subTypeEl) {
       subTypeEl.textContent = typeLabel;
