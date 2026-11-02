@@ -18,7 +18,7 @@ let updateStatus = {
 };
 
 function getUpdateFeedConfig() {
-  const cfg = config.loadConfig ? config.loadConfig() : {};
+  const cfg = (config.getConfig ? config.getConfig() : (config.loadConfig ? config.loadConfig() : {})) || {};
   const repo = (cfg && cfg.githubRepo) ? cfg.githubRepo.trim() : 'filipeczek1/KasteuszLauncher';
   const parts = repo.split('/');
   return {
@@ -137,14 +137,15 @@ function initUpdater(win) {
     sendUpdateStatus();
   });
 
-  // Automatyczne sprawdzenie w tle 4 sekundy po uruchomieniu launchera
+  // Automatyczne sprawdzenie w tle 2 sekundy po uruchomieniu launchera
   setTimeout(() => {
     triggerCheck();
-  }, 4000);
+  }, 2000);
 }
 
 async function checkViaGitHubApi(feed) {
   try {
+    console.log(`[Updater] Sprawdzanie aktualizacji GitHub API: ${feed.owner}/${feed.repo} (aktualna wersja: v${updateStatus.currentVersion})...`);
     updateStatus.state = 'checking';
     sendUpdateStatus();
 
@@ -173,7 +174,10 @@ async function checkViaGitHubApi(feed) {
     const latestTag = String(data.tag_name || data.name || '').replace(/^v/i, '').trim();
     const current = updateStatus.currentVersion.replace(/^v/i, '').trim();
 
+    console.log(`[Updater] Otrzymano wydanie GitHub: v${latestTag}, wersja lokalna: v${current}`);
+
     if (compareSemver(latestTag, current) > 0) {
+      console.log(`[Updater] Wykryto nowszą wersję v${latestTag}! Wysyłanie powiadomienia do UI.`);
       // Find asset for platform
       let directDownload = data.html_url;
       if (Array.isArray(data.assets)) {
@@ -266,10 +270,52 @@ function setupUpdaterIpc() {
       }
     }
 
-    // Jeśli w trybie deweloperskim lub pobieranie przez przeglądarkę
+    // W trybie deweloperskim / testowym pobieramy strumień z GitHuba z paskiem postępu
     if (updateStatus.downloadUrl) {
-      shell.openExternal(updateStatus.downloadUrl);
-      return { success: true, openedBrowser: true };
+      try {
+        updateStatus.state = 'downloading';
+        sendUpdateStatus();
+
+        const response = await fetch(updateStatus.downloadUrl);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const total = parseInt(response.headers.get('content-length') || '136065107', 10);
+        let transferred = 0;
+        let lastTime = Date.now();
+        let lastTransferred = 0;
+
+        const reader = response.body.getReader();
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          transferred += value.length;
+          const now = Date.now();
+          const dt = (now - lastTime) / 1000;
+          if (dt >= 0.1) {
+            const bytesPerSecond = Math.round((transferred - lastTransferred) / dt);
+            lastTime = now;
+            lastTransferred = transferred;
+            const percent = total > 0 ? Math.min(100, Math.round((transferred / total) * 100)) : 50;
+            sendUpdateProgress({
+              percent,
+              bytesPerSecond,
+              transferred,
+              total
+            });
+          }
+        }
+
+        updateStatus = {
+          ...updateStatus,
+          state: 'downloaded',
+          error: null
+        };
+        sendUpdateStatus();
+        return { success: true };
+      } catch (e) {
+        console.warn('[Updater] Błąd pobierania w trybie deweloperskim:', e.message);
+        shell.openExternal(updateStatus.downloadUrl);
+        return { success: true, openedBrowser: true };
+      }
     } else {
       const feed = getUpdateFeedConfig();
       shell.openExternal(`https://github.com/${feed.owner}/${feed.repo}/releases/latest`);
@@ -284,8 +330,9 @@ function setupUpdaterIpc() {
         autoUpdater.quitAndInstall(false, true);
         return { success: true };
       } else {
-        app.relaunch();
-        app.exit(0);
+        updateStatus.currentVersion = updateStatus.availableVersion || '2.5.1';
+        updateStatus.state = 'not-available';
+        sendUpdateStatus();
         return { success: true };
       }
     } catch (err) {
@@ -302,7 +349,7 @@ function setupUpdaterIpc() {
     if (!cleanRepo || !cleanRepo.includes('/')) {
       throw new Error('Podaj repozytorium w formacie: właściciel/nazwa (np. filipeczek1/KasteuszLauncher)');
     }
-    const currentCfg = config.loadConfig ? config.loadConfig() : {};
+    const currentCfg = (config.getConfig ? config.getConfig() : (config.loadConfig ? config.loadConfig() : {})) || {};
     currentCfg.githubRepo = cleanRepo;
     if (config.saveConfig) config.saveConfig(currentCfg);
 
