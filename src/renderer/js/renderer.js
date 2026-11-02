@@ -150,28 +150,34 @@ async function initApp() {
     console.error('Błąd attachInteractiveListeners:', soundErr);
   }
 
-  try {
-    setupWindowControls();
-    setupNavigation();
-    setupWardrobeListeners();
-    setupThemesListeners();
-    setupLauncherStylesListeners();
-    setupSettingsListeners();
-    setupModsListeners();
-    setupProfilesListeners();
-    setupModBrowser();
-    setupLauncherEventListeners();
-    setupFriendsListeners();
-    setupServerHostingListeners();
-    setupSpotifyMusicListeners();
-    setupPacksListeners();
-    setupScreenshotsListeners();
-    setupCrashDoctorListeners();
-    setupBenchmarkListeners();
-    setupUpdaterUI();
-    setupAdminDashboard();
-  } catch (listenerErr) {
-    console.error('Błąd rejestracji listenerów UI:', listenerErr);
+  const setupTasks = [
+    ['WindowControls', setupWindowControls],
+    ['Navigation', setupNavigation],
+    ['WardrobeListeners', setupWardrobeListeners],
+    ['ThemesListeners', setupThemesListeners],
+    ['LauncherStylesListeners', setupLauncherStylesListeners],
+    ['SettingsListeners', setupSettingsListeners],
+    ['ModsListeners', setupModsListeners],
+    ['ProfilesListeners', setupProfilesListeners],
+    ['ModBrowser', setupModBrowser],
+    ['LauncherEventListeners', setupLauncherEventListeners],
+    ['FriendsListeners', setupFriendsListeners],
+    ['ServerHostingListeners', setupServerHostingListeners],
+    ['SpotifyMusicListeners', setupSpotifyMusicListeners],
+    ['PacksListeners', setupPacksListeners],
+    ['ScreenshotsListeners', setupScreenshotsListeners],
+    ['CrashDoctorListeners', setupCrashDoctorListeners],
+    ['BenchmarkListeners', setupBenchmarkListeners],
+    ['UpdaterUI', setupUpdaterUI],
+    ['AdminDashboard', setupAdminDashboard]
+  ];
+
+  for (const [name, fn] of setupTasks) {
+    try {
+      if (typeof fn === 'function') fn();
+    } catch (listenerErr) {
+      console.error(`[INIT] Błąd rejestracji modułu ${name}:`, listenerErr);
+    }
   }
 
   try {
@@ -300,7 +306,7 @@ function setupNavigation() {
     else openProfileModal();
   });
 
-  elements.userProfileBtn.addEventListener('click', () => {
+  elements.userProfileBtn?.addEventListener('click', () => {
     if (!currentAccount) {
       openLoginModal();
     } else {
@@ -308,14 +314,16 @@ function setupNavigation() {
     }
   });
 
-  elements.btnVersionDropdown.addEventListener('click', (e) => {
+  elements.btnVersionDropdown?.addEventListener('click', (e) => {
     e.stopPropagation();
-    elements.versionQuickMenu.classList.toggle('open');
+    elements.versionQuickMenu?.classList.toggle('open');
   });
 
   document.addEventListener('click', (e) => {
-    if (!elements.versionQuickMenu.contains(e.target) && !elements.btnVersionDropdown.contains(e.target)) {
-      elements.versionQuickMenu.classList.remove('open');
+    if (elements.versionQuickMenu && elements.btnVersionDropdown) {
+      if (!elements.versionQuickMenu.contains(e.target) && !elements.btnVersionDropdown.contains(e.target)) {
+        elements.versionQuickMenu.classList.remove('open');
+      }
     }
   });
 

@@ -129,6 +129,7 @@ async function main() {
     { file: path.join(distDir, 'latest-linux.yml'), name: 'latest-linux.yml', type: 'text/yaml' },
     { file: path.join(distDir, `KasteuszLauncher-Setup-${version}.exe.blockmap`), name: `KasteuszLauncher-Setup-${version}.exe.blockmap` },
     { file: path.join(distDir, `KasteuszLauncher-Setup-${version}.exe`), name: `KasteuszLauncher-Setup-${version}.exe` },
+    { file: path.join(distDir, `KasteuszLauncher-Portable-${version}.exe`), name: `KasteuszLauncher-Portable-${version}.exe` },
     { file: path.join(distDir, `KasteuszLauncher-${version}.AppImage`), name: `KasteuszLauncher-${version}.AppImage` },
     { file: path.join(distDir, `KasteuszLauncher-${version}.deb`), name: `KasteuszLauncher-${version}.deb` }
   ];

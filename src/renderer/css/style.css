@@ -340,6 +340,7 @@ button {
   min-height: 0;
   display: flex;
   overflow: hidden;
+  -webkit-app-region: no-drag !important;
 }
 
 .sidebar {
@@ -353,6 +354,7 @@ button {
   background-image: var(--glass-occlusion);
   backdrop-filter: blur(20px);
   border-right: 1px solid var(--border-subtle);
+  -webkit-app-region: no-drag !important;
 }
 
 .sidebar-nav-scroll {
@@ -587,6 +589,7 @@ button {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  -webkit-app-region: no-drag !important;
 }
 
 .tab-view {
@@ -595,6 +598,7 @@ button {
   min-height: 0;
   width: 100%;
   height: 100%;
+  -webkit-app-region: no-drag !important;
   overflow-y: auto;
   padding: 20px 24px;
 }
@@ -3713,6 +3717,7 @@ input[type="range"]::-webkit-slider-thumb:hover {
   align-items: center;
   justify-content: center;
   padding: 20px;
+  -webkit-app-region: no-drag !important;
 }
 
 .modal-overlay.open,

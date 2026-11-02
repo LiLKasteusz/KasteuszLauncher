@@ -39,10 +39,8 @@ function createWindow() {
     }
   });
 
-  mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
-
-  mainWindow.webContents.on('console-message', (event) => {
-    console.log('[RENDERER CONSOLE]', event.message, 'at line', event.lineNumber);
+  mainWindow.webContents.on('console-message', (_event, level, message, line) => {
+    console.log(`[RENDERER ${level}] ${message} (line ${line})`);
   });
 
   mainWindow.webContents.on('did-finish-load', () => {
@@ -52,6 +50,8 @@ function createWindow() {
   mainWindow.webContents.on('did-fail-load', (e, code, desc) => {
     console.log('[MAIN] did-fail-load', code, desc);
   });
+
+  mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
@@ -64,6 +64,7 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  console.log('[MAIN] app.whenReady fired, calling createWindow...');
   createWindow();
   updater.initUpdater(mainWindow);
   presence.initPresence(mainWindow);
