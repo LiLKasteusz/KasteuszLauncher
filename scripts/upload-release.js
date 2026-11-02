@@ -14,7 +14,7 @@ if (!token) {
   console.error('[BŁĄD] Brak tokena GitHub. Ustaw zmienną GH_TOKEN lub utwórz plik .github_token.');
   process.exit(1);
 }
-const owner = 'filipeczek1';
+const owner = 'LiLKasteusz';
 const repo = 'KasteuszLauncher';
 
 function apiRequest(options, postData = null) {

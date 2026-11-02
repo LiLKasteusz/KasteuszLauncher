@@ -14,15 +14,15 @@ let updateStatus = {
   downloadUrl: null,
   progress: null,
   error: null,
-  repo: 'filipeczek1/KasteuszLauncher'
+  repo: 'LiLKasteusz/KasteuszLauncher'
 };
 
 function getUpdateFeedConfig() {
   const cfg = (config.getConfig ? config.getConfig() : (config.loadConfig ? config.loadConfig() : {})) || {};
-  const repo = (cfg && cfg.githubRepo) ? cfg.githubRepo.trim() : 'filipeczek1/KasteuszLauncher';
+  const repo = (cfg && cfg.githubRepo) ? cfg.githubRepo.trim() : 'LiLKasteusz/KasteuszLauncher';
   const parts = repo.split('/');
   return {
-    owner: parts[0] || 'filipeczek1',
+    owner: parts[0] || 'LiLKasteusz',
     repo: parts[1] || 'KasteuszLauncher',
     fullRepo: repo
   };

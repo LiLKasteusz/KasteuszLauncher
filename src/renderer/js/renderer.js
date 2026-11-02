@@ -1127,7 +1127,7 @@ function setupUpdaterUI() {
   btnSaveGithubRepo?.addEventListener('click', async () => {
     const val = settingGithubRepo?.value.trim();
     if (!val || !val.includes('/')) {
-      showToast('Wpisz repozytorium w formacie: właściciel/nazwa (np. filipeczek1/KasteuszLauncher)');
+      showToast('Wpisz repozytorium w formacie: właściciel/nazwa (np. LiLKasteusz/KasteuszLauncher)');
       return;
     }
     try {
