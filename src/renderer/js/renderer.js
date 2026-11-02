@@ -950,6 +950,10 @@ function setupUpdaterUI() {
     if (settingsCurrentVer && status.currentVersion) {
       settingsCurrentVer.textContent = `v${status.currentVersion}`;
     }
+    const topbarVer = document.getElementById('topbar-app-version') || document.querySelector('.topbar-version-tag');
+    if (topbarVer && status.currentVersion) {
+      topbarVer.textContent = `v${status.currentVersion}`;
+    }
     if (settingGithubRepo && status.repo && !settingGithubRepo.matches(':focus')) {
       settingGithubRepo.value = status.repo;
     }
