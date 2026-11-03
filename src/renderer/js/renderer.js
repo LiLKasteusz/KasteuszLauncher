@@ -6185,7 +6185,8 @@ function setupThemesListeners() {
 const LAUNCHER_STYLE_LABELS = {
   style1: 'Styl 1',
   style2: 'Styl 2',
-  style3: 'Styl 3'
+  style3: 'Styl 3',
+  style4: 'Styl 4'
 };
 
 let currentLauncherStyle = 'style1';
@@ -6232,7 +6233,7 @@ function startS3KineticRotator() {
 }
 
 function applyLauncherStyleUI(styleName) {
-  const allowed = ['style1', 'style2', 'style3'];
+  const allowed = ['style1', 'style2', 'style3', 'style4'];
   const normalized = allowed.includes(styleName) ? styleName : 'style1';
   currentLauncherStyle = normalized;
 
@@ -6267,7 +6268,7 @@ function applyLauncherStyleUI(styleName) {
 }
 
 async function switchLauncherStyleWithRestart(targetStyle) {
-  const allowed = ['style1', 'style2', 'style3'];
+  const allowed = ['style1', 'style2', 'style3', 'style4'];
   if (!allowed.includes(targetStyle)) return;
 
   if (targetStyle === currentLauncherStyle) {

@@ -7861,3 +7861,66 @@ input[type="range"]::-webkit-slider-thumb:hover {
 
 
 
+
+/* STYL 4 - inspirowany Lunar Client (granat + fiolet, szklo, neon) */
+.launcher-style-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.lsc-badge.s4 {
+  color: #A5B4FC;
+  background: rgba(99, 102, 241, 0.16);
+  border: 1px solid rgba(129, 140, 248, 0.35);
+}
+
+.lsc-prev-s4 {
+  background: linear-gradient(135deg, #0A0D24 0%, #1A1245 100%);
+}
+
+[data-ui-style="style4"] {
+  --bg-base: #070A1C;
+  --bg-elevated: #0C1030;
+  --bg-rail: rgba(12, 16, 48, 0.72);
+  --bg-dock: rgba(12, 16, 48, 0.82);
+  --surface-1: #101540;
+  --surface-2: #161C4E;
+  --surface-3: #1D2560;
+  --surface-hover: #252E72;
+  --border-subtle: rgba(129, 140, 248, 0.14);
+  --border-medium: rgba(129, 140, 248, 0.24);
+  --border-strong: rgba(165, 180, 252, 0.34);
+}
+
+body[data-ui-style="style4"] {
+  background: radial-gradient(1200px 700px at 80% -10%, rgba(124, 58, 237, 0.22), transparent 60%),
+              radial-gradient(900px 600px at 0% 100%, rgba(79, 70, 229, 0.18), transparent 60%),
+              #070A1C;
+}
+
+[data-ui-style="style4"] .sidebar {
+  backdrop-filter: blur(18px) saturate(140%);
+  border-right: 1px solid var(--border-medium);
+}
+
+[data-ui-style="style4"] .nav-pill.active {
+  background: linear-gradient(90deg, rgba(99, 102, 241, 0.28), rgba(124, 58, 237, 0.10));
+  box-shadow: inset 0 0 0 1px rgba(129, 140, 248, 0.35);
+}
+
+[data-ui-style="style4"] .hero-stage-card {
+  background: linear-gradient(160deg, rgba(29, 37, 96, 0.55), rgba(12, 16, 48, 0.55));
+  border: 1px solid var(--border-medium);
+  box-shadow: 0 20px 60px rgba(7, 10, 28, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(14px);
+}
+
+[data-ui-style="style4"] .btn-play-hero {
+  background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%);
+  box-shadow: 0 0 0 1px rgba(165, 180, 252, 0.5), 0 0 28px rgba(139, 92, 246, 0.55);
+  letter-spacing: 0.06em;
+}
+
+[data-ui-style="style4"] .btn-play-hero:hover:not(:disabled) {
+  box-shadow: 0 0 0 1px rgba(199, 210, 254, 0.7), 0 0 40px rgba(139, 92, 246, 0.8);
+  transform: translateY(-1px);
+}
