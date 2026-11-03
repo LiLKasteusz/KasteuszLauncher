@@ -1,84 +1,15 @@
-<svg width="48" height="48" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 100 100">
   <defs>
-    <!-- Dynamic accent gradients using CSS variables -->
-    <linearGradient id="facetTop" x1="12" y1="8" x2="88" y2="48" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="var(--accent-primary-hover, #c084fc)"/>
-      <stop offset="100%" stop-color="var(--accent-primary, #a855f7)"/>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8b5cf6"/>
+      <stop offset="1" stop-color="#4c1d95"/>
     </linearGradient>
-    <linearGradient id="facetLeft" x1="12" y1="28" x2="50" y2="88" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="var(--accent-primary, #a855f7)"/>
-      <stop offset="100%" stop-color="var(--accent-primary-dark, #6b21a8)"/>
+    <linearGradient id="k" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#e9ddff"/>
     </linearGradient>
-    <linearGradient id="facetRight" x1="50" y1="48" x2="88" y2="88" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="var(--accent-primary-dark, #7e22ce)"/>
-      <stop offset="100%" stop-color="#0b0d14"/>
-    </linearGradient>
-    <linearGradient id="crestGlow" x1="30" y1="30" x2="70" y2="75" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#ffffff"/>
-      <stop offset="100%" stop-color="var(--accent-primary-hover, #e9d5ff)"/>
-    </linearGradient>
-    <filter id="logoOuterGlow" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur stdDeviation="5" result="blur"/>
-      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
-    </filter>
   </defs>
-
-  <!-- Ambient Outer Glow Aura -->
-  <polygon points="50,6 90,27 90,73 50,94 10,73 10,27" 
-           fill="var(--accent-primary, #a855f7)" 
-           opacity="0.25" 
-           filter="url(#logoOuterGlow)"/>
-
-  <!-- Outer Isometric Obsidian Chassis -->
-  <polygon points="50,7 89,27.5 89,72.5 50,93 11,72.5 11,27.5" 
-           fill="#10121a" 
-           stroke="var(--accent-primary, #a855f7)" 
-           stroke-width="1.8" 
-           stroke-linejoin="round"/>
-
-  <!-- Top Facet -->
-  <polygon points="50,11 85,29 50,47 15,29" 
-           fill="url(#facetTop)" 
-           opacity="0.95"/>
-
-  <!-- Left Facet -->
-  <polygon points="15,29 50,47 50,87 15,69" 
-           fill="url(#facetLeft)" 
-           opacity="0.9"/>
-
-  <!-- Right Facet -->
-  <polygon points="50,47 85,29 85,69 50,87" 
-           fill="url(#facetRight)" 
-           opacity="0.85"/>
-
-  <!-- Specular Facet Highlights -->
-  <polyline points="15,29 50,11 85,29" 
-            stroke="#ffffff" 
-            stroke-width="1.4" 
-            stroke-linecap="round" 
-            opacity="0.65"/>
-  <line x1="50" y1="11" x2="50" y2="47" 
-        stroke="#ffffff" 
-        stroke-width="1.2" 
-        stroke-linecap="round" 
-        opacity="0.4"/>
-
-  <!-- Inner High-Tech Embossed "K" Monogram -->
-  <!-- Vertical K Stem -->
-  <path d="M34 38 L41 34 L41 72 L34 76 Z" 
-        fill="url(#crestGlow)" 
-        filter="drop-shadow(0 0 4px var(--accent-primary, #a855f7))"/>
-
-  <!-- Diagonal Upper Arm -->
-  <polygon points="41,54 61,37 68,41 48,58" 
-           fill="url(#crestGlow)" 
-           filter="drop-shadow(0 0 4px var(--accent-primary, #a855f7))"/>
-
-  <!-- Diagonal Lower Arm -->
-  <polygon points="46,56 68,73 61,77 39,60" 
-           fill="url(#crestGlow)" 
-           filter="drop-shadow(0 0 4px var(--accent-primary, #a855f7))"/>
-
-  <!-- Central Diamond Core Spark -->
-  <circle cx="50" cy="47" r="2.5" fill="#ffffff" filter="drop-shadow(0 0 3px #ffffff)"/>
+  <rect x="6" y="6" width="88" height="88" rx="22" fill="url(#bg)"/>
+  <rect x="6" y="6" width="88" height="44" rx="22" fill="#ffffff" opacity="0.08"/>
+  <path d="M30 24 H44 V45 L62 24 H79 L56 50 L80 76 H62 L44 55 V76 H30 Z" fill="url(#k)"/>
 </svg>

@@ -217,6 +217,7 @@ async function selectAndAddMods(parentWindow) {
 }
 
 function toggleMod(filename) {
+  filename = path.basename(String(filename || ''));
   const modsDir = getModsDirectory();
   const currentPath = path.join(modsDir, filename);
 
@@ -240,6 +241,7 @@ function toggleMod(filename) {
 }
 
 function deleteMod(filename) {
+  filename = path.basename(String(filename || ''));
   const modsDir = getModsDirectory();
   const filePath = path.join(modsDir, filename);
 
@@ -823,8 +825,8 @@ async function installModrinthMod({ projectId, slug, gameVersion = '1.21.11', lo
     for (const f of existing) {
       if ((f.endsWith('.jar') || f.endsWith('.jar.disabled')) && f !== primaryFile.filename) {
         const flow = f.toLowerCase();
-        const matchesSlug = modSlug && modSlug.length >= 3 && flow.replace(/[^a-z0-9]/g, '').startsWith(modSlug);
-        const matchesPrefix = filePrefix && filePrefix.length >= 3 && flow.startsWith(filePrefix);
+        const matchesSlug = false;
+        const matchesPrefix = filePrefix && filePrefix.length >= 3 && flow.split(/[-_]\d/)[0] === filePrefix;
         if (matchesSlug || matchesPrefix) {
           try {
             fs.unlinkSync(path.join(modsDir, f));
@@ -1171,7 +1173,8 @@ async function installMrpackFromBuffer(mrpackBuf, {
 
     if (!relPath) continue;
 
-    const destPath = path.join(instanceDir, relPath);
+    const destPath = path.resolve(instanceDir, relPath);
+    if (destPath !== path.resolve(instanceDir) && !destPath.startsWith(path.resolve(instanceDir) + path.sep)) continue;
     if (entry.isDirectory) {
       if (!fs.existsSync(destPath)) fs.mkdirSync(destPath, { recursive: true });
     } else {
@@ -1245,7 +1248,11 @@ async function installMrpackFromBuffer(mrpackBuf, {
       if (!fileUrl) continue;
 
       const fileName = path.basename(fileObj.path);
-      const destPath = path.join(instanceDir, fileObj.path);
+      const destPath = path.resolve(instanceDir, fileObj.path);
+      if (!destPath.startsWith(path.resolve(instanceDir) + path.sep)) {
+        completedFiles++;
+        continue;
+      }
       const parentDir = path.dirname(destPath);
       if (!fs.existsSync(parentDir)) {
         fs.mkdirSync(parentDir, { recursive: true });
@@ -1455,6 +1462,7 @@ function copyPackPaths(type = 'resourcepacks', paths = []) {
 }
 
 function togglePack(type = 'resourcepacks', filename) {
+  filename = path.basename(String(filename || ''));
   const dir = getPacksDirectory(type);
   const currentPath = path.join(dir, filename);
   if (!fs.existsSync(currentPath)) {
@@ -1468,6 +1476,7 @@ function togglePack(type = 'resourcepacks', filename) {
 }
 
 function deletePack(type = 'resourcepacks', filename) {
+  filename = path.basename(String(filename || ''));
   const dir = getPacksDirectory(type);
   const targetPath = path.join(dir, filename);
   if (fs.existsSync(targetPath)) {

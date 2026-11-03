@@ -28,6 +28,10 @@ function getUpdateFeedConfig() {
   };
 }
 
+function setWindow(win) {
+  mainWindow = win;
+}
+
 function sendUpdateStatus() {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('updater:status-changed', updateStatus);
@@ -370,6 +374,7 @@ function setupUpdaterIpc() {
 
 module.exports = {
   initUpdater,
+  setWindow,
   setupUpdaterIpc,
   getUpdateFeedConfig,
   triggerCheck

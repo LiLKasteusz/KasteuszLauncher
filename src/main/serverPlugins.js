@@ -286,7 +286,7 @@ async function installServerPlugin({ slug, projectId, window = null }) {
   }
 
   if (!matchedVer) {
-    matchedVer = versions[0];
+    throw new Error(`Plugin ${idOrSlug} nie posiada wersji zgodnej z silnikiem ${target.engine}.`);
   }
 
   const file = (matchedVer.files && matchedVer.files.find(f => f.primary)) ||
@@ -313,9 +313,9 @@ async function installServerPlugin({ slug, projectId, window = null }) {
   const installedDeps = [];
   if (Array.isArray(matchedVer.dependencies)) {
     for (const dep of matchedVer.dependencies) {
-      if (dep.dependency_type === 'required' && (dep.project_id || dep.version_id)) {
+      if (dep.dependency_type === 'required' && dep.project_id) {
         try {
-          const depId = dep.project_id || dep.version_id;
+          const depId = dep.project_id;
           const depRes = await installServerPlugin({ slug: depId, window });
           if (depRes?.filename) installedDeps.push(depRes.filename);
         } catch (depErr) {

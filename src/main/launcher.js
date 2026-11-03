@@ -494,9 +494,6 @@ async function launchMinecraft(window, versionOverride) {
   const activeProfile = profiles.getActiveProfile();
   const instanceDir = profiles.getActiveInstanceDirectory();
 
-  isLaunching = true;
-  activeLauncherClient = new Client();
-
   const rootDir = appConfig.gameDirectory || config.DEFAULT_GAME_DIR;
   if (!fs.existsSync(rootDir)) {
     fs.mkdirSync(rootDir, { recursive: true });
@@ -504,6 +501,9 @@ async function launchMinecraft(window, versionOverride) {
   if (!fs.existsSync(instanceDir)) {
     fs.mkdirSync(instanceDir, { recursive: true });
   }
+
+  isLaunching = true;
+  activeLauncherClient = new Client();
 
   let versionToLaunch = versionOverride || activeProfile?.effectiveVersionId || appConfig.selectedVersion || '1.21.11';
   const baseMcVer = (activeProfile?.mcVersion || versionToLaunch.replace(/^(fabric|quilt)-/, '') || '1.21.11').trim();
@@ -708,7 +708,7 @@ async function launchMinecraft(window, versionOverride) {
           });
         }
       }
-    });
+    }, appConfig.javaPath);
   } catch (javaErr) {
     isLaunching = false;
     throw new Error(`Błąd przygotowywania środowiska Java dla Minecraft: ${javaErr.message}`);

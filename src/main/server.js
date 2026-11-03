@@ -7,25 +7,25 @@ const { app, shell } = require('electron');
 const config = require('./config');
 
 const SERVERS_ROOT = path.join(
-  process.env.HOME || app?.getPath('userData') || '.',
+  os.homedir(),
   '.kasteuszlauncher',
   'servers'
 );
 
 const LEGACY_SERVER_DIR = path.join(
-  process.env.HOME || app?.getPath('userData') || '.',
+  os.homedir(),
   '.kasteuszlauncher',
   'server'
 );
 
 const CONFIG_FILE = path.join(
-  process.env.HOME || app?.getPath('userData') || '.',
+  os.homedir(),
   '.kasteuszlauncher',
   'server_config.json'
 );
 
 const TUNNEL_KEY_PATH = path.join(
-  process.env.HOME || app?.getPath('userData') || '.',
+  os.homedir(),
   '.kasteuszlauncher',
   'tunnel_id_ed25519'
 );
@@ -550,14 +550,14 @@ function getLocalIp() {
   return '127.0.0.1';
 }
 
-function resolveServerJava() {
+function resolveServerJava(mcVersion) {
   try {
     const javaManager = require('./javaManager');
     if (typeof javaManager.resolveConsoleJava === 'function') {
-      return javaManager.resolveConsoleJava(21);
+      return javaManager.resolveConsoleJava(javaManager.getRequiredJavaMajor(mcVersion));
     }
   } catch (_) {}
-  return process.platform === 'win32' ? 'java.exe' : '/usr/bin/java';
+  return process.platform === 'win32' ? 'java.exe' : 'java';
 }
 
 async function resolveServerDownloadInfo(engine, version) {
@@ -812,7 +812,7 @@ async function startPublicTunnel(window, customPort = null) {
       '-o', 'IdentitiesOnly=yes',
       '-o', 'BatchMode=yes',
       '-o', 'StrictHostKeyChecking=no',
-      '-o', 'UserKnownHostsFile=/dev/null',
+      '-o', `UserKnownHostsFile=${process.platform === 'win32' ? 'NUL' : '/dev/null'}`,
       '-o', 'ServerAliveInterval=25',
       '-o', 'ServerAliveCountMax=3',
       '-o', 'ExitOnForwardFailure=yes',
@@ -955,7 +955,7 @@ async function startServer(window) {
     const localIp = getLocalIp();
     const ram = cfg.ram || 4;
     const minRam = Math.min(ram, 2);
-    const javaBin = resolveServerJava();
+    const javaBin = resolveServerJava(cfg.version);
     const javaArgs = [
       `-Xmx${ram}G`,
       `-Xms${minRam}G`,

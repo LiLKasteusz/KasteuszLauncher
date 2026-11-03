@@ -37,7 +37,12 @@ function getScreenshotsDirectories(filterProfileId = 'all') {
   const dirs = [];
   const defaultMcDir = path.join(os.homedir(), '.kasteuszlauncher', 'minecraft');
   const sharedScreenshots = path.join(defaultMcDir, 'screenshots');
-  const vanillaScreenshots = path.join(os.homedir(), '.minecraft', 'screenshots');
+  const vanillaRoot = process.platform === 'win32'
+    ? path.join(process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'), '.minecraft')
+    : (process.platform === 'darwin'
+      ? path.join(os.homedir(), 'Library', 'Application Support', 'minecraft')
+      : path.join(os.homedir(), '.minecraft'));
+  const vanillaScreenshots = path.join(vanillaRoot, 'screenshots');
 
   if (!fs.existsSync(sharedScreenshots)) {
     try {
@@ -101,6 +106,20 @@ function getScreenshotsDirectories(filterProfileId = 'all') {
   return dirs;
 }
 
+function isAllowedMediaPath(filePath) {
+  try {
+    if (!filePath || typeof filePath !== 'string') return false;
+    const resolved = path.resolve(filePath);
+    if (!ALL_MEDIA_EXTENSIONS.has(path.extname(resolved).toLowerCase())) return false;
+    return getScreenshotsDirectories('all').some(({ dir }) => {
+      const base = path.resolve(dir);
+      return resolved.startsWith(base + path.sep);
+    });
+  } catch (_) {
+    return false;
+  }
+}
+
 async function getScreenshots(filterProfileId = 'all') {
   const dirs = getScreenshotsDirectories(filterProfileId);
   const seenPaths = new Set();
@@ -162,6 +181,9 @@ async function getScreenshots(filterProfileId = 'all') {
 }
 
 async function getScreenshotThumbnail(filePath) {
+  if (!isAllowedMediaPath(filePath)) {
+    return { success: false, error: 'Niedozwolona ścieżka' };
+  }
   if (!fs.existsSync(filePath)) {
     return { success: false, error: 'Plik nie istnieje' };
   }
@@ -227,6 +249,9 @@ async function getScreenshotThumbnail(filePath) {
 }
 
 async function getScreenshotFull(filePath) {
+  if (!isAllowedMediaPath(filePath)) {
+    return { success: false, error: 'Niedozwolona ścieżka' };
+  }
   if (!fs.existsSync(filePath)) {
     return { success: false, error: 'Plik nie istnieje' };
   }
@@ -271,6 +296,9 @@ async function getScreenshotFull(filePath) {
 }
 
 async function copyScreenshotToClipboard(filePath) {
+  if (!isAllowedMediaPath(filePath)) {
+    return { success: false, error: 'Niedozwolona ścieżka' };
+  }
   if (!fs.existsSync(filePath)) {
     return { success: false, error: 'Plik nie istnieje' };
   }
@@ -304,6 +332,9 @@ async function copyScreenshotToClipboard(filePath) {
 }
 
 async function deleteScreenshot(filePath) {
+  if (!isAllowedMediaPath(filePath)) {
+    return { success: false, error: 'Niedozwolona ścieżka' };
+  }
   if (!fs.existsSync(filePath)) {
     return { success: false, error: 'Plik nie istnieje' };
   }
@@ -357,6 +388,9 @@ async function openScreenshotsFolder(filterProfileId = 'active') {
 }
 
 async function openScreenshotFile(filePath) {
+  if (!isAllowedMediaPath(filePath)) {
+    return { success: false, error: 'Niedozwolona ścieżka' };
+  }
   if (!fs.existsSync(filePath)) {
     return { success: false, error: 'Plik nie istnieje' };
   }

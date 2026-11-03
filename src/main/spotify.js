@@ -502,6 +502,10 @@ async function getPlaylistTracks(playlistId, tokenOverride) {
 
 function launchSpotifyApp() {
   return new Promise((resolve) => {
+    if (process.platform === 'win32') {
+      exec('cmd /c start "" spotify:', () => resolve(true));
+      return;
+    }
     exec(`${hostPrefix}flatpak run com.spotify.Client &`, (err) => {
       if (err) {
         exec(`${hostPrefix}spotify &`, () => resolve(true));
@@ -514,6 +518,9 @@ function launchSpotifyApp() {
 
 function getMprisStatus() {
   return new Promise((resolve) => {
+    if (process.platform !== 'linux') {
+      return resolve({ running: false, status: 'Stopped', title: '', artist: '', album: '', artUrl: '' });
+    }
     exec(`${hostPrefix}dbus-send --print-reply --dest=org.mpris.MediaPlayer2.spotify /org/mpris/MediaPlayer2 org.freedesktop.DBus.Properties.Get string:org.mpris.MediaPlayer2.Player string:PlaybackStatus`, (err, stdout) => {
       if (err) {
         return resolve({ running: false, status: 'Stopped', title: '', artist: '', album: '', artUrl: '' });
@@ -559,6 +566,7 @@ function formatSpotifyUri(raw) {
 
 function sendLinuxMprisCommand(cmd, arg = '') {
   return new Promise((resolve) => {
+    if (process.platform !== 'linux') return resolve(false);
     let bashCmd = '';
     if (cmd === 'PlayPause') {
       bashCmd = `${hostPrefix}dbus-send --print-reply --dest=org.mpris.MediaPlayer2.spotify /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player.PlayPause`;
@@ -570,7 +578,7 @@ function sendLinuxMprisCommand(cmd, arg = '') {
       bashCmd = `${hostPrefix}dbus-send --print-reply --dest=org.mpris.MediaPlayer2.spotify /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player.Next`;
     } else if (cmd === 'Previous') {
       bashCmd = `${hostPrefix}dbus-send --print-reply --dest=org.mpris.MediaPlayer2.spotify /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player.Previous`;
-    } else if (cmd === 'OpenUri' && arg) {
+    } else if (cmd === 'OpenUri' && arg && /^spotify:[a-z]+:[a-zA-Z0-9]+$/.test(String(arg))) {
       bashCmd = `${hostPrefix}dbus-send --print-reply --dest=org.mpris.MediaPlayer2.spotify /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player.OpenUri string:"${arg}"`;
     }
 

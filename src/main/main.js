@@ -126,6 +126,8 @@ ipcMain.handle('app:restart', async () => {
   setTimeout(() => {
     try {
       createWindow();
+      updater.setWindow(mainWindow);
+      presence.setWindow(mainWindow);
     } finally {
       isRestartingApp = false;
     }
@@ -205,7 +207,10 @@ ipcMain.handle('auth:select-skin-file', async (_e, variant) => {
 
   if (!result.canceled && result.filePaths.length > 0) {
     const filePath = result.filePaths[0];
-    const fileBuf = require('fs').readFileSync(filePath);
+    if (fs.statSync(filePath).size > 2 * 1024 * 1024) {
+      throw new Error('Plik skórki jest za duży (maksymalnie 2 MB).');
+    }
+    const fileBuf = fs.readFileSync(filePath);
     const dataUrl = `data:image/png;base64,${fileBuf.toString('base64')}`;
     return await auth.setAccountCustomSkin(dataUrl, variant);
   }
@@ -292,6 +297,9 @@ ipcMain.handle('wardrobe:select-cape', async () => {
   });
   if (!result.canceled && result.filePaths.length > 0) {
     const filePath = result.filePaths[0];
+    if (fs.statSync(filePath).size > 2 * 1024 * 1024) {
+      throw new Error('Plik pelerynki jest za duży (maksymalnie 2 MB).');
+    }
     const base64 = fs.readFileSync(filePath).toString('base64');
     return `data:image/png;base64,${base64}`;
   }
@@ -666,7 +674,7 @@ setInterval(() => {
       }
     }
   } catch (_) {}
-}, 100);
+}, 400);
 
 ipcMain.handle('music:update-state', async (_e, state) => {
   try {

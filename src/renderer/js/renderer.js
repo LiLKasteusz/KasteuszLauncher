@@ -414,6 +414,7 @@ function createStanceAnimationClass() {
       player.skin.head.rotation.x = -0.02 + 0.01 * Math.cos(t * 0.5);
 
       if (player.cape && player.cape.visible) {
+        player.cape.rotation.y = 0;
         player.cape.rotation.x = 0.20 + 0.08 * Math.sin(t * 1.3);
         player.cape.rotation.z = 0.03 * Math.cos(t * 0.9);
       }
@@ -5514,7 +5515,11 @@ const BUILTIN_CAPES = {
   kasteusz: { name: "Kasteusz Studio", url: "assets/capes/kasteusz.png" },
   mcqueen95: { name: "Zygzak McQueen #95", url: "assets/capes/mcqueen95.png" },
   szkolnesmp: { name: "Szkolne SMP", url: "assets/capes/szkolnesmp.png" },
-  fire_dragon: { name: "Ognisty Płomień", url: "assets/capes/fire_dragon.png" }
+  fire_dragon: { name: "Ognisty Płomień", url: "assets/capes/fire_dragon.png" },
+  aurora: { name: "Zorza Polarna", url: "assets/capes/aurora.png" },
+  void_crystal: { name: "Kryształ Pustki", url: "assets/capes/void_crystal.png" },
+  golden_crown: { name: "Złota Korona", url: "assets/capes/golden_crown.png" },
+  neon_circuit: { name: "Neonowy Obwód", url: "assets/capes/neon_circuit.png" }
 };
 
 let currentCapeId = "kasteusz";

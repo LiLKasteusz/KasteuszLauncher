@@ -331,6 +331,10 @@ function initPresence(win) {
   });
 }
 
+function setWindow(win) {
+  mainWindow = win;
+}
+
 function setGameActivity(running, label = null) {
   isGameRunning = !!running;
   currentGameLabel = label;
@@ -354,6 +358,7 @@ function setupPresenceIpc() {
 
 module.exports = {
   initPresence,
+  setWindow,
   setupPresenceIpc,
   setGameActivity,
   sendPresenceHeartbeat,

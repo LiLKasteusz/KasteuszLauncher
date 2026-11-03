@@ -28,8 +28,8 @@ function detectGpu() {
     } catch (_) {}
   } else if (process.platform === 'win32') {
     try {
-      const output = execSync('wmic path win32_VideoController get name 2>nul', { encoding: 'utf8' });
-      const gpus = output.split('\n').map(l => l.trim()).filter(l => l && l !== 'Name');
+      const output = execSync('powershell -NoProfile -Command "(Get-CimInstance Win32_VideoController).Name"', { encoding: 'utf8', timeout: 5000 });
+      const gpus = output.split('\n').map(l => l.trim()).filter(Boolean);
       return {
         primary: gpus[0] || 'Karta graficzna Windows',
         all: gpus,
@@ -113,11 +113,11 @@ async function runSyntheticBenchmark() {
 
   const startCpu = Date.now();
   let dummy = 0;
-  for (let i = 0; i < 4000000; i++) {
+  for (let i = 0; i < 1000000; i++) {
     dummy += Math.sqrt(i) * Math.sin(i);
   }
   const cpuDuration = Math.max(1, Date.now() - startCpu);
-  const cpuScore = Math.min(4500, Math.round(180000 / cpuDuration));
+  const cpuScore = Math.min(4500, Math.round(45000 / cpuDuration));
 
   const startRam = Date.now();
   const arr = new Float64Array(1024 * 1024);

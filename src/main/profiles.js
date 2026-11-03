@@ -149,7 +149,9 @@ function readRawState() {
 
 function writeRawState(state) {
   ensureBaseDirs();
-  fs.writeFileSync(PROFILES_FILE, JSON.stringify(state, null, 2), 'utf8');
+  const tmp = `${PROFILES_FILE}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(state, null, 2), 'utf8');
+  fs.renameSync(tmp, PROFILES_FILE);
 }
 
 function formatVersionIdForProfile(profile) {
@@ -206,6 +208,10 @@ function getProfileById(profileId) {
   }
   const found = state.profiles.find(p => p.id === profileId);
   return found ? enrichProfile(found, state.activeProfileId) : getActiveProfile();
+}
+
+function getAllProfiles() {
+  return getProfilesState().profiles;
 }
 
 function getInstanceDirectory(profileOrId) {
@@ -450,6 +456,7 @@ module.exports = {
   getProfilesState,
   getActiveProfile,
   getProfileById,
+  getAllProfiles,
   getInstanceDirectory,
   resolveProfileInstanceDir,
   getActiveInstanceDirectory,

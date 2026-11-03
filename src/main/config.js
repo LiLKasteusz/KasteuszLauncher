@@ -60,6 +60,12 @@ const DEFAULT_CONFIG = {
   ]
 };
 
+function writeJsonAtomic(file, data) {
+  const tmp = `${file}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(data, null, 2), 'utf8');
+  fs.renameSync(tmp, file);
+}
+
 function getConfig() {
   ensureDirectories();
   try {
@@ -88,7 +94,7 @@ function saveConfig(updates) {
   try {
     const current = getConfig();
     const updated = { ...current, ...updates };
-    fs.writeFileSync(CONFIG_FILE, JSON.stringify(updated, null, 2), 'utf8');
+    writeJsonAtomic(CONFIG_FILE, updated);
     return updated;
   } catch (err) {
     console.error('Błąd zapisu konfiguracji:', err);
@@ -111,7 +117,7 @@ function getAuth() {
 function saveAuth(authData) {
   ensureDirectories();
   try {
-    fs.writeFileSync(AUTH_FILE, JSON.stringify(authData, null, 2), 'utf8');
+    writeJsonAtomic(AUTH_FILE, authData);
     return authData;
   } catch (err) {
     console.error('Błąd zapisu autoryzacji:', err);

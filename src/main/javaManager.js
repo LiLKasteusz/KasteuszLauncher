@@ -449,8 +449,8 @@ async function downloadAndInstallJava(requiredMajor = 21, onProgress = null) {
   }
 }
 
-async function ensureJava(requiredMajor = 21, onProgress = null) {
-  const existing = findBestCompatibleJava(requiredMajor);
+async function ensureJava(requiredMajor = 21, onProgress = null, configuredPath = null) {
+  const existing = findBestCompatibleJava(requiredMajor, configuredPath);
   if (existing) {
     return existing.path;
   }

@@ -3,7 +3,7 @@ const path = require('path');
 const { app } = require('electron');
 
 const FRIENDS_FILE = path.join(
-  process.env.HOME || app?.getPath('userData') || '.',
+  require('os').homedir(),
   '.kasteuszlauncher',
   'friends.json'
 );
