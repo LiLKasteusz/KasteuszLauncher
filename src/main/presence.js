@@ -192,6 +192,36 @@ async function checkAnnouncements() {
   } catch (_) {}
 }
 
+let presenceCache = { ts: 0, map: new Map() };
+
+async function fetchPresenceMap(maxAgeMs = 3 * 60 * 1000) {
+  const now = Date.now();
+  if (now - presenceCache.ts < 20000) return presenceCache.map;
+  const map = new Map();
+  try {
+    const res = await fetch(`https://ntfy.sh/${PRESENCE_TOPIC}/json?poll=1&since=10m`);
+    if (res.ok) {
+      const lines = (await res.text()).trim().split('\n').filter(Boolean);
+      for (const line of lines) {
+        try {
+          const row = JSON.parse(line);
+          if (row.event !== 'message' || !row.message) continue;
+          const data = JSON.parse(row.message);
+          if (!data || !data.user) continue;
+          const key = String(data.user).toLowerCase();
+          const prev = map.get(key);
+          if (!prev || data.ts > prev.ts) map.set(key, data);
+        } catch (_) {}
+      }
+    }
+  } catch (_) {}
+  for (const [k, p] of map.entries()) {
+    map.set(k, { ...p, online: !p.offline && (now - p.ts) < maxAgeMs });
+  }
+  presenceCache = { ts: now, map };
+  return map;
+}
+
 async function getAdminData() {
   const acc = config.getActiveAccount ? config.getActiveAccount() : null;
   const isOwner = isOwnerAccount(acc);
@@ -362,5 +392,6 @@ module.exports = {
   setupPresenceIpc,
   setGameActivity,
   sendPresenceHeartbeat,
+  fetchPresenceMap,
   isOwnerAccount
 };
