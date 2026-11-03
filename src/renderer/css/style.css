@@ -6174,10 +6174,10 @@ input[type="range"]::-webkit-slider-thumb:hover {
 
 @keyframes s3WatermarkDrift {
   0% {
-    transform: translate3d(0, -50%, 0);
+    transform: translate3d(0, 0, 0);
   }
   100% {
-    transform: translate3d(-50%, -50%, 0);
+    transform: translate3d(-50%, 0, 0);
   }
 }
 
@@ -6325,6 +6325,8 @@ input[type="range"]::-webkit-slider-thumb:hover {
   left: 0;
   top: 48%;
   width: 200%;
+  transform: translateY(-50%);
+  padding: 24px 0;
   pointer-events: none;
   z-index: 0;
   overflow: hidden;
@@ -6338,10 +6340,11 @@ input[type="range"]::-webkit-slider-thumb:hover {
   white-space: nowrap;
   font-family: var(--font-display);
   font-size: 138px;
+  line-height: 1.2;
   font-weight: 800;
   letter-spacing: -0.04em;
-  color: transparent;
-  -webkit-text-stroke: 1px rgba(255, 255, 255, 0.035);
+  color: rgba(255, 255, 255, 0.03);
+  -webkit-text-stroke: 1.5px rgba(255, 255, 255, 0.16);
   animation: s3WatermarkDrift 42s linear infinite;
 }
 
