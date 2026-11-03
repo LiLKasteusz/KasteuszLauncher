@@ -4361,7 +4361,16 @@ let friendsList = [];
 
 async function loadFriends() {
   try {
+    const previous = friendsList;
     friendsList = await window.api.getFriends();
+    if (Array.isArray(previous) && previous.length > 0) {
+      const wasOnline = new Set(previous.filter(p => p.online).map(p => p.username.toLowerCase()));
+      friendsList.forEach(f => {
+        if (f.online && !wasOnline.has(f.username.toLowerCase())) {
+          showToast(`${f.username} jest teraz online`);
+        }
+      });
+    }
     renderFriendsList(friendsList);
   } catch (err) {
     console.error('Błąd wczytywania znajomych:', err);
@@ -4412,6 +4421,7 @@ function renderFriendsList(friends) {
           <div class="friend-status"></div>
         </div>
       </div>
+      ${f.serverIp ? '<button class="btn-secondary friend-join-btn" style="height: 24px; font-size: 11px; padding: 0 8px; margin-right: 6px;">Dołącz</button>' : ''}
       <button class="friend-remove-btn" title="Usuń ${f.username}">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
           <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
@@ -4427,6 +4437,12 @@ function renderFriendsList(friends) {
     if (nameEl) nameEl.textContent = f.username;
     const statusEl = item.querySelector('.friend-status');
     if (statusEl) statusEl.textContent = f.status || (f.online ? 'Aktywny' : 'Gracz Minecraft');
+
+    item.querySelector('.friend-join-btn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      navigator.clipboard.writeText(f.serverIp);
+      showToast(`Skopiowano IP serwera ${f.username}: ${f.serverIp}. Wklej je w Minecraft (Multiplayer).`);
+    });
 
     item.querySelector('.friend-remove-btn')?.addEventListener('click', async (e) => {
       e.stopPropagation();
@@ -4481,6 +4497,10 @@ function setupFriendsListeners() {
     await loadFriends();
   });
   btnClose?.addEventListener('click', closeAddFriendModal);
+
+  setInterval(() => {
+    if (!document.hidden) loadFriends();
+  }, 60000);
 
   modal?.addEventListener('click', (e) => {
     if (e.target === modal) closeAddFriendModal();

@@ -37,8 +37,10 @@ async function enrich(stored) {
   const list = stored.map(f => {
     const p = map.get(f.username.toLowerCase());
     const online = !!(p && p.online);
+    const srvMatch = online && p.status ? String(p.status).match(/^Na serwerze\s+(\S+)/i) : null;
     return {
       ...f,
+      serverIp: srvMatch && srvMatch[1] !== 'Lokalny' ? srvMatch[1] : null,
       online,
       status: online ? (p.status || 'Online w launcherze') : 'Offline',
       lastSeen: p ? p.ts : null
