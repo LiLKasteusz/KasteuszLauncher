@@ -2,7 +2,7 @@
   "name": "kasteusz-launcher",
   "productName": "KasteuszLauncher",
   "desktopName": "kasteusz-launcher",
-  "version": "2.5.5",
+  "version": "2.5.6",
   "description": "Nowoczesny launcher Minecraft z obsługą kont Microsoft Premium, serwera lokalnego i skinów 3D",
   "main": "src/main/main.js",
   "scripts": {
