@@ -77,7 +77,7 @@
     init(userStation = 'lofi', userVol = 0.35) {
       if (!audioEl) {
         audioEl = new Audio();
-        audioEl.crossOrigin = 'anonymous';
+
         audioEl.preload = 'none';
 
         audioEl.addEventListener('error', (e) => {
