@@ -413,6 +413,23 @@ async function diagnose(profileId = 'active', consoleText = null) {
     });
   }
 
+  const fabricJavaMismatch = combinedText.match(/requires version (?<reqVer>\d+) or later of 'OpenJDK 64-Bit Server VM' \(java\), but only the wrong version is present: (?<curVer>\d+)/i);
+  if (fabricJavaMismatch) {
+    const req = fabricJavaMismatch.groups.reqVer;
+    const cur = fabricJavaMismatch.groups.curVer;
+    diagnosis.errorType = 'JAVA_VERSION_MISMATCH';
+    diagnosis.severity = 'critical';
+    diagnosis.title = `Niezgodna wersja Javy (wymagana Java ${req}+)`;
+    diagnosis.summary = `Zainstalowane mody wymagają Java ${req} lub nowszej, natomiast gra została uruchomiona na Java ${cur}.`;
+    diagnosis.solution = `Przełącz ścieżkę Javy w Launcherze na zainstalowane środowisko Java ${req} (lub pozostaw pole puste, aby launcher wykrył ją automatycznie).`;
+    diagnosis.suggestedActions.unshift({
+      id: `switch_java_${req}`,
+      label: `Przełącz na Java ${req} (Auto-Detect)`,
+      type: 'primary',
+      payload: { targetJavaMajor: parseInt(req, 10) }
+    });
+  }
+
   const javaVersionMatch = combinedText.match(/UnsupportedClassVersionError: .* has been compiled by a more recent version of the Java Runtime \(class file version (?<version>\d+)\), this version of the Java Runtime only recognizes class file versions up to (?<currentVer>\d+)/i);
   if (javaVersionMatch) {
     const requiredClassVer = parseInt(javaVersionMatch.groups.version, 10);

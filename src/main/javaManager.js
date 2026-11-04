@@ -14,16 +14,32 @@ const SCAN_CACHE_TTL_MS = 15000;
 function getRequiredJavaMajor(mcVersion) {
   if (!mcVersion) return 21;
   const clean = String(mcVersion).replace(/^(fabric|quilt|forge|neoforge)-/, '').trim();
-  const match = clean.match(/(\d+)\.(\d+)(?:\.(\d+))?/);
+
+  // Snapshot format: 26w07a, 25w45a, etc.
+  const snapMatch = clean.match(/^(\d{2})w(\d{2})/i);
+  if (snapMatch) {
+    const year = parseInt(snapMatch[1], 10);
+    const week = parseInt(snapMatch[2], 10);
+    if (year >= 25) return 25;
+    if (year === 24 && week >= 14) return 21;
+    if (year >= 21) return 17;
+    return 8;
+  }
+
+  const match = clean.match(/(\d+)(?:\.(\d+))?(?:\.(\d+))?/);
   if (!match) return 21;
 
   const major = parseInt(match[1], 10);
-  const minor = parseInt(match[2], 10);
+  const minor = parseInt(match[2] || '0', 10);
   const patch = parseInt(match[3] || '0', 10);
 
   if (isNaN(major)) return 21;
 
+  // Minecraft 25+, 26.x (nowe wydania roczne) wymagają Java 25
+  if (major >= 25) return 25;
+
   if (major === 1) {
+    if (minor >= 25) return 25;
     if (minor >= 21) return 21;
     if (minor === 20 && patch >= 5) return 21;
     if (minor >= 17) return 17;
@@ -265,6 +281,7 @@ function findBestCompatibleJava(requiredMajor = 21, configuredPath = null) {
     if (!isPlaceholder && fs.existsSync(configuredPath)) {
       const probe = probeJava(configuredPath);
       if (probe) {
+        if (requiredMajor >= 25 && probe.major >= 25) return probe;
         if (requiredMajor === 21 && probe.major >= 21) return probe;
         if (requiredMajor === 17 && probe.major >= 17) return probe;
         if (requiredMajor === 8 && (probe.major === 8 || probe.major <= 17)) return probe;
@@ -274,7 +291,12 @@ function findBestCompatibleJava(requiredMajor = 21, configuredPath = null) {
 
   const javas = detectInstalledJavas();
 
-  if (requiredMajor === 21) {
+  if (requiredMajor >= 25) {
+    const exact = javas.find(j => j.major === requiredMajor && j.is64Bit);
+    if (exact) return exact;
+    const compatible = javas.find(j => j.major >= requiredMajor && j.is64Bit);
+    if (compatible) return compatible;
+  } else if (requiredMajor === 21) {
     // Prefer exact 21, then any >= 21
     const exact = javas.find(j => j.major === 21 && j.is64Bit);
     if (exact) return exact;
