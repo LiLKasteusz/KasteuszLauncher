@@ -6186,7 +6186,9 @@ const LAUNCHER_STYLE_LABELS = {
   style1: 'Styl 1',
   style2: 'Styl 2',
   style3: 'Styl 3',
-  style4: 'Styl 4'
+  style4: 'Styl 4',
+  style5: 'Styl 5',
+  style6: 'Styl 6'
 };
 
 let currentLauncherStyle = 'style1';
@@ -6233,7 +6235,7 @@ function startS3KineticRotator() {
 }
 
 function applyLauncherStyleUI(styleName) {
-  const allowed = ['style1', 'style2', 'style3', 'style4'];
+  const allowed = ['style1', 'style2', 'style3', 'style4', 'style5', 'style6'];
   const normalized = allowed.includes(styleName) ? styleName : 'style1';
   currentLauncherStyle = normalized;
 
@@ -6268,7 +6270,7 @@ function applyLauncherStyleUI(styleName) {
 }
 
 async function switchLauncherStyleWithRestart(targetStyle) {
-  const allowed = ['style1', 'style2', 'style3', 'style4'];
+  const allowed = ['style1', 'style2', 'style3', 'style4', 'style5', 'style6'];
   if (!allowed.includes(targetStyle)) return;
 
   if (targetStyle === currentLauncherStyle) {
@@ -8149,3 +8151,27 @@ if (document.readyState === 'loading') {
 } else {
   initApp();
 }
+
+
+/* Widgety stylow 4-6: odbicie danych z glownego widoku i skroty */
+(function initNewStyleWidgets() {
+  function sync() {
+    document.querySelectorAll('[data-sync]').forEach(el => {
+      const src = document.getElementById(el.getAttribute('data-sync'));
+      if (!src) return;
+      let t = (src.textContent || '').trim();
+      const strip = el.getAttribute('data-strip');
+      if (strip) t = t.replace(strip, '');
+      if (t && el.textContent !== t) el.textContent = t;
+    });
+  }
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-proxy],[data-go]');
+    if (!b) return;
+    if (b.dataset.go) { switchToTab(b.dataset.go); return; }
+    const target = document.getElementById(b.dataset.proxy);
+    if (target) target.click();
+  });
+  setInterval(sync, 700);
+  setTimeout(sync, 300);
+})();

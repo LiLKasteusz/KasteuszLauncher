@@ -70,7 +70,7 @@ async function getOrCreateRelease() {
     tag_name: `v${version}`,
     target_commitish: 'main',
     name: `Kasteusz Launcher v${version}`,
-    body: `### Kasteusz Launcher v${version}\n\nAutomatyczna aktualizacja dla Windows i Linux.`,
+    body: `### Kasteusz Launcher v${version}\n\n${process.env.RELEASE_NOTES || 'Automatyczna aktualizacja dla Windows i Linux.'}`,
     draft: false,
     prerelease: false
   });

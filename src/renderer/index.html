@@ -272,6 +272,55 @@
         </div>
 
         <div class="play-dashboard-grid">
+          <div class="s4-only s4-wrap" aria-label="Styl Obserwatorium">
+            <div class="s4-nick" data-sync="user-nickname-text">Gracz</div>
+            <div class="s4-orbit s4-orbit-a"></div><div class="s4-orbit s4-orbit-b"></div><div class="s4-orbit s4-orbit-c"></div>
+            <div class="s4-chip s4-chip-1"><small>Pamiec RAM</small><b data-sync="quick-stat-ram">-</b></div>
+            <div class="s4-chip s4-chip-2"><small>Aktywne mody</small><b data-sync="quick-stat-mods">-</b></div>
+            <div class="s4-chip s4-chip-3"><small>Czas gry</small><b data-sync="hero-playtime-text" data-strip="Czas: ">-</b></div>
+            <div class="s4-dock">
+              <button type="button" class="s4-profile" data-go="instances"><small>Profil</small><b data-sync="current-version-display">-</b></button>
+              <button type="button" class="s4-play" data-proxy="btn-play-game"><span data-sync="play-btn-text">URUCHOM GRE</span></button>
+            </div>
+          </div>
+
+          <div class="s5-only s5-wrap" aria-label="Styl Aurora">
+            <div class="s5-clock">
+              <span class="s5-clock-num" data-sync="hero-playtime-text" data-strip="Czas: ">0h 0m</span>
+              <span class="s5-clock-cap">tyle spedziles w grze</span>
+            </div>
+            <ul class="s5-facts">
+              <li><span>Pamiec</span><b data-sync="quick-stat-ram">-</b></li>
+              <li><span>Mody</span><b data-sync="quick-stat-mods">-</b></li>
+              <li><span>Profil</span><b data-sync="current-version-display">-</b></li>
+            </ul>
+            <div class="s5-actions">
+              <button type="button" class="s5-play" data-proxy="btn-play-game"><span data-sync="play-btn-text">URUCHOM GRE</span></button>
+              <button type="button" class="s5-ghost" data-go="instances">Zmien profil</button>
+            </div>
+          </div>
+
+          <div class="s6-only s6-wrap" aria-label="Styl Blokowy">
+            <div class="s6-tooltip">
+              <div class="s6-tt-name" data-sync="current-version-display">Profil</div>
+              <div class="s6-tt-line">Pamiec RAM: <span data-sync="quick-stat-ram">-</span></div>
+              <div class="s6-tt-line">Mody: <span data-sync="quick-stat-mods">-</span></div>
+              <div class="s6-tt-line s6-tt-dim">Czas gry: <span data-sync="hero-playtime-text" data-strip="Czas: ">-</span></div>
+              <div class="s6-tt-line s6-tt-mod">Launcher Kasteusza</div>
+            </div>
+            <div class="s6-hotbar">
+              <button type="button" class="s6-slot" data-go="mods"><i class="s6-ic s6-ic-mods"></i><span>Mody</span></button>
+              <button type="button" class="s6-slot" data-go="packs"><i class="s6-ic s6-ic-packs"></i><span>Paczki</span></button>
+              <button type="button" class="s6-slot" data-go="instances"><i class="s6-ic s6-ic-prof"></i><span>Profile</span></button>
+              <button type="button" class="s6-slot s6-slot-play" data-proxy="btn-play-game"><i class="s6-ic s6-ic-play"></i><span data-sync="play-btn-text">GRAJ</span></button>
+              <button type="button" class="s6-slot" data-go="music"><i class="s6-ic s6-ic-music"></i><span>Muzyka</span></button>
+              <button type="button" class="s6-slot" data-go="screenshots"><i class="s6-ic s6-ic-shot"></i><span>Zrzuty</span></button>
+              <button type="button" class="s6-slot" data-go="server"><i class="s6-ic s6-ic-srv"></i><span>Serwer</span></button>
+              <button type="button" class="s6-slot" data-go="benchmark"><i class="s6-ic s6-ic-bench"></i><span>Test</span></button>
+              <button type="button" class="s6-slot" data-go="settings"><i class="s6-ic s6-ic-set"></i><span>Opcje</span></button>
+            </div>
+          </div>
+
 
           <!-- STYL 2 (BADLION): Left Command Column -->
           <div class="s2-left-col s2-only">
@@ -2083,9 +2132,43 @@
                   <div class="lsc-meta">
                     <div class="lsc-title-row">
                       <span class="lsc-name">Styl 4</span>
-                      <span class="lsc-badge s4">Lunar</span>
+                      <span class="lsc-badge s4">Obserwatorium</span>
                     </div>
-                    <span class="lsc-desc">Granatowo-fioletowy motyw w stylu Lunar Client, szkło i neonowy przycisk Play</span>
+                    <span class="lsc-desc">Postać na środku sceny, pływające szklane panele i kapsuła Play</span>
+                  </div>
+                </button>
+
+                <button type="button" class="launcher-style-card" data-launcher-style="style5">
+                  <div class="lsc-preview lsc-prev-s1 lsc-prev-s5">
+                    <div class="lsc-prev-sidebar"></div>
+                    <div class="lsc-prev-main">
+                      <div class="lsc-prev-stage"></div>
+                      <div class="lsc-prev-bar"></div>
+                    </div>
+                  </div>
+                  <div class="lsc-meta">
+                    <div class="lsc-title-row">
+                      <span class="lsc-name">Styl 5</span>
+                      <span class="lsc-badge s5">Aurora</span>
+                    </div>
+                    <span class="lsc-desc">Zorza polarna w tle, postać po prawej, statystyki w poziomym pasie</span>
+                  </div>
+                </button>
+
+                <button type="button" class="launcher-style-card" data-launcher-style="style6">
+                  <div class="lsc-preview lsc-prev-s1 lsc-prev-s6">
+                    <div class="lsc-prev-sidebar"></div>
+                    <div class="lsc-prev-main">
+                      <div class="lsc-prev-stage"></div>
+                      <div class="lsc-prev-bar"></div>
+                    </div>
+                  </div>
+                  <div class="lsc-meta">
+                    <div class="lsc-title-row">
+                      <span class="lsc-name">Styl 6</span>
+                      <span class="lsc-badge s6">Blokowy</span>
+                    </div>
+                    <span class="lsc-desc">Klockowy, pikselowy wygląd z grubymi ramkami i twardymi cieniami</span>
                   </div>
                 </button>
               </div>
