@@ -4228,8 +4228,39 @@ async function handlePlayClick() {
   }
 }
 
+function setLaunchOverlay(show, text = '') {
+  let ov = document.getElementById('launch-overlay');
+  if (!ov && show) {
+    const st = document.createElement('style');
+    st.textContent = `
+      #launch-overlay{position:fixed;inset:0;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:radial-gradient(ellipse at 50% 45%,#44117a 0%,#16062c 55%,#07020f 100%);transition:opacity .4s}
+      #launch-overlay .lo-logo{font:900 84px/1 'Segoe UI',sans-serif;letter-spacing:10px;background:linear-gradient(180deg,#fff 0%,#f08cff 40%,#8a2be2 100%);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 0 22px rgba(230,60,255,.7))}
+      #launch-overlay .lo-sub{font:700 22px/1 'Segoe UI',sans-serif;letter-spacing:16px;color:#ff6bd6;text-shadow:0 0 14px #ff35c8}
+      #launch-overlay .lo-bar{width:420px;height:6px;border-radius:3px;background:rgba(255,255,255,.08);overflow:hidden;margin-top:26px}
+      #launch-overlay .lo-fill{height:100%;width:40%;background:linear-gradient(90deg,#8a2be2,#ff6bd6,#5be7ff);animation:lo-slide 1.4s ease-in-out infinite}
+      #launch-overlay .lo-text{font:500 14px 'Segoe UI',sans-serif;color:#cdb3ee}
+      @keyframes lo-slide{0%{margin-left:-40%}100%{margin-left:100%}}`;
+    document.head.appendChild(st);
+    ov = document.createElement('div');
+    ov.id = 'launch-overlay';
+    ov.innerHTML = '<div class="lo-logo">KASTEUSZ</div><div class="lo-sub">CLIENT</div><div class="lo-bar"><div class="lo-fill"></div></div><div class="lo-text" id="launch-overlay-text"></div>';
+    document.body.appendChild(ov);
+  }
+  if (!ov) return;
+  if (show) {
+    ov.style.display = 'flex';
+    ov.style.opacity = '1';
+    const t = document.getElementById('launch-overlay-text');
+    if (t && text) t.textContent = text;
+  } else {
+    ov.style.opacity = '0';
+    setTimeout(() => { ov.style.display = 'none'; }, 400);
+  }
+}
+
 function setLaunchingState(launching, text = '') {
   isGameLaunching = launching;
+  setLaunchOverlay(launching, text);
   const progBar = document.getElementById('launch-progress-bar');
   const topbarLabel = document.getElementById('topbar-status-label');
   const s3PlayBtn = document.getElementById('s3-btn-play');
@@ -4290,6 +4321,7 @@ function setupLauncherEventListeners() {
 
   window.api.onLauncherStarted((data) => {
     showToast(`Uruchomiono Minecraft ${data.version}`);
+    setLaunchOverlay(false);
     elements.playBtnText.textContent = 'SESJA AKTYWNA';
     if (progBar) progBar.style.width = '100%';
     const s3PlayLabel = document.getElementById('s3-btn-play-label');

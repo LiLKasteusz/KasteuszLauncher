@@ -333,7 +333,13 @@ const AMETHYST = {
 // ───────────────────────── logo / edycja / ekran ładowania ─────────────────────────
 function buildLogo() {
   const L = new Layer(1024, 256);
-  drawBlockText(L, 'KASTEUSZ', 42, 6, { ...AMETHYST, B: 20, tex: 4, bevel: 3, depth: 8, outline: 3, glowR: 7, glowA: 1.7 });
+  drawBlockText(L, 'KASTEUSZ', 42, 4, { ...AMETHYST, B: 20, tex: 4, bevel: 3, depth: 10, outline: 3, glowR: 9, glowA: 2.1 });
+  const deco = new Layer(1024, 256);
+  neonLine(deco, 120, 500, 160, 3, [1.0, 0.35, 0.85], true);
+  neonLine(deco, 524, 904, 160, 3, [1.0, 0.35, 0.85], false);
+  diamond(deco, 512, 161, 6, [0.35, 0.92, 1.0]);
+  const g = new Layer(1024, 256); g.composite(deco); g.blur(5); g.scale(1.5);
+  L.composite(g); L.composite(deco);
   // Minecraft rysuje tylko górne 176 px – wygaszamy wszystko poniżej, żeby nie było twardej krawędzi
   for (let y = 150; y < 256; y++) {
     const f = 1 - smooth(158, 175, y);
@@ -375,12 +381,24 @@ function buildEdition() {
 function buildMojangSplash() {
   // Gra składa logo z dwóch połówek tekstury: górna połowa -> lewa strona, dolna -> prawa.
   const wide = new Layer(1024, 256);
-  drawBlockText(wide, 'KASTEUSZ', 136, 62, { ...AMETHYST, B: 16, tex: 4, bevel: 2, depth: 7, outline: 3, glowR: 8, glowA: 1.1 });
+  // ciemne tło z fioletowym gradientem w centrum, żeby logo miało głębię
+  for (let y = 0; y < 256; y++) for (let x = 0; x < 1024; x++) {
+    const d = Math.hypot((x - 512) / 512, (y - 128) / 128);
+    const c = mix3([0.26, 0.07, 0.42], [0.02, 0.005, 0.05], clamp(d));
+    wide.over(x, y, c[0], c[1], c[2], 1);
+  }
+  drawBlockText(wide, 'KASTEUSZ', 136, 40, { ...AMETHYST, B: 16, tex: 4, bevel: 2, depth: 7, outline: 3, glowR: 9, glowA: 1.3 });
   const deco = new Layer(1024, 256);
-  neonLine(deco, 300, 500, 206, 3, [1.0, 0.35, 0.85], true);
-  neonLine(deco, 524, 724, 206, 3, [1.0, 0.35, 0.85], false);
-  diamond(deco, 512, 207, 6, [0.35, 0.92, 1.0]);
-  const g = new Layer(1024, 256); g.composite(deco); g.blur(4); g.scale(1.4);
+  neonLine(deco, 300, 500, 186, 3, [1.0, 0.35, 0.85], true);
+  neonLine(deco, 524, 724, 186, 3, [1.0, 0.35, 0.85], false);
+  diamond(deco, 512, 187, 6, [0.35, 0.92, 1.0]);
+  drawBlockText(deco, 'CLIENT', 412, 204, {
+    B: 5, tex: 1, bevel: 1, depth: 2, outline: 1, glowR: 4, glowA: 1.0, spacing: 2,
+    stops: [[0, [1, 1, 1]], [1, [1, 0.42, 0.86]]],
+    side: [[0.5, 0.1, 0.45], [0.18, 0.03, 0.2]],
+    glow: [1.0, 0.25, 0.85]
+  });
+  const g = new Layer(1024, 256); g.composite(deco); g.blur(5); g.scale(1.5);
   wide.composite(g); wide.composite(deco);
 
   const out = new Layer(512, 512);
@@ -412,7 +430,8 @@ function buildButton(kind) {
     disabled: { edge: [0.24, 0.18, 0.32], ring: [0.1, 0.08, 0.14], top: [0.09, 0.07, 0.13], bot: [0.06, 0.05, 0.09], hl: [0.13, 0.1, 0.18], sh: [0.04, 0.03, 0.06], a: 0.8 }
   }[kind];
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-    const corner = (x === 0 || x === W - 1) && (y === 0 || y === H - 1);
+    const dxc = Math.min(x, W - 1 - x), dyc = Math.min(y, H - 1 - y);
+    const corner = dxc + dyc < 2;
     if (corner) continue;
     const onEdge = x === 0 || y === 0 || x === W - 1 || y === H - 1;
     const onRing = x === 1 || y === 1 || x === W - 2 || y === H - 2;
@@ -624,10 +643,10 @@ function sky(dx, dy, dz, full) {
   const nm = ridgeAt(NEAR, a, e);
   if (nm) {
     let col = mix3([0.035, 0.01, 0.07], [0.3, 0.07, 0.32], 0.35 * (1 - nm.fy / Math.max(nm.h, 1)));
-    const seam = nm.fx < 0.06 || fract(nm.fy) < 0.06;
+    const seam = full && (nm.fx < 0.06 || fract(nm.fy) < 0.06);
     if (seam) col = [col[0] * 0.55, col[1] * 0.55, col[2] * 0.55];
     const row = Math.floor(nm.fy);
-    if (!seam && row < nm.h - 1 && hash3(nm.idx, row, 7) > 0.965) {
+    if (full && !seam && row < nm.h - 1 && hash3(nm.idx, row, 7) > 0.965) {
       const cx = Math.abs(nm.fx - 0.5), cy = Math.abs(fract(nm.fy) - 0.5);
       col = Math.max(cx, cy) < 0.25 ? [0.85, 0.45, 1.0] : [0.45, 0.12, 0.85];
     }
@@ -658,8 +677,8 @@ function ground(dx, dy, dz) {
   const fwx = t * PIX * 1.5, fwz = t * t * PIX * 1.5, w = 0.006;
   const lx = (1 - smooth(w, w + fwx, gx)) * clamp(1 - fwx / (S * 0.35));
   const lz = (1 - smooth(w, w + fwz, gz)) * clamp(1 - fwz / (S * 0.35));
-  const line = Math.max(lx, lz) * Math.exp(-dist / 30) * (0.75 + 0.25 * smooth(1, 4, dist));
-  const glow = (Math.exp(-gx / 0.05) + Math.exp(-gz / 0.05)) * 0.16 * Math.exp(-dist / 14);
+  const line = Math.max(lx, lz) * Math.exp(-dist / 30) * (0.75 + 0.25 * smooth(1, 4, dist)) * (1 - smooth(40, 120, dist));
+  const glow = (Math.exp(-gx / 0.05) + Math.exp(-gz / 0.05)) * 0.16 * Math.exp(-dist / 14) * clamp(1 - Math.max(fwx, fwz) / (S * 0.25));
   const gc = mix3([1.0, 0.3, 0.9], [0.55, 0.25, 1.0], smooth(2, 25, dist));
 
   const ripple = 0.006 * Math.sin(pz * 4 + Math.sin(px * 1.3) * 2) * smooth(0, 0.08, -dy);
@@ -713,14 +732,19 @@ function renderView(W, H, yaw) {
   PIX = (85 * Math.PI / 180) / H;
   const L = new Layer(W, H);
   const th = 10 * Math.PI / 180, tf = Math.tan(42.5 * Math.PI / 180);
+  const ss = parseInt(process.env.VIEW_SS || '1', 10);
   for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
-    const x = (2 * (i + 0.5) / W - 1) * tf * (W / H), y = (1 - 2 * (j + 0.5) / H) * tf;
-    let dx = x, dy = y * Math.cos(th) - Math.sin(th), dz = y * Math.sin(th) + Math.cos(th);
-    const cx = dx * Math.cos(yaw) + dz * Math.sin(yaw), cz = -dx * Math.sin(yaw) + dz * Math.cos(yaw);
-    const l = Math.hypot(cx, dy, cz);
-    const c = shade(cx / l, dy / l, cz / l);
-    const k = (j * W + i) * 4;
-    L.d[k] = tone(c[0]); L.d[k + 1] = tone(c[1]); L.d[k + 2] = tone(c[2]); L.d[k + 3] = 1;
+    let r = 0, g = 0, b = 0;
+    for (let sj = 0; sj < ss; sj++) for (let si = 0; si < ss; si++) {
+      const x = (2 * (i + (si + 0.5) / ss) / W - 1) * tf * (W / H), y = (1 - 2 * (j + (sj + 0.5) / ss) / H) * tf;
+      let dx = x, dy = y * Math.cos(th) - Math.sin(th), dz = y * Math.sin(th) + Math.cos(th);
+      const cx = dx * Math.cos(yaw) + dz * Math.sin(yaw), cz = -dx * Math.sin(yaw) + dz * Math.cos(yaw);
+      const l = Math.hypot(cx, dy, cz);
+      const c = shade(cx / l, dy / l, cz / l);
+      r += tone(c[0]); g += tone(c[1]); b += tone(c[2]);
+    }
+    const q = 1 / (ss * ss), k = (j * W + i) * 4;
+    L.d[k] = r * q; L.d[k + 1] = g * q; L.d[k + 2] = b * q; L.d[k + 3] = 1;
   }
   return L;
 }
@@ -771,32 +795,44 @@ function main() {
   entries.push({ name: 'pack.png', data: buildPackIcon().png() });
   entries.push({ name: 'assets/minecraft/texts/splashes.txt', data: SPLASHES.join('\n') + '\n' });
 
-  const logo = buildLogo().png();
+  const THEME_DIR = path.join(ROOT, 'src/main/assets/menu-theme');
+  const readTheme = (filename, fallbackFn) => {
+    const p = path.join(THEME_DIR, filename);
+    if (fs.existsSync(p)) return fs.readFileSync(p);
+    return fallbackFn ? fallbackFn().png() : null;
+  };
+
+  const logo = readTheme('minecraft.png', buildLogo);
   entries.push({ name: T + 'title/minecraft.png', data: logo });
-  entries.push({ name: T + 'title/minceraft.png', data: logo });
-  entries.push({ name: T + 'title/edition.png', data: buildEdition().png() });
-  entries.push({ name: T + 'title/mojangstudios.png', data: buildMojangSplash().png() });
+  entries.push({ name: T + 'title/minceraft.png', data: readTheme('minceraft.png') || logo });
+  entries.push({ name: T + 'title/edition.png', data: readTheme('edition.png', buildEdition) });
+  entries.push({ name: T + 'title/mojangstudios.png', data: readTheme('mojangstudios.png', buildMojangSplash) });
 
   const W = T + 'sprites/widget/';
-  entries.push({ name: W + 'button.png', data: buildButton('normal').png() });
+  entries.push({ name: W + 'button.png', data: readTheme('button.png', () => buildButton('normal')) });
   entries.push({ name: W + 'button.png.mcmeta', data: nineSlice(200, 20, 3) });
-  entries.push({ name: W + 'button_highlighted.png', data: buildButton('highlighted').png() });
+  entries.push({ name: W + 'button_highlighted.png', data: readTheme('button_highlighted.png', () => buildButton('highlighted')) });
   entries.push({ name: W + 'button_highlighted.png.mcmeta', data: nineSlice(200, 20, 3) });
-  entries.push({ name: W + 'button_disabled.png', data: buildButton('disabled').png() });
+  entries.push({ name: W + 'button_disabled.png', data: readTheme('button_disabled.png', () => buildButton('disabled')) });
   entries.push({ name: W + 'button_disabled.png.mcmeta', data: nineSlice(200, 20, 1) });
-  entries.push({ name: W + 'slider.png', data: buildTrack(false).png() });
+  entries.push({ name: W + 'slider.png', data: readTheme('slider.png', () => buildTrack(false)) });
   entries.push({ name: W + 'slider.png.mcmeta', data: nineSlice(200, 20, 1) });
-  entries.push({ name: W + 'slider_highlighted.png', data: buildTrack(true).png() });
+  entries.push({ name: W + 'slider_highlighted.png', data: readTheme('slider_highlighted.png', () => buildTrack(true)) });
   entries.push({ name: W + 'slider_highlighted.png.mcmeta', data: nineSlice(200, 20, 1) });
   const handleBorder = { left: 2, top: 2, right: 2, bottom: 3 };
-  entries.push({ name: W + 'slider_handle.png', data: buildHandle(false).png() });
+  entries.push({ name: W + 'slider_handle.png', data: readTheme('slider_handle.png', () => buildHandle(false)) });
   entries.push({ name: W + 'slider_handle.png.mcmeta', data: nineSlice(8, 20, handleBorder) });
-  entries.push({ name: W + 'slider_handle_highlighted.png', data: buildHandle(true).png() });
+  entries.push({ name: W + 'slider_handle_highlighted.png', data: readTheme('slider_handle_highlighted.png', () => buildHandle(true)) });
   entries.push({ name: W + 'slider_handle_highlighted.png.mcmeta', data: nineSlice(8, 20, handleBorder) });
-  entries.push({ name: W + 'text_field.png', data: buildTextField(false).png() });
+  entries.push({ name: W + 'text_field.png', data: readTheme('text_field.png', () => buildTextField(false)) });
   entries.push({ name: W + 'text_field.png.mcmeta', data: nineSlice(200, 20, 1) });
-  entries.push({ name: W + 'text_field_highlighted.png', data: buildTextField(true).png() });
+  entries.push({ name: W + 'text_field_highlighted.png', data: readTheme('text_field_highlighted.png', () => buildTextField(true)) });
   entries.push({ name: W + 'text_field_highlighted.png.mcmeta', data: nineSlice(200, 20, 1) });
+
+  const widgetsPng = readTheme('widgets.png');
+  if (widgetsPng) {
+    entries.push({ name: T + 'widgets.png', data: widgetsPng });
+  }
   console.log(`[menu-pack] GUI gotowe (${Date.now() - t0} ms)`);
 
   for (let f = 0; f < 6; f++) {
